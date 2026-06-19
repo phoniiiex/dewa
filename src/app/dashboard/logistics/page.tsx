@@ -1,97 +1,122 @@
 "use client";
-import { Truck, MapPin, Phone, Clock, CheckCircle2, AlertCircle, XCircle, Package } from "lucide-react";
+import { useState } from "react";
+import { Search, Truck, MapPin, Phone, User, Clock } from "lucide-react";
+import { useData } from "@/lib/store";
+import type { DeliveryStatus } from "@/lib/types";
+import Modal from "@/components/ui/Modal";
+import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
 
-const deliveries = [
-  { id: "DEL-001", order: "#ORD-98745", type: "warehouse_shipment", typeLabel: "گواستنەوە بۆ کۆگا", driver: "عومەر سەعید", phone: "0770 900 1111", destination: "کۆگای هیمۆ لاب — سلێمانی", status: "delivered", statusLabel: "گەیشت", items: "پاراسیتامۆل × ١٢٠", dispatchedAt: "٢٩/١٠ — ٠٩:٠٠", deliveredAt: "٢٩/١٠ — ١٤:٣٠" },
-  { id: "DEL-002", order: "#ORD-98745", type: "rep_delivery", typeLabel: "گەیاندنی نوێنەر", driver: "ئاکۆ مەحموود", phone: "0770 111 2222", destination: "دەرمانخانەی ئازادی — سلێمانی", status: "delivered", statusLabel: "گەیشت", items: "پاراسیتامۆل × ٣٠ (بۆنەس)", dispatchedAt: "٢٩/١٠ — ١٠:٠٠", deliveredAt: "٢٩/١٠ — ١٢:٠٠" },
-  { id: "DEL-003", order: "#ORD-23674", type: "warehouse_shipment", typeLabel: "گواستنەوە بۆ کۆگا", driver: "ڕۆژگار عەلی", phone: "0750 800 2222", destination: "کۆگای ڕۆشنبیری — هەولێر", status: "in_transit", statusLabel: "لە ڕێگایە", items: "ئەمۆکسیسیلین × ٢٣٠", dispatchedAt: "٢٨/١٠ — ١١:٠٠", deliveredAt: "—" },
-  { id: "DEL-004", order: "#ORD-78967", type: "direct_delivery", typeLabel: "ڕاستەوخۆ بۆ کڕیار", driver: "کاروان حەسەن", phone: "0770 700 3333", destination: "کلینیکی هەنار — هەولێر", status: "in_transit", statusLabel: "لە ڕێگایە", items: "ئۆمیپرازۆل × ٩٤", dispatchedAt: "٢٧/١٠ — ٠٨:٣٠", deliveredAt: "—" },
-  { id: "DEL-005", order: "#ORD-46578", type: "warehouse_shipment", typeLabel: "گواستنەوە بۆ کۆگا", driver: "—", phone: "—", destination: "کۆگای ناوەند — کەرکوک", status: "pending", statusLabel: "چاوەڕوان", items: "مێتفۆرمین × ٦١", dispatchedAt: "—", deliveredAt: "—" },
-  { id: "DEL-006", order: "#ORD-12567", type: "direct_delivery", typeLabel: "ڕاستەوخۆ بۆ کڕیار", driver: "عومەر سەعید", phone: "0770 900 1111", destination: "دەرمانخانەی ڕۆشنا — کەرکوک", status: "failed", statusLabel: "شکست", items: "ئازیترۆمایسین × ٣٥", dispatchedAt: "٢٥/١٠ — ١٤:٠٠", deliveredAt: "—" },
-];
-
-const statusConfig: Record<string, { bg: string; color: string; icon: React.ReactNode }> = {
-  delivered: { bg: "#EBFBEE", color: "#40C057", icon: <CheckCircle2 size={14} /> },
-  in_transit: { bg: "#E7F5FF", color: "#339AF0", icon: <Truck size={14} /> },
-  pending: { bg: "#FFF9DB", color: "#FD7E14", icon: <Clock size={14} /> },
-  failed: { bg: "#FFF5F5", color: "#FA5252", icon: <XCircle size={14} /> },
-};
-
-const typeConfig: Record<string, { bg: string; color: string }> = {
-  warehouse_shipment: { bg: "#EDF2FF", color: "#4263EB" },
-  rep_delivery: { bg: "#FEF3EB", color: "#F47B35" },
-  direct_delivery: { bg: "#EBFBEE", color: "#40C057" },
-};
+const statusLabels: Record<DeliveryStatus, string> = { PENDING: "چاوەڕوان", IN_TRANSIT: "لە ڕێگادا", DELIVERED: "گەیشت", FAILED: "شکستی هێنا" };
+const statusColors: Record<DeliveryStatus, { bg: string; color: string }> = { PENDING: { bg: "#FFF3BF", color: "#F08C00" }, IN_TRANSIT: { bg: "#D0EBFF", color: "#1971C2" }, DELIVERED: { bg: "#D3F9D8", color: "#2B8A3E" }, FAILED: { bg: "#FFE3E3", color: "#C92A2A" } };
 
 export default function LogisticsPage() {
+  const { deliveries, updateDelivery } = useData();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("هەموو");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [driverForm, setDriverForm] = useState({ driver: "", driverPhone: "" });
+
+  const filtered = deliveries.filter(d => {
+    const matchSearch = d.orderNumber.includes(searchTerm) || d.destination.includes(searchTerm) || d.driver.includes(searchTerm);
+    const matchStatus = statusFilter === "هەموو" || statusLabels[d.status] === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const handleStatusChange = (id: string, status: DeliveryStatus) => {
+    const now = new Date().toLocaleString("ckb-IQ");
+    const updates: Record<string, string | DeliveryStatus> = { status };
+    if (status === "IN_TRANSIT") updates.dispatchedAt = now;
+    if (status === "DELIVERED") updates.deliveredAt = now;
+    updateDelivery(id, updates);
+  };
+
+  const openDriverModal = (id: string) => {
+    const d = deliveries.find(x => x.id === id);
+    setDriverForm({ driver: d?.driver || "", driverPhone: d?.driverPhone || "" });
+    setEditId(id);
+  };
+
+  const saveDriver = () => {
+    if (editId) updateDelivery(editId, driverForm);
+    setEditId(null);
+  };
+
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, background: "#E7F5FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#339AF0" }}><Truck size={20} /></div>
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700 }}>گواستنەوە و گەیاندن</h1>
-            <p style={{ fontSize: 13, color: "#6C757D" }}>شوێنپێگرتنی هەموو گەیاندنەکان و بارودۆخیان</p>
-          </div>
+          <div style={{ width: 40, height: 40, background: "#D0EBFF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#1971C2" }}><Truck size={20} /></div>
+          <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>لۆجستیک و گەیاندن</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەدواداچوونی هەموو گەیاندنەکان</p></div>
         </div>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
         {[
-          { title: "کۆی گەیاندنەکان", value: "٤٨٢", color: undefined },
-          { title: "لە ڕێگایە", value: "٢", color: "#339AF0" },
-          { title: "چاوەڕوانی شۆفێر", value: "١", color: "#FD7E14" },
-          { title: "شکست", value: "١", color: "#FA5252" },
+          { title: "کۆی گەیاندن", value: String(deliveries.length) },
+          { title: "چاوەڕوان", value: String(deliveries.filter(d => d.status === "PENDING").length), color: "#F08C00" },
+          { title: "لە ڕێگادا", value: String(deliveries.filter(d => d.status === "IN_TRANSIT").length), color: "#1971C2" },
+          { title: "گەیشتوو", value: String(deliveries.filter(d => d.status === "DELIVERED").length), color: "#2B8A3E" },
         ].map((k, i) => (
-          <div className="kpi-card" key={i}>
-            <div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div>
-            <div className="kpi-card-value" style={{ fontSize: "1.4rem", color: k.color }}>{k.value}</div>
-          </div>
+          <div className="kpi-card" key={i}><div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: k.color }}>{k.value}</div></div>
         ))}
       </div>
 
+      <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+        <div style={{ position: "relative" }}>
+          <Search size={16} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
+          <input type="text" placeholder="گەڕان..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ width: 280, padding: "8px 36px 8px 12px", border: "1px solid #DEE2E6", borderRadius: 8, fontSize: 13, background: "#F8F9FA", fontFamily: "inherit" }} />
+        </div>
+        <div style={{ display: "flex", gap: 4, background: "#F1F3F5", borderRadius: 8, padding: 2 }}>
+          {["هەموو", ...Object.values(statusLabels)].map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 500, background: statusFilter === s ? "white" : "transparent", color: statusFilter === s ? "#1A1A2E" : "#6C757D", boxShadow: statusFilter === s ? "0 1px 2px rgba(0,0,0,0.05)" : "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>{s}</button>
+          ))}
+        </div>
+      </div>
+
       <div className="data-table-wrapper">
-        <div className="data-table-header"><span className="data-table-title">گەیاندنەکان</span></div>
         <table className="data-table">
-          <thead>
-            <tr><th>کۆد</th><th>داواکاری</th><th>جۆر</th><th>شۆفێر</th><th>مەنزیل</th><th>بەرهەم</th><th>نێردراو</th><th>گەیشت</th><th>بارودۆخ</th></tr>
-          </thead>
+          <thead><tr><th>داواکاری</th><th>شوفێر</th><th>مەنزڵ</th><th>کاڵا</th><th>نێردراوە</th><th>گەیشتووە</th><th>بارودۆخ</th><th></th></tr></thead>
           <tbody>
-            {deliveries.map((d) => {
-              const sc = statusConfig[d.status];
-              const tc = typeConfig[d.type];
-              return (
-                <tr key={d.id}>
-                  <td style={{ fontWeight: 600, fontSize: 12, color: "#6C757D" }}>{d.id}</td>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{d.order}</td>
-                  <td><span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: tc.bg, color: tc.color }}>{d.typeLabel}</span></td>
-                  <td>
-                    {d.driver !== "—" ? (
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{d.driver}</div>
-                        <div style={{ fontSize: 11, color: "#ADB5BD", direction: "ltr", textAlign: "right" }}>{d.phone}</div>
-                      </div>
-                    ) : (
-                      <span style={{ color: "#FD7E14", fontSize: 12, fontWeight: 600 }}>دیاری نەکراو</span>
-                    )}
-                  </td>
-                  <td style={{ fontSize: 12, maxWidth: 200 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}><MapPin size={11} color="#ADB5BD" /> {d.destination}</div>
-                  </td>
-                  <td style={{ fontSize: 12, color: "#6C757D" }}>{d.items}</td>
-                  <td style={{ fontSize: 12, color: "#6C757D" }}>{d.dispatchedAt}</td>
-                  <td style={{ fontSize: 12, color: "#6C757D" }}>{d.deliveredAt}</td>
-                  <td>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: sc.bg, color: sc.color }}>
-                      {sc.icon} {d.statusLabel}
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
+            {filtered.map(d => (
+              <tr key={d.id}>
+                <td style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{d.orderNumber}</td>
+                <td>
+                  {d.driver ? (
+                    <div><span style={{ fontSize: 13, fontWeight: 600 }}>{d.driver}</span><div style={{ fontSize: 11, color: "#6C757D", direction: "ltr", textAlign: "right" }}>{d.driverPhone}</div></div>
+                  ) : (
+                    <button onClick={() => openDriverModal(d.id)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #4263EB", background: "#EDF2FF", fontSize: 11, cursor: "pointer", fontFamily: "inherit", color: "#4263EB", fontWeight: 600 }}>دیاریکردنی شوفێر</button>
+                  )}
+                </td>
+                <td style={{ fontSize: 12, maxWidth: 180 }}><div style={{ display: "flex", alignItems: "center", gap: 4 }}><MapPin size={12} color="#ADB5BD" />{d.destination}</div></td>
+                <td style={{ fontSize: 11, color: "#6C757D", maxWidth: 160 }}>{d.items}</td>
+                <td style={{ fontSize: 12, color: "#6C757D" }}>{d.dispatchedAt}</td>
+                <td style={{ fontSize: 12, color: "#6C757D" }}>{d.deliveredAt}</td>
+                <td>
+                  <select value={d.status} onChange={(e) => handleStatusChange(d.id, e.target.value as DeliveryStatus)} style={{ padding: "4px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, border: "1px solid #DEE2E6", fontFamily: "inherit", cursor: "pointer", background: statusColors[d.status].bg, color: statusColors[d.status].color }}>
+                    {Object.entries(statusLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <button onClick={() => openDriverModal(d.id)} style={{ padding: 4, color: "#6C757D", background: "none", border: "none", cursor: "pointer" }} title="دەستکاری شوفێر"><User size={14} /></button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
+        <div className="pagination"><span className="pagination-info">{filtered.length} گەیاندن</span></div>
       </div>
+
+      {/* Driver Assignment Modal */}
+      <Modal open={!!editId} onClose={() => setEditId(null)} title="دیاریکردنی شوفێر" width={420}>
+        <FormGrid cols={1}>
+          <FormField label="ناوی شوفێر"><input style={inputStyle} value={driverForm.driver} onChange={(e) => setDriverForm({ ...driverForm, driver: e.target.value })} placeholder="ناوی شوفێر" /></FormField>
+          <FormField label="تەلەفۆنی شوفێر"><input style={inputStyle} value={driverForm.driverPhone} onChange={(e) => setDriverForm({ ...driverForm, driverPhone: e.target.value })} placeholder="0770 XXX XXXX" /></FormField>
+        </FormGrid>
+        <div style={{ display: "flex", gap: 12, justifyContent: "flex-start", marginTop: 24, paddingTop: 16, borderTop: "1px solid #E9ECEF" }}>
+          <button onClick={saveDriver} style={{ padding: "10px 28px", borderRadius: 8, background: "#4263EB", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit" }}>پاشەکەوتکردن</button>
+          <button onClick={() => setEditId(null)} style={{ padding: "10px 28px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#6C757D" }}>پاشگەزبوونەوە</button>
+        </div>
+      </Modal>
     </>
   );
 }

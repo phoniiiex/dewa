@@ -637,6 +637,18 @@
 }
 .status-badge.processing::before { background: var(--color-info); }
 
+.status-badge.shipped {
+  background: #D0EBFF;
+  color: #1971C2;
+}
+.status-badge.shipped::before { background: #1971C2; }
+
+.status-badge.delivered {
+  background: #D3F9D8;
+  color: #2B8A3E;
+}
+.status-badge.delivered::before { background: #2B8A3E; }
+
 /* Customer cell */
 .customer-cell {
   display: flex;

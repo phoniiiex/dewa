@@ -1,487 +1,134 @@
 "use client";
-import { useState } from "react";
-import {
-  TrendingUp,
-  TrendingDown,
-  ArrowUpRight,
-  ArrowDownRight,
-  ShoppingCart,
-  Users,
-  Gift,
-  Package,
-  MoreHorizontal,
-} from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
-  PieChart,
-  Pie,
-} from "recharts";
+import { Package, Users, ShoppingCart, DollarSign, TrendingUp, Truck, AlertTriangle, ArrowUpCircle, Clock, UserCheck } from "lucide-react";
+import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
+import Link from "next/link";
 
-/* ============ Mock Data ============ */
-const kpiData = [
-  {
-    title: "کۆی فرۆشتن",
-    value: 48_294_000,
-    currency: true,
-    trend: 7.1,
-    action: "ڕاپۆرت",
-    icon: <TrendingUp size={16} />,
-  },
-  {
-    title: "کۆی داواکارییەکان",
-    value: 1248,
-    currency: false,
-    trend: -1.4,
-    action: "ڕاپۆرت",
-    icon: <ShoppingCart size={16} />,
-  },
-  {
-    title: "کڕیاری چالاک",
-    value: 186,
-    currency: false,
-    trend: 2.1,
-    action: "وردەکاری",
-    icon: <Users size={16} />,
-  },
-  {
-    title: "بۆنەسی دابەشکراو",
-    value: 3842,
-    currency: false,
-    trend: 3.2,
-    suffix: " یەکە",
-    action: "وردەکاری",
-    icon: <Gift size={16} />,
-  },
-  {
-    title: "بەرهەمی چالاک",
-    value: 248,
-    currency: false,
-    trend: 1.8,
-    action: "وردەکاری",
-    icon: <Package size={16} />,
-  },
-  {
-    title: "داواکاری چاوەڕوان",
-    value: 28,
-    currency: false,
-    trend: -2.0,
-    action: "سەیرکردن",
-    icon: <ShoppingCart size={16} />,
-    highlight: true,
-  },
-];
-
-const salesChartData = [
-  { name: "شوبات", value: 35_000_000 },
-  { name: "ئازار", value: 42_000_000 },
-  { name: "نیسان", value: 38_000_000 },
-  { name: "ئایار", value: 48_000_000 },
-  { name: "حوزەیران", value: 52_000_000 },
-  { name: "تەمووز", value: 48_294_000 },
-];
-
-const topProductsData = [
-  { name: "پاراسیتامۆل ٥٠٠ملگ", value: 12_500_000, color: "#4263EB" },
-  { name: "ئەمۆکسیسیلین ٢٥٠ملگ", value: 9_800_000, color: "#F47B35" },
-  { name: "ئۆمیپرازۆل ٢٠ملگ", value: 8_200_000, color: "#40C057" },
-  { name: "مێتفۆرمین ٥٠٠ملگ", value: 7_100_000, color: "#7C5CFC" },
-  { name: "ئازیترۆمایسین ٥٠٠ملگ", value: 5_400_000, color: "#339AF0" },
-];
-
-const clientSegmentData = [
-  { name: "دەرمانخانە", value: 45, color: "#4263EB" },
-  { name: "نەخۆشخانە", value: 30, color: "#F47B35" },
-  { name: "کلینیک", value: 18, color: "#40C057" },
-  { name: "کۆمەڵ", value: 7, color: "#7C5CFC" },
-];
-
-const recentOrders = [
-  {
-    id: "#ORD-98745",
-    date: "٢٩ تشرینی یەکەم",
-    status: "paid",
-    statusLabel: "پارەدراو",
-    customer: "دەرمانخانەی ئازادی",
-    product: "پاراسیتامۆل ٥٠٠ملگ",
-    amount: 399_000,
-    avatarColor: "#4263EB",
-  },
-  {
-    id: "#ORD-23674",
-    date: "٢٨ تشرینی یەکەم",
-    status: "processing",
-    statusLabel: "لە ئامادەکردن",
-    customer: "نەخۆشخانەی سلێمانی",
-    product: "ئەمۆکسیسیلین ٢٥٠ملگ",
-    amount: 1_299_000,
-    avatarColor: "#F47B35",
-  },
-  {
-    id: "#ORD-78967",
-    date: "٢٧ تشرینی یەکەم",
-    status: "paid",
-    statusLabel: "پارەدراو",
-    customer: "کلینیکی هەنار",
-    product: "ئۆمیپرازۆل ٢٠ملگ",
-    amount: 549_000,
-    avatarColor: "#40C057",
-  },
-  {
-    id: "#ORD-46578",
-    date: "٢٦ تشرینی یەکەم",
-    status: "pending",
-    statusLabel: "چاوەڕوان",
-    customer: "دەرمانخانەی ڕۆژ",
-    product: "مێتفۆرمین ٥٠٠ملگ",
-    amount: 250_000,
-    avatarColor: "#7C5CFC",
-  },
-  {
-    id: "#ORD-12567",
-    date: "٢٥ تشرینی یەکەم",
-    status: "paid",
-    statusLabel: "پارەدراو",
-    customer: "دەرمانخانەی ڕۆشنا",
-    product: "ئازیترۆمایسین ٥٠٠ملگ",
-    amount: 180_000,
-    avatarColor: "#339AF0",
-  },
-];
-
-const periodTabs = [
-  { label: "١ ڕۆژ", key: "1D" },
-  { label: "١ هەفتە", key: "1W", active: true },
-  { label: "١ مانگ", key: "1M" },
-  { label: "٣ مانگ", key: "3M" },
-  { label: "١ ساڵ", key: "1Y" },
-];
-
-/* ============ Dashboard Page ============ */
 export default function DashboardPage() {
-  const [activePeriod, setActivePeriod] = useState("1W");
+  const { orders, products, clients, reps, transactions, deliveries, warehouses } = useData();
+
+  const totalRevenue = orders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0);
+  const pendingOrders = orders.filter(o => o.status === "PENDING").length;
+  const nearExpiryProducts = products.filter(p => {
+    const diff = new Date(p.expiryDate).getTime() - Date.now();
+    return diff > 0 && diff < 90 * 24 * 60 * 60 * 1000;
+  }).length;
+  const activeDeliveries = deliveries.filter(d => d.status === "IN_TRANSIT").length;
+  const totalIncome = transactions.filter(t => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0);
+
+  const recentOrders = [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+  const statusLabels: Record<string, string> = { PENDING: "چاوەڕوان", PROCESSING: "لە پڕۆسەدا", SHIPPED: "نێردرا", DELIVERED: "گەیشت", PAID: "پارەدراو", CANCELLED: "هەڵوەشاوە" };
+  const statusClasses: Record<string, string> = { PENDING: "pending", PROCESSING: "processing", SHIPPED: "shipped", DELIVERED: "delivered", PAID: "paid", CANCELLED: "cancelled" };
 
   return (
     <>
-      {/* KPI Grid */}
-      <div className="kpi-grid">
-        {kpiData.map((kpi, i) => {
-          const isUp = kpi.trend >= 0;
-          return (
-            <div className={`kpi-card ${kpi.highlight ? "highlight" : ""}`} key={i}>
-              <div className="kpi-card-header">
-                <span className="kpi-card-title">{kpi.title}</span>
-                <span className="kpi-card-action">{kpi.action}</span>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700 }}>بەخێربێیت بۆ دەوا 👋</h1>
+        <p style={{ fontSize: 14, color: "#6C757D", marginTop: 4 }}>پوختەی گشتی سیستەم</p>
+      </div>
+
+      {/* Main KPIs */}
+      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
+        {[
+          { title: "کۆی داهات", value: formatIQD(totalRevenue), icon: <DollarSign size={20} />, color: "#40C057", bg: "#EBFBEE", trend: "+١٢٪" },
+          { title: "داواکاری", value: String(orders.length), icon: <ShoppingCart size={20} />, color: "#4263EB", bg: "#EDF2FF" },
+          { title: "بەرهەم", value: String(products.length), icon: <Package size={20} />, color: "#7C5CFC", bg: "#F3F0FF" },
+          { title: "کڕیار", value: String(clients.length), icon: <Users size={20} />, color: "#F47B35", bg: "#FEF3EB" },
+        ].map((k, i) => (
+          <div className="kpi-card" key={i} style={{ position: "relative", overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div>
+                <div className="kpi-card-value" style={{ fontSize: "1.5rem" }}>{k.value}</div>
+                {k.trend && <span style={{ fontSize: 11, color: "#40C057", fontWeight: 600, marginTop: 4, display: "inline-block" }}>{k.trend}</span>}
               </div>
-              <div className="kpi-card-value">
-                {kpi.currency ? (
-                  <>
-                    <span>{(kpi.value / 1000).toLocaleString("en-US")}</span>
-                    <span className="currency">× ١٠٠٠ د.ع</span>
-                  </>
-                ) : (
-                  <span>
-                    {kpi.value.toLocaleString("en-US")}
-                    {kpi.suffix || ""}
-                  </span>
-                )}
-                <span className={`kpi-badge ${isUp ? "up" : "down"}`}>
-                  {isUp ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                  {kpi.trend > 0 ? "+" : ""}
-                  {kpi.trend}%
-                </span>
-              </div>
-              {i === 0 && (
-                <div className="kpi-period-tabs">
-                  {periodTabs.map((tab) => (
-                    <button
-                      key={tab.key}
-                      className={`kpi-period-tab ${activePeriod === tab.key ? "active" : ""}`}
-                      onClick={() => setActivePeriod(tab.key)}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: k.bg, display: "flex", alignItems: "center", justifyContent: "center", color: k.color }}>{k.icon}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }}>
+        {/* Recent Orders */}
+        <div style={{ background: "white", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Clock size={16} color="#4263EB" /> کۆتا داواکارییەکان</h3>
+            <Link href="/dashboard/orders" style={{ fontSize: 12, color: "#4263EB", fontWeight: 600, textDecoration: "none" }}>هەموو →</Link>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {recentOrders.map(o => (
+              <div key={o.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "#F8F9FA", borderRadius: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "monospace" }}>{o.orderNumber}</span>
+                  <span style={{ fontSize: 13, color: "#6C757D" }}>{o.clientName}</span>
                 </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>{formatIQD(o.totalAmount)}</span>
+                  <span className={`status-badge ${statusClasses[o.status]}`}>{statusLabels[o.status]}</span>
+                </div>
+              </div>
+            ))}
+            {recentOrders.length === 0 && <p style={{ fontSize: 13, color: "#ADB5BD", textAlign: "center", padding: 24 }}>هیچ داواکارییەک نییە</p>}
+          </div>
+        </div>
+
+        {/* Quick Stats */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Alerts */}
+          <div style={{ background: "white", borderRadius: 14, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>ئاگاداری</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {pendingOrders > 0 && (
+                <Link href="/dashboard/orders" style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "#FFF3BF", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#F08C00", textDecoration: "none" }}>
+                  <Clock size={14} /> {pendingOrders} داواکاری چاوەڕوان
+                </Link>
+              )}
+              {nearExpiryProducts > 0 && (
+                <Link href="/dashboard/products" style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "#FFE3E3", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#C92A2A", textDecoration: "none" }}>
+                  <AlertTriangle size={14} /> {nearExpiryProducts} بەرهەم نزیکی بەسەرچوونن
+                </Link>
+              )}
+              {activeDeliveries > 0 && (
+                <Link href="/dashboard/logistics" style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "#D0EBFF", borderRadius: 8, fontSize: 13, fontWeight: 600, color: "#1971C2", textDecoration: "none" }}>
+                  <Truck size={14} /> {activeDeliveries} گەیاندن لە ڕێگادا
+                </Link>
+              )}
+              {pendingOrders === 0 && nearExpiryProducts === 0 && activeDeliveries === 0 && (
+                <p style={{ fontSize: 13, color: "#40C057", textAlign: "center", padding: 12 }}>✅ هیچ ئاگادارییەک نییە</p>
               )}
             </div>
-          );
-        })}
-      </div>
+          </div>
 
-      {/* Charts Row */}
-      <div className="chart-grid">
-        {/* Sales Chart */}
-        <div className="chart-card span-2">
-          <div className="chart-card-header">
-            <div>
-              <div className="chart-card-title">کۆی فرۆشتن</div>
-              <div className="chart-card-subtitle">
-                ٨,٩٤٤ × ١٠٠٠ د.ع{" "}
-                <span className="kpi-badge up" style={{ marginRight: 8 }}>
-                  <ArrowUpRight size={10} /> +٢.١٪
-                </span>
-              </div>
+          {/* Financial Summary */}
+          <div style={{ background: "linear-gradient(135deg, #1A1A2E, #2D2B55)", borderRadius: 14, padding: 20, color: "white" }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, opacity: 0.9 }}>پوختەی دارایی</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+              <span style={{ fontSize: 12, opacity: 0.7 }}>داهات</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#40C057" }}>+{formatIQD(totalIncome)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+              <span style={{ fontSize: 12, opacity: 0.7 }}>خەرجی</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#FA5252" }}>-{formatIQD(totalExpense)}</span>
+            </div>
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 12, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>قازانج</span>
+              <span style={{ fontSize: 16, fontWeight: 800 }}>{formatIQD(totalIncome - totalExpense)}</span>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={salesChartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
-              <defs>
-                <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#4263EB" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#4263EB" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E9ECEF" vertical={false} />
-              <XAxis
-                dataKey="name"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: "#6C757D", fontSize: 12 }}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: "#6C757D", fontSize: 12 }}
-                tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
-                orientation="left"
-              />
-              <Tooltip
-                formatter={(value: any) => [formatIQD(Number(value)), "فرۆشتن"]}
-                contentStyle={{
-                  background: "#1A1A2E",
-                  border: "none",
-                  borderRadius: 8,
-                  color: "white",
-                  fontSize: 13,
-                  direction: "rtl",
-                }}
-                labelStyle={{ color: "#ADB5BD" }}
-              />
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke="#4263EB"
-                strokeWidth={2.5}
-                fill="url(#salesGradient)"
-                dot={{ fill: "#4263EB", r: 4, strokeWidth: 2, stroke: "white" }}
-                activeDot={{ r: 6, strokeWidth: 2 }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
 
-        {/* Client Segments */}
-        <div className="chart-card">
-          <div className="chart-card-header">
-            <div className="chart-card-title">بەشەکانی کڕیار</div>
-            <span className="kpi-badge up" style={{ fontSize: 11 }}>+٥.٨٪</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={clientSegmentData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={80}
-                  paddingAngle={3}
-                  dataKey="value"
-                  startAngle={90}
-                  endAngle={450}
-                >
-                  {clientSegmentData.map((entry, index) => (
-                    <Cell key={index} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-            {clientSegmentData.map((seg, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  fontSize: 13,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      background: seg.color,
-                      display: "inline-block",
-                    }}
-                  />
-                  <span style={{ color: "#6C757D" }}>{seg.name}</span>
-                </div>
-                <span style={{ fontWeight: 600 }}>{seg.value}٪</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Top Products Bar */}
-      <div className="chart-grid" style={{ marginBottom: 24 }}>
-        <div className="chart-card span-2">
-          <div className="chart-card-header">
-            <div className="chart-card-title">باشترین بەرهەمەکان</div>
-            <span className="kpi-card-action">هەمووی ببینە</span>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={topProductsData} layout="vertical" margin={{ left: 0, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E9ECEF" horizontal={false} />
-              <XAxis
-                type="number"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: "#6C757D", fontSize: 11 }}
-                tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
-              />
-              <YAxis
-                dataKey="name"
-                type="category"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: "#1A1A2E", fontSize: 12 }}
-                width={140}
-                orientation="right"
-              />
-              <Tooltip
-                formatter={(value: any) => [formatIQD(Number(value)), "داهات"]}
-                contentStyle={{
-                  background: "#1A1A2E",
-                  border: "none",
-                  borderRadius: 8,
-                  color: "white",
-                  fontSize: 13,
-                  direction: "rtl",
-                }}
-              />
-              <Bar dataKey="value" radius={[4, 4, 4, 4]} barSize={20}>
-                {topProductsData.map((entry, index) => (
-                  <Cell key={index} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Recent Activity Placeholder */}
-        <div className="chart-card">
-          <div className="chart-card-header">
-            <div className="chart-card-title">چالاکییە تازەکان</div>
-            <span className="kpi-card-action">وردەکاری</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
+          {/* Quick Nav */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {[
-              { text: "ئینڤێنتۆری نوێکرایەوە: پاراسیتامۆل", time: "١١:٣٠", color: "#4263EB" },
-              { text: "گۆڕانکاری نرخ: ئەمۆکسیسیلین", time: "١١:٣٠", color: "#F47B35" },
-              { text: "بەرهەمی نوێ زیادکرا: ئۆمیپرازۆل", time: "١١:٣٠", color: "#40C057" },
-              { text: "داواکاری تەواوبوو: #ORD-98745", time: "١٠:٤٥", color: "#7C5CFC" },
-              { text: "کڕیاری نوێ: دەرمانخانەی هەناو", time: "١٠:٣٠", color: "#339AF0" },
-            ].map((act, i) => (
-              <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: act.color,
-                    marginTop: 6,
-                    flexShrink: 0,
-                  }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: "#1A1A2E" }}>{act.text}</div>
-                </div>
-                <div style={{ fontSize: 11, color: "#ADB5BD", whiteSpace: "nowrap" }}>
-                  {act.time}
-                </div>
-              </div>
+              { label: "نوێنەران", href: "/dashboard/reps", icon: <UserCheck size={16} />, bg: "#EBFBEE", color: "#40C057" },
+              { label: "کۆگاکان", href: "/dashboard/warehouses", icon: <Truck size={16} />, bg: "#F3F0FF", color: "#7C5CFC" },
+              { label: "بۆنەس", href: "/dashboard/bonus", icon: <TrendingUp size={16} />, bg: "#FEF3EB", color: "#F47B35" },
+              { label: "شیکاری", href: "/dashboard/analytics", icon: <ArrowUpCircle size={16} />, bg: "#EDF2FF", color: "#4263EB" },
+            ].map((item, i) => (
+              <Link key={i} href={item.href} style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", background: item.bg, borderRadius: 10, fontSize: 13, fontWeight: 600, color: item.color, textDecoration: "none" }}>
+                {item.icon} {item.label}
+              </Link>
             ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Orders Table */}
-      <div className="data-table-wrapper">
-        <div className="data-table-header">
-          <span className="data-table-title">داواکارییە تازەکان</span>
-          <button className="kpi-card-action">هەمووی ببینە</button>
-        </div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>ژمارە</th>
-              <th>بەروار</th>
-              <th>بارودۆخ</th>
-              <th>کڕیار</th>
-              <th>بەرهەم</th>
-              <th>بڕی پارە</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentOrders.map((order) => (
-              <tr key={order.id}>
-                <td style={{ fontWeight: 600, fontSize: 13 }}>{order.id}</td>
-                <td style={{ color: "#6C757D" }}>{order.date}</td>
-                <td>
-                  <span className={`status-badge ${order.status}`}>
-                    {order.statusLabel}
-                  </span>
-                </td>
-                <td>
-                  <div className="customer-cell">
-                    <div
-                      className="customer-avatar"
-                      style={{ background: order.avatarColor }}
-                    >
-                      {order.customer.charAt(0)}
-                    </div>
-                    <span>{order.customer}</span>
-                  </div>
-                </td>
-                <td>{order.product}</td>
-                <td style={{ fontWeight: 600 }}>{formatIQD(order.amount)}</td>
-                <td>
-                  <button style={{ padding: 4, color: "#ADB5BD" }}>
-                    <MoreHorizontal size={16} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="pagination">
-          <span className="pagination-info">پەڕەی ١ لە ١٦</span>
-          <div className="pagination-buttons">
-            <button className="pagination-btn">«</button>
-            <button className="pagination-btn">‹</button>
-            <button className="pagination-btn active">١</button>
-            <button className="pagination-btn">٢</button>
-            <button className="pagination-btn">٣</button>
-            <button className="pagination-btn">…</button>
-            <button className="pagination-btn">١٦</button>
-            <button className="pagination-btn">›</button>
-            <button className="pagination-btn">»</button>
           </div>
         </div>
       </div>

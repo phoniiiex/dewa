@@ -1,127 +1,131 @@
 "use client";
-import { Gift, ArrowUpRight, TrendingUp, Percent, Package, Users } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
+import { Gift, Warehouse, UserCheck, ShoppingCart } from "lucide-react";
+import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 
-const bonusByRep = [
-  { name: "ئاکۆ", units: 4200, color: "#4263EB" },
-  { name: "هێمن", units: 3100, color: "#F47B35" },
-  { name: "شادی", units: 2800, color: "#40C057" },
-  { name: "دانا", units: 2200, color: "#7C5CFC" },
-  { name: "ڕێبوار", units: 1800, color: "#339AF0" },
-  { name: "سەردار", units: 1400, color: "#E64980" },
-];
-
-const bonusByWarehouse = [
-  { name: "هیمۆ لاب (٢٠٪)", units: 3200, color: "#4263EB" },
-  { name: "ڕۆشنبیری (١٥٪)", units: 2400, color: "#F47B35" },
-  { name: "سەلامەتی (١٨٪)", units: 1800, color: "#40C057" },
-  { name: "ناوەند (٢٢٪)", units: 1500, color: "#7C5CFC" },
-];
-
-const splitData = [
-  { name: "بۆنەسی کۆگا", value: 45, color: "#4263EB" },
-  { name: "بۆنەسی نوێنەر", value: 55, color: "#F47B35" },
-];
-
-const recentBonus = [
-  { order: "#ORD-98745", client: "دەرمانخانەی ئازادی", rep: "ئاکۆ", warehouse: "هیمۆ لاب", totalPct: 50, whPct: 20, repPct: 30, baseQty: 100, whBonus: 20, repBonus: 30, totalShipped: 150 },
-  { order: "#ORD-23674", client: "نەخۆشخانەی سلێمانی", rep: "هێمن", warehouse: "ڕۆشنبیری", totalPct: 40, whPct: 15, repPct: 25, baseQty: 200, whBonus: 30, repBonus: 50, totalShipped: 280 },
-  { order: "#ORD-78967", client: "کلینیکی هەنار", rep: "شادی", warehouse: "سەلامەتی", totalPct: 35, whPct: 18, repPct: 17, baseQty: 80, whBonus: 14, repBonus: 14, totalShipped: 108 },
-  { order: "#ORD-46578", client: "دەرمانخانەی ڕۆژ", rep: "دانا", warehouse: "ناوەند", totalPct: 60, whPct: 22, repPct: 38, baseQty: 50, whBonus: 11, repBonus: 19, totalShipped: 80 },
-];
-
 export default function BonusPage() {
+  const { orders, warehouses, reps } = useData();
+  const warehouseOrders = orders.filter(o => o.routingMode === "WAREHOUSE");
+
+  // Per-warehouse breakdown
+  const warehouseStats = warehouses.map(w => {
+    const wo = orders.filter(o => o.warehouseId === w.id);
+    const totalBonus = wo.reduce((s, o) => s + o.items.reduce((a, i) => a + i.bonusQty * i.unitPrice, 0), 0);
+    return { ...w, orders: wo.length, totalBonus };
+  });
+
+  // Per-rep breakdown
+  const repStats = reps.map(r => {
+    const ro = orders.filter(o => o.repId === r.id);
+    const totalRepBonus = ro.reduce((s, o) => {
+      const repBonusFraction = o.repBonusPct / 100;
+      return s + o.items.reduce((a, i) => a + Math.round(i.quantity * repBonusFraction) * i.unitPrice, 0);
+    }, 0);
+    return { ...r, orders: ro.length, totalRepBonus };
+  });
+
+  const totalBonusValue = orders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.bonusQty * i.unitPrice, 0), 0);
+
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, background: "#EBFBEE", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#40C057" }}><Gift size={20} /></div>
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700 }}>شیکاری بۆنەس</h1>
-            <p style={{ fontSize: 13, color: "#6C757D" }}>شوێنپێگرتنی سیستەمی بۆنەس و دابەشبوونی لەنێوان کۆگا و نوێنەر</p>
-          </div>
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+        <div style={{ width: 40, height: 40, background: "linear-gradient(135deg, #7C5CFC, #4263EB)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "white" }}><Gift size={20} /></div>
+        <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>سیستەمی بۆنەس</h1><p style={{ fontSize: 13, color: "#6C757D" }}>شیکاری بۆنەسی کۆگاکان و نوێنەران</p></div>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
         {[
-          { title: "کۆی بۆنەسی دابەشکراو", value: "١٦,٤٠٠ یەکە", icon: <Gift size={16} /> },
-          { title: "بۆنەسی کۆگاکان", value: "٨,٩٠٠ یەکە", icon: <Package size={16} /> },
-          { title: "بۆنەسی نوێنەران", value: "٧,٥٠٠ یەکە", icon: <Users size={16} /> },
-          { title: "ناوەندی ڕێژەی بۆنەس", value: "٣٨٪", icon: <Percent size={16} /> },
+          { title: "کۆی داواکاری بە بۆنەس", value: String(orders.filter(o => o.totalBonusPct > 0).length) },
+          { title: "لە ڕێگای کۆگا", value: String(warehouseOrders.length) },
+          { title: "نرخی بۆنەسی کۆ", value: formatIQD(totalBonusValue), color: "#7C5CFC" },
+          { title: "ڕێژەی بۆنەسی تێکڕا", value: orders.length > 0 ? `${Math.round(orders.reduce((s, o) => s + o.totalBonusPct, 0) / orders.length)}٪` : "٠٪" },
         ].map((k, i) => (
-          <div className="kpi-card" key={i}>
-            <div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div>
-            <div className="kpi-card-value" style={{ fontSize: "1.4rem" }}>{k.value}</div>
-          </div>
+          <div className="kpi-card" key={i}><div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: k.color }}>{k.value}</div></div>
         ))}
       </div>
 
-      <div className="chart-grid" style={{ marginBottom: 24 }}>
-        <div className="chart-card span-2">
-          <div className="chart-card-header"><div className="chart-card-title">بۆنەسی دابەشکراو بۆ هەر نوێنەرێک</div></div>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={bonusByRep} layout="vertical" margin={{ left: 0, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E9ECEF" horizontal={false} />
-              <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: "#6C757D", fontSize: 11 }} />
-              <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: "#1A1A2E", fontSize: 12 }} width={60} orientation="right" />
-              <Tooltip formatter={(value: any) => [`${Number(value).toLocaleString()} یەکە`, "بۆنەس"]} contentStyle={{ background: "#1A1A2E", border: "none", borderRadius: 8, color: "white", fontSize: 13, direction: "rtl" }} />
-              <Bar dataKey="units" radius={[4, 4, 4, 4]} barSize={18}>
-                {bonusByRep.map((e, i) => <Cell key={i} fill={e.color} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="chart-card">
-          <div className="chart-card-header"><div className="chart-card-title">دابەشبوونی بۆنەس</div></div>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={splitData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={3} dataKey="value" startAngle={90} endAngle={450}>
-                {splitData.map((e, i) => <Cell key={i} fill={e.color} />)}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-            {splitData.map((s, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, display: "inline-block" }} />
-                  <span style={{ color: "#6C757D" }}>{s.name}</span>
-                </div>
-                <span style={{ fontWeight: 600 }}>{s.value}٪</span>
-              </div>
-            ))}
+      {/* How Bonus Works */}
+      <div style={{ background: "linear-gradient(135deg, #1A1A2E, #2D2B55)", color: "white", borderRadius: 14, padding: 24, marginBottom: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>چۆنیەتی کارکردنی سیستەمی بۆنەس</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+          <div style={{ padding: 16, background: "rgba(255,255,255,0.1)", borderRadius: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#F47B35" }}>١. بۆنەسی بنەڕەتی کۆگا</div>
+            <p style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.6 }}>بەڕێوەبەر ڕێژەیەکی دیاریکراو بۆ هەر کۆگایەک دادەنێت (بۆ نموونە: ٢٠٪)</p>
+          </div>
+          <div style={{ padding: 16, background: "rgba(255,255,255,0.1)", borderRadius: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#4263EB" }}>٢. بۆنەسی نوێنەر</div>
+            <p style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.6 }}>نوێنەر ڕێژەی بۆنەسی کۆ دادەنێت (بۆ نموونە: ٥٠٪) بۆ داواکارییەکە</p>
+          </div>
+          <div style={{ padding: 16, background: "rgba(255,255,255,0.1)", borderRadius: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#40C057" }}>٣. شیکاری ئۆتۆماتیکی</div>
+            <p style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.6 }}>سیستەم بۆنەسی کۆگا لە کۆی بۆنەس دەسڕێتەوە (٥٠٪ - ٢٠٪ = ٣٠٪ بۆ نوێنەر)</p>
           </div>
         </div>
       </div>
 
-      {/* Bonus Detail Table */}
-      <div className="data-table-wrapper">
-        <div className="data-table-header"><span className="data-table-title">وردەکاری بۆنەسی تازە</span></div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>داواکاری</th><th>کڕیار</th><th>نوێنەر</th><th>کۆگا</th><th>بنەڕەت</th>
-              <th>کۆی بۆنەس٪</th><th>بۆنەس کۆگا</th><th>بۆنەس نوێنەر</th><th>کۆی نێردراو</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentBonus.map((b, i) => (
-              <tr key={i}>
-                <td style={{ fontWeight: 600, fontSize: 13 }}>{b.order}</td>
-                <td style={{ fontSize: 13 }}>{b.client}</td>
-                <td style={{ fontSize: 13, color: "#6C757D" }}>{b.rep}</td>
-                <td style={{ fontSize: 13, color: "#6C757D" }}>{b.warehouse}</td>
-                <td style={{ fontWeight: 600 }}>{b.baseQty}</td>
-                <td><span style={{ background: "#EDF2FF", color: "#4263EB", padding: "2px 8px", borderRadius: 4, fontSize: 12, fontWeight: 600 }}>{b.totalPct}٪</span></td>
-                <td><span style={{ color: "#4263EB", fontWeight: 600 }}>+{b.whBonus}</span> <span style={{ fontSize: 10, color: "#ADB5BD" }}>({b.whPct}٪)</span></td>
-                <td><span style={{ color: "#F47B35", fontWeight: 600 }}>+{b.repBonus}</span> <span style={{ fontSize: 10, color: "#ADB5BD" }}>({b.repPct}٪)</span></td>
-                <td style={{ fontWeight: 700, fontSize: 14 }}>{b.totalShipped}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Warehouse Bonus Table */}
+      <div style={{ marginBottom: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><Warehouse size={18} color="#7C5CFC" /> بۆنەسی کۆگاکان</h3>
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead><tr><th>کۆگا</th><th>شار</th><th>ڕێژەی بنەڕەت</th><th>داواکاری</th><th>نرخی بۆنەسی کۆ</th></tr></thead>
+            <tbody>
+              {warehouseStats.map(w => (
+                <tr key={w.id}>
+                  <td style={{ fontWeight: 600 }}>{w.name}</td>
+                  <td style={{ color: "#6C757D" }}>{w.city}</td>
+                  <td><span style={{ padding: "4px 12px", borderRadius: 8, background: "linear-gradient(135deg, #7C5CFC, #4263EB)", color: "white", fontWeight: 700, fontSize: 14 }}>{w.bonusPct}٪</span></td>
+                  <td style={{ fontWeight: 600 }}>{w.orders}</td>
+                  <td style={{ fontWeight: 700, color: "#7C5CFC" }}>{formatIQD(w.totalBonus)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Rep Bonus Table */}
+      <div>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><UserCheck size={18} color="#40C057" /> بۆنەسی نوێنەران</h3>
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead><tr><th>نوێنەر</th><th>شار</th><th>داواکاری</th><th>بۆنەسی نوێنەر</th></tr></thead>
+            <tbody>
+              {repStats.map(r => (
+                <tr key={r.id}>
+                  <td style={{ fontWeight: 600 }}>{r.name}</td>
+                  <td style={{ color: "#6C757D" }}>{r.city}</td>
+                  <td style={{ fontWeight: 600 }}>{r.orders}</td>
+                  <td style={{ fontWeight: 700, color: "#40C057" }}>{formatIQD(r.totalRepBonus)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* All Orders Bonus Detail */}
+      <div style={{ marginTop: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><ShoppingCart size={18} color="#F47B35" /> وردەکاری بۆنەسی داواکارییەکان</h3>
+        <div className="data-table-wrapper">
+          <table className="data-table">
+            <thead><tr><th>ژمارە</th><th>کڕیار</th><th>نوێنەر</th><th>کۆگا</th><th>بۆنەسی کۆ</th><th>بۆنەسی کۆگا</th><th>بۆنەسی نوێنەر</th><th>بۆنەس نۆتەیشن</th></tr></thead>
+            <tbody>
+              {orders.filter(o => o.totalBonusPct > 0).map(o => (
+                <tr key={o.id}>
+                  <td style={{ fontFamily: "monospace", fontWeight: 700 }}>{o.orderNumber}</td>
+                  <td style={{ fontSize: 13 }}>{o.clientName}</td>
+                  <td style={{ fontSize: 13, color: "#6C757D" }}>{o.repName}</td>
+                  <td style={{ fontSize: 13, color: "#6C757D" }}>{o.warehouseName || "—"}</td>
+                  <td style={{ fontWeight: 700, color: "#4263EB" }}>{o.totalBonusPct}٪</td>
+                  <td style={{ fontWeight: 700, color: "#F47B35" }}>{o.warehouseBonusPct}٪</td>
+                  <td style={{ fontWeight: 700, color: "#40C057" }}>{o.repBonusPct}٪</td>
+                  <td style={{ fontWeight: 600, color: "#7C5CFC" }}>{o.bonusNotation}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );

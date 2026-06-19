@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useData } from "@/lib/store";
 import {
   LayoutDashboard,
   BarChart3,
@@ -18,6 +19,8 @@ import {
   ChevronLeft,
   BadgeCheck,
   MoreHorizontal,
+  FileText,
+  Bot,
 } from "lucide-react";
 
 interface NavItem {
@@ -40,6 +43,7 @@ const navSections: NavSection[] = [
       { label: "شیکاری", href: "/dashboard/analytics", icon: <BarChart3 size={18} /> },
       { label: "بەرهەمەکان", href: "/dashboard/products", icon: <Package size={18} /> },
       { label: "داواکارییەکان", href: "/dashboard/orders", icon: <ShoppingCart size={18} />, badge: 3 },
+      { label: "پسوولەکان", href: "/dashboard/invoices", icon: <FileText size={18} /> },
       { label: "بۆنەس", href: "/dashboard/bonus", icon: <Gift size={18} /> },
     ],
   },
@@ -51,6 +55,7 @@ const navSections: NavSection[] = [
       { label: "کۆگاکان", href: "/dashboard/warehouses", icon: <Building2 size={18} /> },
       { label: "دابینکەرەکان", href: "/dashboard/suppliers", icon: <Factory size={18} /> },
       { label: "گواستنەوە", href: "/dashboard/logistics", icon: <Truck size={18} /> },
+      { label: "بۆتی شۆفێر", href: "/dashboard/telegram", icon: <Bot size={18} /> },
     ],
   },
   {
@@ -68,14 +73,19 @@ const footerItems: NavItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { settings } = useData();
 
   return (
     <aside className="sidebar" id="sidebar">
       {/* Header */}
       <div className="sidebar-header">
-        <div className="sidebar-logo">د</div>
+        {settings.logo ? (
+          <img src={settings.logo} alt="logo" style={{ width: 40, height: 40, borderRadius: 12, objectFit: "cover" }} />
+        ) : (
+          <div className="sidebar-logo">د</div>
+        )}
         <div className="sidebar-company">
-          <span className="sidebar-company-name">دەوا</span>
+          <span className="sidebar-company-name">{settings.name || "دەوا"}</span>
           <span className="sidebar-company-type">دەرمانسازی و فرۆشتن</span>
         </div>
         <button className="sidebar-collapse-btn" aria-label="Collapse sidebar">
@@ -126,13 +136,17 @@ export default function Sidebar() {
 
       {/* User */}
       <div className="sidebar-user">
-        <div className="sidebar-user-avatar">ئا</div>
+        {settings.profilePic ? (
+          <img src={settings.profilePic} alt="profile" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+        ) : (
+          <div className="sidebar-user-avatar">ئا</div>
+        )}
         <div className="sidebar-user-info">
           <span className="sidebar-user-name">
             ئاسۆ ئەحمەد
             <BadgeCheck size={14} className="sidebar-user-verified" style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
           </span>
-          <span className="sidebar-user-email">aso@dewa.com</span>
+          <span className="sidebar-user-email">admin@dewa.com</span>
         </div>
         <button className="sidebar-user-more" aria-label="More options">
           <MoreHorizontal size={16} />

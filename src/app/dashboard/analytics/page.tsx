@@ -1,270 +1,150 @@
 "use client";
-import { useState } from "react";
-import {
-  ArrowUpRight,
-  ArrowDownRight,
-  MoreHorizontal,
-} from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
-  PieChart,
-  Pie,
-  LineChart,
-  Line,
-  Legend,
-} from "recharts";
+import { BarChart3, TrendingUp, Users, Package, ShoppingCart, DollarSign, MapPin, Truck } from "lucide-react";
+import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 
-const monthlySales = [
-  { name: "کانونی دووەم", value: 28_000_000 },
-  { name: "شوبات", value: 35_000_000 },
-  { name: "ئازار", value: 42_000_000 },
-  { name: "نیسان", value: 38_000_000 },
-  { name: "ئایار", value: 48_000_000 },
-  { name: "حوزەیران", value: 52_000_000 },
-];
-
-const repPerformance = [
-  { name: "ئاکۆ", orders: 85, revenue: 12_000_000, color: "#4263EB" },
-  { name: "هێمن", orders: 72, revenue: 9_800_000, color: "#F47B35" },
-  { name: "شادی", orders: 68, revenue: 8_200_000, color: "#40C057" },
-  { name: "دانا", orders: 55, revenue: 7_100_000, color: "#7C5CFC" },
-  { name: "ڕێبوار", orders: 48, revenue: 5_400_000, color: "#339AF0" },
-];
-
-const categoryBreakdown = [
-  { name: "ئەنتیبایۆتیک", value: 35, color: "#4263EB" },
-  { name: "ئازارکوژ", value: 28, color: "#F47B35" },
-  { name: "گەدە و هەرس", value: 18, color: "#40C057" },
-  { name: "شەکرە", value: 12, color: "#7C5CFC" },
-  { name: "هتد", value: 7, color: "#339AF0" },
-];
-
-const cityDistribution = [
-  { name: "سلێمانی", value: 320, color: "#4263EB" },
-  { name: "هەولێر", value: 280, color: "#F47B35" },
-  { name: "دهۆک", value: 180, color: "#40C057" },
-  { name: "کەرکوک", value: 150, color: "#7C5CFC" },
-  { name: "هەڵەبجە", value: 90, color: "#339AF0" },
-];
-
-const weeklyComparison = [
-  { name: "شەممە", thisWeek: 4_200_000, lastWeek: 3_800_000 },
-  { name: "یەکشەممە", thisWeek: 5_100_000, lastWeek: 4_600_000 },
-  { name: "دووشەممە", thisWeek: 6_200_000, lastWeek: 5_900_000 },
-  { name: "سێشەممە", thisWeek: 5_800_000, lastWeek: 5_200_000 },
-  { name: "چوارشەممە", thisWeek: 7_100_000, lastWeek: 6_400_000 },
-  { name: "پێنجشەممە", thisWeek: 6_500_000, lastWeek: 5_800_000 },
-  { name: "هەینی", thisWeek: 3_100_000, lastWeek: 2_900_000 },
-];
-
-const topClients = [
-  { name: "دەرمانخانەی ئازادی", orders: 45, revenue: 8_500_000 },
-  { name: "نەخۆشخانەی سلێمانی", orders: 38, revenue: 7_200_000 },
-  { name: "کلینیکی هەنار", orders: 32, revenue: 5_100_000 },
-  { name: "دەرمانخانەی ڕۆژ", orders: 28, revenue: 4_800_000 },
-  { name: "دەرمانخانەی ڕۆشنا", orders: 25, revenue: 3_200_000 },
-];
-
 export default function AnalyticsPage() {
-  const [period, setPeriod] = useState("مانگانە");
+  const { orders, products, clients, reps, transactions, deliveries, warehouses } = useData();
+
+  const totalRevenue = orders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0);
+  const totalIncome = transactions.filter(t => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
+  const totalExpense = transactions.filter(t => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0);
+
+  // City distribution
+  const cityStats = clients.reduce((acc, c) => {
+    acc[c.city] = (acc[c.city] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Category distribution
+  const categoryStats = products.reduce((acc, p) => {
+    acc[p.category] = (acc[p.category] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Order status distribution
+  const statusStats = orders.reduce((acc, o) => {
+    acc[o.status] = (acc[o.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const statusLabels: Record<string, string> = { PENDING: "چاوەڕوان", PROCESSING: "لە پڕۆسەدا", SHIPPED: "نێردرا", DELIVERED: "گەیشت", PAID: "پارەدراو", CANCELLED: "هەڵوەشاوە" };
+
+  // Top products by order count
+  const productOrderCount = orders.flatMap(o => o.items).reduce((acc, i) => {
+    acc[i.productName] = (acc[i.productName] || 0) + i.quantity;
+    return acc;
+  }, {} as Record<string, number>);
+  const topProducts = Object.entries(productOrderCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  // Top reps
+  const topReps = reps.map(r => ({
+    name: r.name,
+    orders: orders.filter(o => o.repId === r.id).length,
+    revenue: orders.filter(o => o.repId === r.id && o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0),
+  })).sort((a, b) => b.revenue - a.revenue);
+
+  const barMax = (entries: [string, number][]) => Math.max(...entries.map(e => e[1]), 1);
 
   return (
     <>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700 }}>شیکاری و ڕاپۆرتەکان</h1>
-          <p style={{ fontSize: 13, color: "#6C757D" }}>شیکاری تەواوی فرۆشتن، بۆنەس، و ئەدای نوێنەران</p>
-        </div>
-        <div style={{ display: "flex", gap: 4, background: "#F1F3F5", borderRadius: 8, padding: 2 }}>
-          {["ڕۆژانە", "هەفتانە", "مانگانە", "ساڵانە"].map((p) => (
-            <button key={p} onClick={() => setPeriod(p)} style={{
-              padding: "6px 14px", borderRadius: 6, fontSize: 12, fontWeight: 500,
-              background: period === p ? "white" : "transparent",
-              color: period === p ? "#1A1A2E" : "#6C757D",
-              boxShadow: period === p ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-              border: "none", cursor: "pointer", fontFamily: "inherit",
-            }}>
-              {p}
-            </button>
-          ))}
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+        <div style={{ width: 40, height: 40, background: "#EDF2FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#4263EB" }}><BarChart3 size={20} /></div>
+        <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>شیکاری و ڕاپۆرتەکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>شیکاری گشتی ئەدای سیستەم</p></div>
       </div>
 
-      {/* KPI Row */}
+      {/* KPIs */}
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
         {[
-          { title: "کۆی داهات", value: "٥٢,٠٠٠,٠٠٠ د.ع", trend: 12.3, up: true },
-          { title: "کۆی داواکاری", value: "٤٨٦", trend: 8.1, up: true },
-          { title: "نرخی ناوەندی داواکاری", value: "١٠٦,٩٩٥ د.ع", trend: -2.4, up: false },
-          { title: "نوێنەری چالاک", value: "١٢", trend: 0, up: true },
-        ].map((kpi, i) => (
-          <div className="kpi-card" key={i} style={{ animationDelay: `${i * 0.05}s` }}>
-            <div className="kpi-card-title" style={{ marginBottom: 8 }}>{kpi.title}</div>
-            <div className="kpi-card-value" style={{ fontSize: "1.4rem" }}>
-              {kpi.value}
-              {kpi.trend !== 0 && (
-                <span className={`kpi-badge ${kpi.up ? "up" : "down"}`} style={{ marginRight: 8 }}>
-                  {kpi.up ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-                  {kpi.trend > 0 ? "+" : ""}{kpi.trend}%
-                </span>
-              )}
-            </div>
+          { title: "کۆی داهات", value: formatIQD(totalRevenue), icon: <DollarSign size={16} />, color: "#40C057" },
+          { title: "داواکاری", value: String(orders.length), icon: <ShoppingCart size={16} />, color: "#4263EB" },
+          { title: "بەرهەم", value: String(products.length), icon: <Package size={16} />, color: "#7C5CFC" },
+          { title: "کڕیار", value: String(clients.length), icon: <Users size={16} />, color: "#F47B35" },
+        ].map((k, i) => (
+          <div className="kpi-card" key={i}>
+            <div className="kpi-card-title" style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>{k.icon} {k.title}</div>
+            <div className="kpi-card-value" style={{ fontSize: "1.4rem", color: k.color }}>{k.value}</div>
           </div>
         ))}
       </div>
 
-      {/* Charts Row 1 */}
-      <div className="chart-grid" style={{ marginBottom: 24 }}>
-        <div className="chart-card span-2">
-          <div className="chart-card-header">
-            <div className="chart-card-title">داهاتی مانگانە</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+        {/* Revenue Summary */}
+        <div style={{ background: "white", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>پوختەی دارایی</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 12, background: "#D3F9D8", borderRadius: 8 }}>
+              <span style={{ fontWeight: 600, color: "#2B8A3E" }}>کۆی داهات</span>
+              <span style={{ fontWeight: 800, fontSize: 16, color: "#2B8A3E" }}>{formatIQD(totalIncome)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 12, background: "#FFE3E3", borderRadius: 8 }}>
+              <span style={{ fontWeight: 600, color: "#C92A2A" }}>کۆی خەرجی</span>
+              <span style={{ fontWeight: 800, fontSize: 16, color: "#C92A2A" }}>{formatIQD(totalExpense)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 12, background: "#EDF2FF", borderRadius: 8 }}>
+              <span style={{ fontWeight: 600, color: "#4263EB" }}>قازانجی تەوا</span>
+              <span style={{ fontWeight: 800, fontSize: 16, color: "#4263EB" }}>{formatIQD(totalIncome - totalExpense)}</span>
+            </div>
           </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={monthlySales}>
-              <defs>
-                <linearGradient id="grad1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#4263EB" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#4263EB" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E9ECEF" vertical={false} />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#6C757D", fontSize: 12 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: "#6C757D", fontSize: 11 }} tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} orientation="left" />
-              <Tooltip formatter={(value: any) => [formatIQD(Number(value)), "داهات"]} contentStyle={{ background: "#1A1A2E", border: "none", borderRadius: 8, color: "white", fontSize: 13, direction: "rtl" }} />
-              <Area type="monotone" dataKey="value" stroke="#4263EB" strokeWidth={2.5} fill="url(#grad1)" dot={{ fill: "#4263EB", r: 4, strokeWidth: 2, stroke: "white" }} />
-            </AreaChart>
-          </ResponsiveContainer>
         </div>
 
-        <div className="chart-card">
-          <div className="chart-card-header">
-            <div className="chart-card-title">جۆرەکانی بەرهەم</div>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={categoryBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value" startAngle={90} endAngle={450}>
-                {categoryBreakdown.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-            {categoryBreakdown.map((seg, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: seg.color, display: "inline-block" }} />
-                  <span style={{ color: "#6C757D" }}>{seg.name}</span>
+        {/* Order Status Distribution */}
+        <div style={{ background: "white", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>بارودۆخی داواکارییەکان</h3>
+          {Object.entries(statusStats).map(([status, count]) => (
+            <div key={status} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <span style={{ fontSize: 12, width: 80, color: "#6C757D" }}>{statusLabels[status] || status}</span>
+              <div style={{ flex: 1, height: 24, background: "#F1F3F5", borderRadius: 6, overflow: "hidden" }}>
+                <div style={{ width: `${(count / Math.max(orders.length, 1)) * 100}%`, height: "100%", background: "linear-gradient(90deg, #4263EB, #7C5CFC)", borderRadius: 6, transition: "width 0.5s ease", display: "flex", alignItems: "center", justifyContent: "flex-end", paddingRight: 8, minWidth: 30 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "white" }}>{count}</span>
                 </div>
-                <span style={{ fontWeight: 600 }}>{seg.value}٪</span>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Charts Row 2 */}
-      <div className="chart-grid" style={{ marginBottom: 24 }}>
-        <div className="chart-card span-2">
-          <div className="chart-card-header">
-            <div className="chart-card-title">بەراوردی ئەم هەفتە بە هەفتەی پێشوو</div>
-          </div>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={weeklyComparison}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E9ECEF" vertical={false} />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#6C757D", fontSize: 12 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: "#6C757D", fontSize: 11 }} tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} orientation="left" />
-              <Tooltip formatter={(value: any) => [formatIQD(Number(value))]} contentStyle={{ background: "#1A1A2E", border: "none", borderRadius: 8, color: "white", fontSize: 13, direction: "rtl" }} />
-              <Line type="monotone" dataKey="thisWeek" name="ئەم هەفتە" stroke="#4263EB" strokeWidth={2.5} dot={{ r: 4 }} />
-              <Line type="monotone" dataKey="lastWeek" name="هەفتەی پێشوو" stroke="#ADB5BD" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} />
-              <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 12, paddingBottom: 12 }} />
-            </LineChart>
-          </ResponsiveContainer>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+        {/* Top Products */}
+        <div style={{ background: "white", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>پەرفرۆشترین بەرهەمەکان</h3>
+          {topProducts.map(([name, qty], i) => (
+            <div key={name} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <span style={{ width: 24, height: 24, borderRadius: "50%", background: i === 0 ? "#FFD43B" : i === 1 ? "#ADB5BD" : i === 2 ? "#D2691E" : "#E9ECEF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: i < 3 ? "white" : "#6C757D" }}>{i + 1}</span>
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{name}</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#4263EB" }}>{qty.toLocaleString()}</span>
+            </div>
+          ))}
+          {topProducts.length === 0 && <p style={{ fontSize: 13, color: "#ADB5BD" }}>هیچ داتایەک نییە</p>}
         </div>
 
-        <div className="chart-card">
-          <div className="chart-card-header">
-            <div className="chart-card-title">دابەشبوونی شار</div>
-          </div>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={cityDistribution} layout="vertical" margin={{ left: 0, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E9ECEF" horizontal={false} />
-              <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: "#6C757D", fontSize: 11 }} />
-              <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: "#1A1A2E", fontSize: 12 }} width={70} orientation="right" />
-              <Bar dataKey="value" radius={[4, 4, 4, 4]} barSize={16}>
-                {cityDistribution.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        {/* City Distribution */}
+        <div style={{ background: "white", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>دابەشبوونی کڕیاران بە شار</h3>
+          {Object.entries(cityStats).map(([city, count]) => (
+            <div key={city} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <MapPin size={14} color="#ADB5BD" />
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{city}</span>
+              <div style={{ width: 100, height: 20, background: "#F1F3F5", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ width: `${(count / barMax(Object.entries(cityStats))) * 100}%`, height: "100%", background: "linear-gradient(90deg, #F47B35, #FA5252)", borderRadius: 4 }} />
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, width: 28, textAlign: "center" }}>{count}</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Tables Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-        {/* Rep Performance */}
-        <div className="data-table-wrapper">
-          <div className="data-table-header">
-            <span className="data-table-title">ئەدای نوێنەران</span>
-          </div>
+      {/* Top Reps */}
+      <div style={{ background: "white", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 20 }}>ئەدای نوێنەران</h3>
+        <div className="data-table-wrapper" style={{ boxShadow: "none" }}>
           <table className="data-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>نوێنەر</th>
-                <th>داواکاری</th>
-                <th>داهات</th>
-              </tr>
-            </thead>
+            <thead><tr><th>نوێنەر</th><th>داواکاری</th><th>داهات</th></tr></thead>
             <tbody>
-              {repPerformance.map((rep, i) => (
+              {topReps.map((r, i) => (
                 <tr key={i}>
-                  <td style={{ fontWeight: 700, color: "#ADB5BD" }}>{i + 1}</td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: rep.color, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 11, fontWeight: 700 }}>
-                        {rep.name.charAt(0)}
-                      </div>
-                      <span style={{ fontWeight: 600, fontSize: 13 }}>{rep.name}</span>
-                    </div>
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{rep.orders}</td>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{formatIQD(rep.revenue)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Top Clients */}
-        <div className="data-table-wrapper">
-          <div className="data-table-header">
-            <span className="data-table-title">باشترین کڕیارەکان</span>
-          </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>کڕیار</th>
-                <th>داواکاری</th>
-                <th>داهات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topClients.map((client, i) => (
-                <tr key={i}>
-                  <td style={{ fontWeight: 700, color: "#ADB5BD" }}>{i + 1}</td>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{client.name}</td>
-                  <td style={{ fontWeight: 600 }}>{client.orders}</td>
-                  <td style={{ fontWeight: 600, fontSize: 13 }}>{formatIQD(client.revenue)}</td>
+                  <td style={{ fontWeight: 600 }}>{r.name}</td>
+                  <td style={{ fontWeight: 600, color: "#4263EB" }}>{r.orders}</td>
+                  <td style={{ fontWeight: 700, color: "#40C057" }}>{formatIQD(r.revenue)}</td>
                 </tr>
               ))}
             </tbody>
