@@ -1,6 +1,6 @@
 "use client";
 import { useState, FormEvent, useEffect } from "react";
-import { Bot, Send, Settings2, Zap, CheckCircle, XCircle, Truck, MessageSquare, Copy, ExternalLink, RefreshCw } from "lucide-react";
+import { Bot, Send, Settings2, Zap, CheckCircle, XCircle, Truck, MessageSquare, ExternalLink, RefreshCw, UserPlus, Users, Radar } from "lucide-react";
 import { useData } from "@/lib/store";
 import { FormField, FormGrid, inputStyle } from "@/components/ui/FormField";
 
@@ -10,6 +10,13 @@ interface TelegramConfig {
   isActive: boolean;
   drivers: { name: string; chatId: string; phone: string }[];
   lastTest: string | null;
+}
+
+interface DetectedUser {
+  chatId: string;
+  firstName: string;
+  lastName: string;
+  username: string;
 }
 
 const defaultConfig: TelegramConfig = {
@@ -39,6 +46,11 @@ export default function TelegramPage() {
   const [testing, setTesting] = useState(false);
   const [newDriver, setNewDriver] = useState({ name: "", chatId: "", phone: "" });
   const [selectedTab, setSelectedTab] = useState<"setup" | "drivers" | "send">("setup");
+
+  // Auto-detect state
+  const [detectedUsers, setDetectedUsers] = useState<DetectedUser[]>([]);
+  const [detecting, setDetecting] = useState(false);
+  const [detectError, setDetectError] = useState<string | null>(null);
 
   useEffect(() => { setConfig(loadConfig()); }, []);
 
@@ -74,6 +86,72 @@ export default function TelegramPage() {
       updateConfig({ isActive: false });
     }
     setTesting(false);
+  };
+
+  // Fetch users who sent /start to the bot
+  const handleDetectUsers = async () => {
+    if (!config.botToken) { showToast("تکایە سەرەتا تۆکنی بۆت بنووسە", "error"); return; }
+    setDetecting(true);
+    setDetectError(null);
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${config.botToken}/getUpdates?limit=100`);
+      const data = await res.json();
+      if (!data.ok) {
+        setDetectError(`هەڵە: ${data.description}`);
+        setDetecting(false);
+        return;
+      }
+
+      // Extract unique users from messages
+      const userMap = new Map<string, DetectedUser>();
+      for (const update of data.result) {
+        const msg = update.message;
+        if (msg && msg.from && !msg.from.is_bot) {
+          const chatId = String(msg.chat.id);
+          if (!userMap.has(chatId)) {
+            userMap.set(chatId, {
+              chatId,
+              firstName: msg.from.first_name || "",
+              lastName: msg.from.last_name || "",
+              username: msg.from.username || "",
+            });
+          }
+        }
+      }
+
+      const users = Array.from(userMap.values());
+      // Filter out users already added as drivers
+      const existingChatIds = new Set(config.drivers.map(d => d.chatId));
+      const newUsers = users.filter(u => !existingChatIds.has(u.chatId));
+      setDetectedUsers(newUsers);
+
+      if (users.length === 0) {
+        setDetectError("هیچ بەکارهێنەرێک نەدۆزرایەوە. دڵنیابە شۆفێران /start ناردووە بۆ بۆتەکە.");
+      } else if (newUsers.length === 0) {
+        setDetectError(`${users.length} بەکارهێنەر دۆزرایەوە بەڵام هەموویان پێشتر زیادکراون.`);
+      }
+    } catch {
+      setDetectError("هەڵەی تۆڕ — ناتوانرێ پەیوەندی بکرێت بە تێلێگرام");
+    }
+    setDetecting(false);
+  };
+
+  const handleAddDetectedUser = (user: DetectedUser) => {
+    const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || `User ${user.chatId}`;
+    updateConfig({ drivers: [...config.drivers, { name, chatId: user.chatId, phone: "" }] });
+    setDetectedUsers(prev => prev.filter(u => u.chatId !== user.chatId));
+    showToast(`${name} وەک شۆفێر زیادکرا ✅`);
+  };
+
+  const handleAddAllDetected = () => {
+    const newDrivers = detectedUsers.map(user => ({
+      name: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || `User ${user.chatId}`,
+      chatId: user.chatId,
+      phone: "",
+    }));
+    updateConfig({ drivers: [...config.drivers, ...newDrivers] });
+    showToast(`${newDrivers.length} شۆفێر زیادکران ✅`);
+    setDetectedUsers([]);
   };
 
   const handleAddDriver = (e: FormEvent) => {
@@ -159,7 +237,7 @@ export default function TelegramPage() {
               <li>بنووسە <code>/newbot</code> و ناوێکی بدە</li>
               <li>تۆکنی بۆتەکە کۆپی بکە و لێرە بیلکێنە</li>
               <li>شۆفێران دەبێ <code>/start</code> بنووسن بۆ بۆتەکەت</li>
-              <li>Chat ID یان پەیامێکی فۆروارد بکە بۆ <strong>@userinfobot</strong> بۆ وەرگرتنی Chat ID</li>
+              <li>لە تابی <strong>شۆفێران</strong> کلیک بکە لەسەر <strong>"دۆزینەوەی بەکارهێنەران"</strong> بۆ بینینی ئەوانەی /start ناردووە</li>
             </ol>
           </div>
 
@@ -189,8 +267,79 @@ export default function TelegramPage() {
       {/* Drivers Tab */}
       {selectedTab === "drivers" && (
         <div style={{ maxWidth: 700 }}>
+          {/* Auto-Detect Section */}
+          <div style={{ background: "linear-gradient(135deg, #EDF2FF, #F3F0FF)", borderRadius: 14, padding: 28, border: "1px solid #D0BFFF", marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}><Radar size={18} color="#7C5CFC" /> دۆزینەوەی بەکارهێنەران</h3>
+                <p style={{ fontSize: 12, color: "#6C757D" }}>ئەو کەسانەی /start ناردووە بۆ بۆتەکەت بینین و زیادکردنیان وەک شۆفێر</p>
+              </div>
+              <button onClick={handleDetectUsers} disabled={detecting || !config.botToken} style={{
+                padding: "10px 20px", borderRadius: 10, background: detecting ? "#ADB5BD" : "linear-gradient(135deg, #7C5CFC, #4263EB)",
+                color: "white", fontSize: 13, fontWeight: 700, border: "none", cursor: detecting ? "default" : "pointer",
+                fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 4px 12px rgba(66,99,235,0.3)",
+              }}>
+                {detecting ? <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Radar size={14} />}
+                {detecting ? "گەڕان..." : "سکان بکە"}
+              </button>
+            </div>
+
+            {!config.botToken && (
+              <div style={{ padding: 12, borderRadius: 8, background: "#FFF3BF", fontSize: 12, color: "#E67700", fontWeight: 600 }}>
+                ⚠️ تکایە سەرەتا تۆکنی بۆت بنووسە لە تابی ڕێکخستن
+              </div>
+            )}
+
+            {detectError && (
+              <div style={{ padding: 12, borderRadius: 8, background: "#FFF8DB", fontSize: 13, color: "#E67700", fontWeight: 500, marginTop: 8 }}>
+                {detectError}
+              </div>
+            )}
+
+            {detectedUsers.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#495057" }}>{detectedUsers.length} بەکارهێنەری نوێ دۆزرایەوە</span>
+                  <button onClick={handleAddAllDetected} style={{
+                    padding: "6px 16px", borderRadius: 8, background: "#40C057", color: "white",
+                    fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit",
+                    display: "flex", alignItems: "center", gap: 4,
+                  }}><Users size={12} /> هەمووی زیاد بکە</button>
+                </div>
+                {detectedUsers.map(user => (
+                  <div key={user.chatId} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "12px 16px", background: "white", borderRadius: 10, marginBottom: 8,
+                    border: "1px solid #E9ECEF", transition: "all 0.15s",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #4263EB, #7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 16 }}>
+                        {user.firstName?.[0] || user.username?.[0] || "?"}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>
+                          {[user.firstName, user.lastName].filter(Boolean).join(" ") || "بێناو"}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#6C757D", display: "flex", gap: 8 }}>
+                          {user.username && <span>@{user.username}</span>}
+                          <span style={{ fontFamily: "monospace", color: "#ADB5BD" }}>ID: {user.chatId}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button onClick={() => handleAddDetectedUser(user)} style={{
+                      padding: "8px 16px", borderRadius: 8, background: "#4263EB", color: "white",
+                      fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit",
+                      display: "flex", alignItems: "center", gap: 4,
+                    }}><UserPlus size={14} /> زیادکردن</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Manual Add */}
           <div style={{ background: "white", borderRadius: 14, padding: 28, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF", marginBottom: 20 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>زیادکردنی شۆفێر</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>زیادکردنی دەستی</h3>
             <form onSubmit={handleAddDriver}>
               <FormGrid>
                 <FormField label="ناوی شۆفێر" required><input style={inputStyle} required value={newDriver.name} onChange={(e) => setNewDriver({ ...newDriver, name: e.target.value })} /></FormField>
@@ -201,26 +350,30 @@ export default function TelegramPage() {
             </form>
           </div>
 
+          {/* Existing Drivers */}
           {config.drivers.length > 0 && (
-            <div className="data-table-wrapper">
-              <table className="data-table">
-                <thead><tr><th>ناو</th><th>Chat ID</th><th>مۆبایل</th><th>تاقی</th><th></th></tr></thead>
-                <tbody>
-                  {config.drivers.map((d, i) => (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 600 }}>{d.name}</td>
-                      <td style={{ fontFamily: "monospace", fontSize: 12, color: "#6C757D" }}>{d.chatId}</td>
-                      <td style={{ fontSize: 13, color: "#6C757D" }}>{d.phone || "—"}</td>
-                      <td>
-                        <button onClick={() => handleSendToDriver(d.chatId, `👋 سڵاو ${d.name}!\nئەمە نامەیەکی تاقیکردنەوەیە لە دەوا سیستەم.`)} style={{ padding: "4px 12px", borderRadius: 6, background: "#EDF2FF", color: "#4263EB", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit" }}>نامەی تاقی</button>
-                      </td>
-                      <td>
-                        <button onClick={() => handleRemoveDriver(i)} style={{ padding: 4, color: "#FA5252", background: "none", border: "none", cursor: "pointer" }}><XCircle size={14} /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Truck size={16} /> شۆفێرانی تۆمارکراو ({config.drivers.length})</h3>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead><tr><th>ناو</th><th>Chat ID</th><th>مۆبایل</th><th>تاقی</th><th></th></tr></thead>
+                  <tbody>
+                    {config.drivers.map((d, i) => (
+                      <tr key={i}>
+                        <td style={{ fontWeight: 600 }}>{d.name}</td>
+                        <td style={{ fontFamily: "monospace", fontSize: 12, color: "#6C757D" }}>{d.chatId}</td>
+                        <td style={{ fontSize: 13, color: "#6C757D" }}>{d.phone || "—"}</td>
+                        <td>
+                          <button onClick={() => handleSendToDriver(d.chatId, `👋 سڵاو ${d.name}!\nئەمە نامەیەکی تاقیکردنەوەیە لە دەوا سیستەم.`)} style={{ padding: "4px 12px", borderRadius: 6, background: "#EDF2FF", color: "#4263EB", fontSize: 11, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit" }}>نامەی تاقی</button>
+                        </td>
+                        <td>
+                          <button onClick={() => handleRemoveDriver(i)} style={{ padding: 4, color: "#FA5252", background: "none", border: "none", cursor: "pointer" }}><XCircle size={14} /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
