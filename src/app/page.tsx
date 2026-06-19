@@ -8,13 +8,24 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // MVP demo credentials
+  const DEMO_EMAIL = "admin@dewa.com";
+  const DEMO_PASSWORD = "dewa2025";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     setIsLoading(true);
-    // For MVP — redirect to dashboard
+
     setTimeout(() => {
-      window.location.href = "/dashboard";
+      if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
+        window.location.href = "/dashboard";
+      } else {
+        setError("ئیمەیڵ یان وشەی نهێنی هەڵەیە");
+        setIsLoading(false);
+      }
     }, 800);
   };
 
@@ -107,6 +118,22 @@ export default function LoginPage() {
             >
               {isLoading ? "چاوەڕوانبە..." : "چوونە ژوورەوە"}
             </button>
+
+            {error && (
+              <div style={{
+                background: "#FFF5F5",
+                color: "#FA5252",
+                padding: "10px 16px",
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                textAlign: "center",
+                border: "1px solid #FFE3E3",
+                animation: "fadeInUp 0.3s ease",
+              }}>
+                {error}
+              </div>
+            )}
           </form>
         </div>
 
