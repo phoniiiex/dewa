@@ -116,10 +116,14 @@ export default function SettingsPage() {
           <div style={{ background: "white", borderRadius: 14, padding: 28, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}><Building2 size={18} /> زانیاری کۆمپانیا</h3>
 
-            {/* Image Uploads */}
+            {/* Logo Upload */}
             <div style={{ display: "flex", gap: 32, marginBottom: 28, padding: 20, background: "#F8F9FA", borderRadius: 12, justifyContent: "center" }}>
               <ImageUploader value={companyForm.logo} onChange={(v) => setCompanyForm({ ...companyForm, logo: v })} label="لۆگۆی کۆمپانیا" shape="square" />
-              <ImageUploader value={companyForm.profilePic} onChange={(v) => setCompanyForm({ ...companyForm, profilePic: v })} label="وێنەی ئەدمین" shape="circle" />
+              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#495057" }}>لۆگۆی کۆمپانیا</span>
+                <span style={{ fontSize: 11, color: "#ADB5BD" }}>وێنەیەک بۆ پسوولەکان و سایدبار</span>
+                <span style={{ fontSize: 11, color: "#ADB5BD" }}>وێنەی پرۆفایل: کلیک بکە لەسەر وێنەکەت لە سایدبار</span>
+              </div>
             </div>
 
             <form onSubmit={handleCompanySave}>
