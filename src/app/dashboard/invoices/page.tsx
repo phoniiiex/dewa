@@ -288,17 +288,37 @@ export default function InvoicesPage() {
                 </div>
               </div>
 
-              {/* Add custom block form */}
-              {showAddBlock && (
-                <div style={{ padding: 12, borderBottom: "1px solid #E9ECEF", background: "#F8F9FA" }}>
-                  <input placeholder="ناوی بلۆک..." value={customBlockLabel} onChange={e => setCustomBlockLabel(e.target.value)} style={{ ...inputStyle, marginBottom: 6 }} />
-                  <textarea placeholder="ناوەڕۆک..." value={customBlockText} onChange={e => setCustomBlockText(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical", marginBottom: 6 }} />
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={addCustomBlock} style={{ ...btnPrimary, flex: 1, fontSize: 11 }}><Plus size={12} /> زیادکردن</button>
-                    <button onClick={() => setShowAddBlock(false)} style={{ ...btnPrimary, flex: 1, fontSize: 11, background: "#6C757D" }}>پاشگەزبوونەوە</button>
+              {/* Add block panel — custom + restore deleted builtins */}
+              {showAddBlock && (() => {
+                const deletedBuiltins = DEFAULT_BLOCKS.filter(db => !db.required && !blocks.find(b => b.id === db.id));
+                return (
+                  <div style={{ padding: 12, borderBottom: "1px solid #E9ECEF", background: "#F8F9FA" }}>
+                    {/* Restore deleted builtin blocks */}
+                    {deletedBuiltins.length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#6C757D", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>بلۆکی سڕاوەکان</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                          {deletedBuiltins.map(db => (
+                            <button key={db.id} onClick={() => { setBlocks(prev => [...prev, { ...db, visible: true }]); }} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #D0BFFF", background: "#F3F0FF", color: "#7C5CFC", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}>
+                              {BLOCK_ICONS[db.id] || <StickyNote size={10} />}
+                              <span>{db.label}</span>
+                              <Plus size={10} />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Custom block */}
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#6C757D", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>بلۆکی تایبەت</div>
+                    <input placeholder="ناوی بلۆک..." value={customBlockLabel} onChange={e => setCustomBlockLabel(e.target.value)} style={{ ...inputStyle, marginBottom: 6 }} />
+                    <textarea placeholder="ناوەڕۆک..." value={customBlockText} onChange={e => setCustomBlockText(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical", marginBottom: 6 }} />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={addCustomBlock} style={{ ...btnPrimary, flex: 1, fontSize: 11 }}><Plus size={12} /> زیادکردن</button>
+                      <button onClick={() => setShowAddBlock(false)} style={{ ...btnPrimary, flex: 1, fontSize: 11, background: "#6C757D" }}>پاشگەزبوونەوە</button>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               <div style={{ padding: 6 }}>
                 {blocks.map((block, idx) => (
