@@ -90,13 +90,30 @@ export default function InvoicesPage() {
   const discountAmount = subtotal * (customDiscount / 100);
   const finalTotal = subtotal - discountAmount;
 
-  // Generate QR code when order/client changes
+  // Generate QR code when order/client changes — embed data in URL so it works on any device
   useEffect(() => {
     if (!selectedOrder || !client) { setQrSvg(""); return; }
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    const url = `${baseUrl}/client/${client.id}`;
+    // Build compact financial summary for the QR
+    const clientOrders = orders.filter(o => o.clientId === client.id);
+    const totalAmount = clientOrders.reduce((s, o) => s + o.totalAmount, 0);
+    const paidCount = clientOrders.filter(o => o.status === "PAID").length;
+    const data = {
+      n: client.name,
+      t: client.type,
+      p: client.phone,
+      c: client.city,
+      b: client.balance,
+      o: clientOrders.length,
+      ta: totalAmount,
+      pc: paidCount,
+      co: settings.name,
+      ce: settings.nameEn,
+    };
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    const url = `${baseUrl}/client/${client.id}#d=${encoded}`;
     generateC2QRSvg({ url, size: 200 }).then(svg => setQrSvg(svg)).catch(() => setQrSvg(""));
-  }, [selectedOrder, client]);
+  }, [selectedOrder, client, orders, settings]);
 
   const buildInvoiceHTML = () => {
     if (!selectedOrder) return "";
