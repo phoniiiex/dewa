@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Mail, Lock, Eye, EyeOff, User, Globe } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import "@/styles/login.css";
 
 export default function LoginPage() {
@@ -13,14 +14,15 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(true);
 
-  // Check if already logged in
+  // Check if already logged in via Supabase session
   useEffect(() => {
-    const session = localStorage.getItem("dewa_session");
-    if (session) {
-      router.replace("/dashboard");
-    } else {
-      setChecking(false);
-    }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        router.replace("/dashboard");
+      } else {
+        setChecking(false);
+      }
+    });
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -28,35 +30,18 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
 
-    setTimeout(() => {
-      // Read users from localStorage (shared with the store)
-      let users: Array<{ id: string; name: string; email: string; password?: string; role: string; isActive: boolean }> = [];
-      try {
-        const raw = localStorage.getItem("dewa_users");
-        if (raw) users = JSON.parse(raw);
-      } catch { /* ignore */ }
-
-      // Fallback admin if no users exist
-      if (users.length === 0) {
-        users = [{ id: "u-admin", name: "ئاسۆ ئەحمەد", email: "admin@dewa.com", password: "dewa2025", role: "ADMIN", isActive: true }];
-      }
-
-      // Find matching user
-      const user = users.find(u => u.email === email && u.password === password && u.isActive);
-      if (user) {
-        localStorage.setItem("dewa_session", JSON.stringify({
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          loggedInAt: new Date().toISOString(),
-        }));
-        router.push("/dashboard");
-      } else {
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (authError) {
         setError("ئیمەیڵ یان وشەی نهێنی هەڵەیە");
         setIsLoading(false);
+        return;
       }
-    }, 600);
+      router.push("/dashboard");
+    } catch {
+      setError("هەڵەیەک ڕوویدا، دووبارە هەوڵبدەوە");
+      setIsLoading(false);
+    }
   };
 
   if (checking) return (

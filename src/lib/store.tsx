@@ -1,93 +1,207 @@
 // ============================================
-// DEWA (دەوا) — Data Store with localStorage
+// DEWA (دەوا) — Data Store with Supabase
 // React Context for full CRUD persistence
 // ============================================
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { supabase } from "./supabase";
 import type {
   Product, Client, Rep, Warehouse, Supplier, Order,
-  Delivery, Transaction, CompanySettings, User, OrderItem,
-  InvoiceTemplate,
+  Delivery, Transaction, CompanySettings, User, InvoiceTemplate,
 } from "./types";
 
-// ===== SEED DATA =====
-const seedProducts: Product[] = [
-  { id: "p1", name: "پاراسیتامۆل ٥٠٠مغ", sku: "PAR-500", category: "ئازارکوژ", price: 5000, stock: 2400, unitType: "پاکەت", origin: "تورکیا 🇹🇷", supplier: "مەدیکۆ تورکیا", expiryDate: "2026-08-15", batchNumber: "BT-2024-001", isSample: false, isActive: true, createdAt: "2025-01-10" },
-  { id: "p2", name: "ئەمۆکسیسیلین ٥٠٠مغ", sku: "AMX-500", category: "ئەنتیبایۆتیک", price: 12000, stock: 1200, unitType: "پاکەت", origin: "فەرەنسا 🇫🇷", supplier: "فارما فرانسا", expiryDate: "2026-05-20", batchNumber: "BT-2024-002", isSample: false, isActive: true, createdAt: "2025-01-10" },
-  { id: "p3", name: "ئۆمیپرازۆل ٢٠مغ", sku: "OMP-020", category: "گەدە و هەرس", price: 8500, stock: 800, unitType: "پاکەت", origin: "ئوردن 🇯🇴", supplier: "جۆردان فارما", expiryDate: "2026-12-01", batchNumber: "BT-2024-003", isSample: false, isActive: true, createdAt: "2025-02-01" },
-  { id: "p4", name: "مێتفۆرمین ٨٥٠مغ", sku: "MET-850", category: "شەکرە", price: 7500, stock: 650, unitType: "پاکەت", origin: "هندستان 🇮🇳", supplier: "ئینتا فارما", expiryDate: "2027-03-10", batchNumber: "BT-2024-004", isSample: false, isActive: true, createdAt: "2025-02-15" },
-  { id: "p5", name: "ئازیترۆمایسین ٥٠٠مغ", sku: "AZT-500", category: "ئەنتیبایۆتیک", price: 15000, stock: 420, unitType: "پاکەت", origin: "تورکیا 🇹🇷", supplier: "مەدیکۆ تورکیا", expiryDate: "2026-09-30", batchNumber: "BT-2024-005", isSample: false, isActive: true, createdAt: "2025-03-01" },
-  { id: "p6", name: "ئیبوپرۆفین ٤٠٠مغ", sku: "IBU-400", category: "ئازارکوژ", price: 6000, stock: 1800, unitType: "پاکەت", origin: "ئوردن 🇯🇴", supplier: "جۆردان فارما", expiryDate: "2027-01-15", batchNumber: "BT-2024-006", isSample: false, isActive: true, createdAt: "2025-03-10" },
-  { id: "p7", name: "سیپرۆفلۆکساسین ٥٠٠مغ", sku: "CIP-500", category: "ئەنتیبایۆتیک", price: 11000, stock: 350, unitType: "پاکەت", origin: "هندستان 🇮🇳", supplier: "ئینتا فارما", expiryDate: "2026-07-20", batchNumber: "BT-2024-007", isSample: false, isActive: true, createdAt: "2025-04-01" },
-  { id: "p8", name: "ڤیتامین C ١٠٠٠مغ", sku: "VTC-1000", category: "ڤیتامین", price: 4500, stock: 3000, unitType: "بوتل", origin: "سوویسرا 🇨🇭", supplier: "سوویسرا مەد", expiryDate: "2027-06-01", batchNumber: "BT-2024-008", isSample: false, isActive: true, createdAt: "2025-04-15" },
-];
+// ===== DB ↔ APP MAPPERS =====
+// Supabase uses snake_case, our app uses camelCase
+function toProduct(r: Record<string, unknown>): Product {
+  return { id: r.id as string, name: r.name as string, sku: r.sku as string, category: (r.category || "") as string, price: Number(r.price || 0), stock: Number(r.stock || 0), unitType: (r.unit_type || "") as string, origin: (r.origin || "") as string, supplier: (r.supplier || "") as string, expiryDate: (r.expiry_date || "") as string, batchNumber: (r.batch_number || "") as string, isSample: !!r.is_sample, isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
+}
+function fromProduct(p: Partial<Product>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (p.id !== undefined) m.id = p.id;
+  if (p.name !== undefined) m.name = p.name;
+  if (p.sku !== undefined) m.sku = p.sku;
+  if (p.category !== undefined) m.category = p.category;
+  if (p.price !== undefined) m.price = p.price;
+  if (p.stock !== undefined) m.stock = p.stock;
+  if (p.unitType !== undefined) m.unit_type = p.unitType;
+  if (p.origin !== undefined) m.origin = p.origin;
+  if (p.supplier !== undefined) m.supplier = p.supplier;
+  if (p.expiryDate !== undefined) m.expiry_date = p.expiryDate;
+  if (p.batchNumber !== undefined) m.batch_number = p.batchNumber;
+  if (p.isSample !== undefined) m.is_sample = p.isSample;
+  if (p.isActive !== undefined) m.is_active = p.isActive;
+  if (p.createdAt !== undefined) m.created_at = p.createdAt;
+  return m;
+}
 
-const seedReps: Rep[] = [
-  { id: "r1", name: "ئاکۆ مەحموود", phone: "0770 111 2222", city: "سلێمانی", isActive: true, createdAt: "2025-01-01" },
-  { id: "r2", name: "هێمن ئەحمەد", phone: "0750 222 3333", city: "سلێمانی", isActive: true, createdAt: "2025-01-01" },
-  { id: "r3", name: "شادی عومەر", phone: "0770 333 4444", city: "هەولێر", isActive: true, createdAt: "2025-01-15" },
-  { id: "r4", name: "دانا ڕەسوول", phone: "0750 444 5555", city: "دهۆک", isActive: true, createdAt: "2025-02-01" },
-  { id: "r5", name: "ڕێبوار کەریم", phone: "0770 555 6666", city: "کەرکوک", isActive: true, createdAt: "2025-02-15" },
-];
+function toClient(r: Record<string, unknown>): Client {
+  return { id: r.id as string, name: r.name as string, owner: (r.owner || "") as string, phone: (r.phone || "") as string, city: (r.city || "") as string, type: (r.type || "PHARMACY") as Client["type"], repId: (r.rep_id || "") as string, paymentTerms: (r.payment_terms || "IMMEDIATE") as Client["paymentTerms"], balance: Number(r.balance || 0), isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
+}
+function fromClient(c: Partial<Client>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (c.id !== undefined) m.id = c.id;
+  if (c.name !== undefined) m.name = c.name;
+  if (c.owner !== undefined) m.owner = c.owner;
+  if (c.phone !== undefined) m.phone = c.phone;
+  if (c.city !== undefined) m.city = c.city;
+  if (c.type !== undefined) m.type = c.type;
+  if (c.repId !== undefined) m.rep_id = c.repId;
+  if (c.paymentTerms !== undefined) m.payment_terms = c.paymentTerms;
+  if (c.balance !== undefined) m.balance = c.balance;
+  if (c.isActive !== undefined) m.is_active = c.isActive;
+  if (c.createdAt !== undefined) m.created_at = c.createdAt;
+  return m;
+}
 
-const seedClients: Client[] = [
-  { id: "c1", name: "دەرمانخانەی ئازادی", owner: "ئاراس عەبدوڵا", phone: "0770 123 4567", city: "سلێمانی", type: "PHARMACY", repId: "r1", paymentTerms: "NET_30", balance: 2500000, isActive: true, createdAt: "2025-01-10" },
-  { id: "c2", name: "نەخۆشخانەی سلێمانی", owner: "د. کارزان محەمەد", phone: "0750 234 5678", city: "سلێمانی", type: "HOSPITAL", repId: "r2", paymentTerms: "NET_30", balance: 8200000, isActive: true, createdAt: "2025-01-15" },
-  { id: "c3", name: "کلینیکی هەنار", owner: "د. ڕۆژان عومەر", phone: "0770 345 6789", city: "هەولێر", type: "CLINIC", repId: "r3", paymentTerms: "IMMEDIATE", balance: 1200000, isActive: true, createdAt: "2025-02-01" },
-  { id: "c4", name: "دەرمانخانەی ڕۆژ", owner: "سەرهەنگ عەلی", phone: "0750 456 7890", city: "دهۆک", type: "PHARMACY", repId: "r4", paymentTerms: "IMMEDIATE", balance: 0, isActive: true, createdAt: "2025-02-10" },
-  { id: "c5", name: "دەرمانخانەی ڕۆشنا", owner: "نازدار حەسەن", phone: "0770 567 8901", city: "کەرکوک", type: "PHARMACY", repId: "r5", paymentTerms: "NET_15", balance: 3400000, isActive: true, createdAt: "2025-03-01" },
-  { id: "c6", name: "نەخۆشخانەی هەولێر", owner: "د. ئاسۆ کەریم", phone: "0750 678 9012", city: "هەولێر", type: "HOSPITAL", repId: "r1", paymentTerms: "NET_30", balance: 5600000, isActive: true, createdAt: "2025-03-15" },
-];
+function toRep(r: Record<string, unknown>): Rep {
+  return { id: r.id as string, name: r.name as string, phone: (r.phone || "") as string, city: (r.city || "") as string, isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
+}
+function fromRep(r: Partial<Rep>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (r.id !== undefined) m.id = r.id;
+  if (r.name !== undefined) m.name = r.name;
+  if (r.phone !== undefined) m.phone = r.phone;
+  if (r.city !== undefined) m.city = r.city;
+  if (r.isActive !== undefined) m.is_active = r.isActive;
+  if (r.createdAt !== undefined) m.created_at = r.createdAt;
+  return m;
+}
 
-const seedWarehouses: Warehouse[] = [
-  { id: "w1", name: "کۆگای هیمۆ لاب", city: "سلێمانی", address: "شەقامی سالم، نزیک میدیای شار", contact: "هاوڕێ محەمەد", phone: "0770 100 2000", bonusPct: 20, isActive: true, createdAt: "2025-01-01" },
-  { id: "w2", name: "کۆگای ڕۆشنبیری", city: "هەولێر", address: "شەقامی ٦٠ مەتری", contact: "عەلی جەعفەر", phone: "0750 200 3000", bonusPct: 15, isActive: true, createdAt: "2025-01-01" },
-  { id: "w3", name: "کۆگای سەلامەتی", city: "دهۆک", address: "شەقامی بارزان", contact: "ئازاد ئەحمەد", phone: "0770 300 4000", bonusPct: 18, isActive: true, createdAt: "2025-02-01" },
-];
+function toWarehouse(r: Record<string, unknown>): Warehouse {
+  return { id: r.id as string, name: r.name as string, city: (r.city || "") as string, address: (r.address || "") as string, contact: (r.contact || "") as string, phone: (r.phone || "") as string, bonusPct: Number(r.bonus_pct || 0), isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
+}
+function fromWarehouse(w: Partial<Warehouse>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (w.id !== undefined) m.id = w.id;
+  if (w.name !== undefined) m.name = w.name;
+  if (w.city !== undefined) m.city = w.city;
+  if (w.address !== undefined) m.address = w.address;
+  if (w.contact !== undefined) m.contact = w.contact;
+  if (w.phone !== undefined) m.phone = w.phone;
+  if (w.bonusPct !== undefined) m.bonus_pct = w.bonusPct;
+  if (w.isActive !== undefined) m.is_active = w.isActive;
+  if (w.createdAt !== undefined) m.created_at = w.createdAt;
+  return m;
+}
 
-const seedSuppliers: Supplier[] = [
-  { id: "s1", name: "فارما فرانسا", contact: "Jean Dupont", phone: "+33 1 4567 8901", email: "orders@pharmafrance.com", country: "فەرەنسا 🇫🇷", balance: 45000000, isActive: true, createdAt: "2025-01-01" },
-  { id: "s2", name: "مەدیکۆ تورکیا", contact: "Ahmet Yilmaz", phone: "+90 212 345 6789", email: "sales@medicoturkey.com", country: "تورکیا 🇹🇷", balance: 32000000, isActive: true, createdAt: "2025-01-01" },
-  { id: "s3", name: "جۆردان فارما", contact: "خالد المحمد", phone: "+962 6 123 4567", email: "info@jordanpharma.com", country: "ئوردن 🇯🇴", balance: 15000000, isActive: true, createdAt: "2025-01-15" },
-  { id: "s4", name: "ئینتا فارما", contact: "Raj Patel", phone: "+91 22 4567 8901", email: "export@intapharma.in", country: "هندستان 🇮🇳", balance: 28000000, isActive: true, createdAt: "2025-02-01" },
-];
+function toSupplier(r: Record<string, unknown>): Supplier {
+  return { id: r.id as string, name: r.name as string, contact: (r.contact || "") as string, phone: (r.phone || "") as string, email: (r.email || "") as string, country: (r.country || "") as string, balance: Number(r.balance || 0), isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
+}
+function fromSupplier(s: Partial<Supplier>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (s.id !== undefined) m.id = s.id;
+  if (s.name !== undefined) m.name = s.name;
+  if (s.contact !== undefined) m.contact = s.contact;
+  if (s.phone !== undefined) m.phone = s.phone;
+  if (s.email !== undefined) m.email = s.email;
+  if (s.country !== undefined) m.country = s.country;
+  if (s.balance !== undefined) m.balance = s.balance;
+  if (s.isActive !== undefined) m.is_active = s.isActive;
+  if (s.createdAt !== undefined) m.created_at = s.createdAt;
+  return m;
+}
 
-const seedOrders: Order[] = [
-  { id: "o1", orderNumber: "ORD-001", clientId: "c1", clientName: "دەرمانخانەی ئازادی", repId: "r1", repName: "ئاکۆ مەحموود", warehouseId: "w1", warehouseName: "کۆگای هیمۆ لاب", items: [{ productId: "p1", productName: "پاراسیتامۆل ٥٠٠مغ", quantity: 100, bonusQty: 30, unitPrice: 5000 }], status: "PAID", routingMode: "WAREHOUSE", bonusNotation: "100+50", totalBonusPct: 50, warehouseBonusPct: 20, repBonusPct: 30, totalAmount: 500000, notes: "", createdAt: "2025-10-28" },
-  { id: "o2", orderNumber: "ORD-002", clientId: "c2", clientName: "نەخۆشخانەی سلێمانی", repId: "r2", repName: "هێمن ئەحمەد", warehouseId: "w2", warehouseName: "کۆگای ڕۆشنبیری", items: [{ productId: "p2", productName: "ئەمۆکسیسیلین ٥٠٠مغ", quantity: 200, bonusQty: 50, unitPrice: 12000 }], status: "SHIPPED", routingMode: "WAREHOUSE", bonusNotation: "200+40", totalBonusPct: 40, warehouseBonusPct: 15, repBonusPct: 25, totalAmount: 2400000, notes: "", createdAt: "2025-10-29" },
-  { id: "o3", orderNumber: "ORD-003", clientId: "c3", clientName: "کلینیکی هەنار", repId: "r3", repName: "شادی عومەر", warehouseId: null, warehouseName: null, items: [{ productId: "p3", productName: "ئۆمیپرازۆل ٢٠مغ", quantity: 80, bonusQty: 14, unitPrice: 8500 }], status: "PROCESSING", routingMode: "DIRECT", bonusNotation: "80+14", totalBonusPct: 17, warehouseBonusPct: 0, repBonusPct: 17, totalAmount: 680000, notes: "گەیاندنی خێرا", createdAt: "2025-10-29" },
-];
+function toOrder(r: Record<string, unknown>): Order {
+  return { id: r.id as string, orderNumber: (r.order_number || "") as string, clientId: (r.client_id || "") as string, clientName: (r.client_name || "") as string, repId: (r.rep_id || "") as string, repName: (r.rep_name || "") as string, warehouseId: (r.warehouse_id || null) as string | null, warehouseName: (r.warehouse_name || null) as string | null, items: (r.items || []) as Order["items"], status: (r.status || "PENDING") as Order["status"], routingMode: (r.routing_mode || "DIRECT") as Order["routingMode"], bonusNotation: (r.bonus_notation || "") as string, totalBonusPct: Number(r.total_bonus_pct || 0), warehouseBonusPct: Number(r.warehouse_bonus_pct || 0), repBonusPct: Number(r.rep_bonus_pct || 0), totalAmount: Number(r.total_amount || 0), notes: (r.notes || "") as string, createdAt: (r.created_at || "") as string };
+}
+function fromOrder(o: Partial<Order>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (o.id !== undefined) m.id = o.id;
+  if (o.orderNumber !== undefined) m.order_number = o.orderNumber;
+  if (o.clientId !== undefined) m.client_id = o.clientId;
+  if (o.clientName !== undefined) m.client_name = o.clientName;
+  if (o.repId !== undefined) m.rep_id = o.repId;
+  if (o.repName !== undefined) m.rep_name = o.repName;
+  if (o.warehouseId !== undefined) m.warehouse_id = o.warehouseId;
+  if (o.warehouseName !== undefined) m.warehouse_name = o.warehouseName;
+  if (o.items !== undefined) m.items = o.items;
+  if (o.status !== undefined) m.status = o.status;
+  if (o.routingMode !== undefined) m.routing_mode = o.routingMode;
+  if (o.bonusNotation !== undefined) m.bonus_notation = o.bonusNotation;
+  if (o.totalBonusPct !== undefined) m.total_bonus_pct = o.totalBonusPct;
+  if (o.warehouseBonusPct !== undefined) m.warehouse_bonus_pct = o.warehouseBonusPct;
+  if (o.repBonusPct !== undefined) m.rep_bonus_pct = o.repBonusPct;
+  if (o.totalAmount !== undefined) m.total_amount = o.totalAmount;
+  if (o.notes !== undefined) m.notes = o.notes;
+  if (o.createdAt !== undefined) m.created_at = o.createdAt;
+  return m;
+}
 
-const seedDeliveries: Delivery[] = [
-  { id: "d1", orderId: "o1", orderNumber: "ORD-001", type: "WAREHOUSE", driver: "عومەر سەعید", driverPhone: "0770 900 1111", destination: "کۆگای هیمۆ لاب — سلێمانی", status: "DELIVERED", items: "پاراسیتامۆل × ١٢٠", dispatchedAt: "٢٩/١٠ — ٠٩:٠٠", deliveredAt: "٢٩/١٠ — ١٤:٣٠", createdAt: "2025-10-28" },
-  { id: "d2", orderId: "o2", orderNumber: "ORD-002", type: "WAREHOUSE", driver: "ڕۆژگار عەلی", driverPhone: "0750 800 2222", destination: "کۆگای ڕۆشنبیری — هەولێر", status: "IN_TRANSIT", items: "ئەمۆکسیسیلین × ٢٣٠", dispatchedAt: "٢٨/١٠ — ١١:٠٠", deliveredAt: "—", createdAt: "2025-10-29" },
-  { id: "d3", orderId: "o3", orderNumber: "ORD-003", type: "DIRECT", driver: "", driverPhone: "", destination: "کلینیکی هەنار — هەولێر", status: "PENDING", items: "ئۆمیپرازۆل × ٩٤", dispatchedAt: "—", deliveredAt: "—", createdAt: "2025-10-29" },
-];
+function toDelivery(r: Record<string, unknown>): Delivery {
+  return { id: r.id as string, orderId: (r.order_id || "") as string, orderNumber: (r.order_number || "") as string, type: (r.type || "DIRECT") as Delivery["type"], driver: (r.driver || "") as string, driverPhone: (r.driver_phone || "") as string, destination: (r.destination || "") as string, status: (r.status || "PENDING") as Delivery["status"], items: (r.items || "") as string, dispatchedAt: (r.dispatched_at || "") as string, deliveredAt: (r.delivered_at || "") as string, createdAt: (r.created_at || "") as string };
+}
+function fromDelivery(d: Partial<Delivery>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (d.id !== undefined) m.id = d.id;
+  if (d.orderId !== undefined) m.order_id = d.orderId;
+  if (d.orderNumber !== undefined) m.order_number = d.orderNumber;
+  if (d.type !== undefined) m.type = d.type;
+  if (d.driver !== undefined) m.driver = d.driver;
+  if (d.driverPhone !== undefined) m.driver_phone = d.driverPhone;
+  if (d.destination !== undefined) m.destination = d.destination;
+  if (d.status !== undefined) m.status = d.status;
+  if (d.items !== undefined) m.items = d.items;
+  if (d.dispatchedAt !== undefined) m.dispatched_at = d.dispatchedAt;
+  if (d.deliveredAt !== undefined) m.delivered_at = d.deliveredAt;
+  if (d.createdAt !== undefined) m.created_at = d.createdAt;
+  return m;
+}
 
-const seedTransactions: Transaction[] = [
-  { id: "t1", type: "INCOME", description: "پارەدانی دەرمانخانەی ئازادی", amount: 2500000, method: "CASH", relatedOrderId: "o1", createdAt: "2025-10-29" },
-  { id: "t2", type: "EXPENSE", description: "کڕینی دەرمان لە فارما فرانسا", amount: 8000000, method: "TRANSFER", relatedOrderId: null, createdAt: "2025-10-29" },
-  { id: "t3", type: "INCOME", description: "پارەدانی نەخۆشخانەی سلێمانی", amount: 5200000, method: "TRANSFER", relatedOrderId: "o2", createdAt: "2025-10-28" },
-  { id: "t4", type: "EXPENSE", description: "مووچەی نوێنەران", amount: 3200000, method: "CASH", relatedOrderId: null, createdAt: "2025-10-28" },
-];
+function toTransaction(r: Record<string, unknown>): Transaction {
+  return { id: r.id as string, type: (r.type || "INCOME") as Transaction["type"], description: (r.description || "") as string, amount: Number(r.amount || 0), method: (r.method || "CASH") as Transaction["method"], relatedOrderId: (r.related_order_id || null) as string | null, createdAt: (r.created_at || "") as string };
+}
+function fromTransaction(t: Partial<Transaction>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (t.id !== undefined) m.id = t.id;
+  if (t.type !== undefined) m.type = t.type;
+  if (t.description !== undefined) m.description = t.description;
+  if (t.amount !== undefined) m.amount = t.amount;
+  if (t.method !== undefined) m.method = t.method;
+  if (t.relatedOrderId !== undefined) m.related_order_id = t.relatedOrderId;
+  if (t.createdAt !== undefined) m.created_at = t.createdAt;
+  return m;
+}
 
-const seedUsers: User[] = [
-  { id: "u-admin", name: "ئاسۆ ئەحمەد", email: "admin@dewa.com", password: "dewa2025", role: "ADMIN", phone: "0770 000 1234", city: "سلێمانی", isActive: true, createdAt: "2025-01-01" },
-];
+function toSettings(r: Record<string, unknown>): CompanySettings {
+  return { name: (r.name || "") as string, nameEn: (r.name_en || "") as string, phone: (r.phone || "") as string, email: (r.email || "") as string, city: (r.city || "") as string, address: (r.address || "") as string, currency: (r.currency || "IQD") as string, language: (r.language || "ckb") as string, logo: (r.logo || "") as string, profilePic: (r.profile_pic || "") as string };
+}
+function fromSettings(s: Partial<CompanySettings>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (s.name !== undefined) m.name = s.name;
+  if (s.nameEn !== undefined) m.name_en = s.nameEn;
+  if (s.phone !== undefined) m.phone = s.phone;
+  if (s.email !== undefined) m.email = s.email;
+  if (s.city !== undefined) m.city = s.city;
+  if (s.address !== undefined) m.address = s.address;
+  if (s.currency !== undefined) m.currency = s.currency;
+  if (s.language !== undefined) m.language = s.language;
+  if (s.logo !== undefined) m.logo = s.logo;
+  if (s.profilePic !== undefined) m.profile_pic = s.profilePic;
+  return m;
+}
 
-const defaultSettings: CompanySettings = {
-  name: "دەوا فارما",
-  nameEn: "Dewa Pharma",
-  phone: "0770 000 1234",
-  email: "info@dewapharma.com",
-  city: "سلێمانی",
-  address: "شەقامی سالم، تاوەری ئازادی، نهۆم ٣",
-  currency: "IQD",
-  language: "ckb",
-};
+function toUser(r: Record<string, unknown>): User {
+  return { id: r.id as string, name: (r.name || "") as string, email: (r.email || "") as string, password: "", role: (r.role || "REP") as User["role"], phone: (r.phone || "") as string, city: (r.city || "") as string, isActive: r.is_active !== false, createdAt: (r.created_at ? new Date(r.created_at as string).toISOString().split("T")[0] : "") as string };
+}
 
-// ===== HELPER =====
+function toTemplate(r: Record<string, unknown>): InvoiceTemplate {
+  return { id: r.id as string, name: (r.name || "") as string, blocks: (r.blocks || []) as InvoiceTemplate["blocks"], showBonusCol: r.show_bonus_col !== false, defaultNote: (r.default_note || "") as string, defaultTerms: (r.default_terms || "") as string, defaultDiscount: Number(r.default_discount || 0), createdAt: (r.created_at || "") as string };
+}
+function fromTemplate(t: Partial<InvoiceTemplate>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (t.id !== undefined) m.id = t.id;
+  if (t.name !== undefined) m.name = t.name;
+  if (t.blocks !== undefined) m.blocks = t.blocks;
+  if (t.showBonusCol !== undefined) m.show_bonus_col = t.showBonusCol;
+  if (t.defaultNote !== undefined) m.default_note = t.defaultNote;
+  if (t.defaultTerms !== undefined) m.default_terms = t.defaultTerms;
+  if (t.defaultDiscount !== undefined) m.default_discount = t.defaultDiscount;
+  if (t.createdAt !== undefined) m.created_at = t.createdAt;
+  return m;
+}
+
+// ===== HELPERS =====
 function genId() {
   return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
@@ -100,88 +214,49 @@ function getNextOrderNumber(orders: Order[]): string {
   return `ORD-${String(max + 1).padStart(3, "0")}`;
 }
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = localStorage.getItem(`dewa_${key}`);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveToStorage<T>(key: string, data: T) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(`dewa_${key}`, JSON.stringify(data));
-}
+const defaultSettings: CompanySettings = {
+  name: "دەوا فارما", nameEn: "Dewa Pharma", phone: "0770 000 1234",
+  email: "info@dewapharma.com", city: "سلێمانی",
+  address: "شەقامی سالم، تاوەری ئازادی، نهۆم ٣", currency: "IQD", language: "ckb",
+};
 
 // ===== CONTEXT =====
 interface DataStore {
-  // Data
-  products: Product[];
-  clients: Client[];
-  reps: Rep[];
-  warehouses: Warehouse[];
-  suppliers: Supplier[];
-  orders: Order[];
-  deliveries: Delivery[];
-  transactions: Transaction[];
-  settings: CompanySettings;
-  users: User[];
-  invoiceTemplates: InvoiceTemplate[];
+  products: Product[]; clients: Client[]; reps: Rep[]; warehouses: Warehouse[];
+  suppliers: Supplier[]; orders: Order[]; deliveries: Delivery[];
+  transactions: Transaction[]; settings: CompanySettings; users: User[];
+  invoiceTemplates: InvoiceTemplate[]; loading: boolean;
 
-  // Product CRUD
-  addProduct: (p: Omit<Product, "id" | "createdAt">) => Product;
+  addProduct: (p: Omit<Product, "id" | "createdAt">) => Promise<Product>;
   updateProduct: (id: string, p: Partial<Product>) => void;
   deleteProduct: (id: string) => void;
-
-  // Client CRUD
-  addClient: (c: Omit<Client, "id" | "createdAt">) => Client;
+  addClient: (c: Omit<Client, "id" | "createdAt">) => Promise<Client>;
   updateClient: (id: string, c: Partial<Client>) => void;
   deleteClient: (id: string) => void;
-
-  // Rep CRUD
-  addRep: (r: Omit<Rep, "id" | "createdAt">) => Rep;
+  addRep: (r: Omit<Rep, "id" | "createdAt">) => Promise<Rep>;
   updateRep: (id: string, r: Partial<Rep>) => void;
   deleteRep: (id: string) => void;
-
-  // Warehouse CRUD
-  addWarehouse: (w: Omit<Warehouse, "id" | "createdAt">) => Warehouse;
+  addWarehouse: (w: Omit<Warehouse, "id" | "createdAt">) => Promise<Warehouse>;
   updateWarehouse: (id: string, w: Partial<Warehouse>) => void;
   deleteWarehouse: (id: string) => void;
-
-  // Supplier CRUD
-  addSupplier: (s: Omit<Supplier, "id" | "createdAt">) => Supplier;
+  addSupplier: (s: Omit<Supplier, "id" | "createdAt">) => Promise<Supplier>;
   updateSupplier: (id: string, s: Partial<Supplier>) => void;
   deleteSupplier: (id: string) => void;
-
-  // Order CRUD
-  addOrder: (o: Omit<Order, "id" | "orderNumber" | "createdAt">) => Order;
+  addOrder: (o: Omit<Order, "id" | "orderNumber" | "createdAt">) => Promise<Order>;
   updateOrder: (id: string, o: Partial<Order>) => void;
   deleteOrder: (id: string) => void;
-
-  // Delivery CRUD
-  addDelivery: (d: Omit<Delivery, "id" | "createdAt">) => Delivery;
+  addDelivery: (d: Omit<Delivery, "id" | "createdAt">) => Promise<Delivery>;
   updateDelivery: (id: string, d: Partial<Delivery>) => void;
-
-  // Transaction CRUD
-  addTransaction: (t: Omit<Transaction, "id" | "createdAt">) => Transaction;
-
-  // User CRUD
-  addUser: (u: Omit<User, "id" | "createdAt">) => User;
+  addTransaction: (t: Omit<Transaction, "id" | "createdAt">) => Promise<Transaction>;
+  addUser: (u: Omit<User, "id" | "createdAt">) => Promise<User>;
   updateUser: (id: string, u: Partial<User>) => void;
   deleteUser: (id: string) => void;
-
-  // Template CRUD
-  addTemplate: (t: Omit<InvoiceTemplate, "id" | "createdAt">) => InvoiceTemplate;
+  addTemplate: (t: Omit<InvoiceTemplate, "id" | "createdAt">) => Promise<InvoiceTemplate>;
   deleteTemplate: (id: string) => void;
-
-  // Settings
   updateSettings: (s: Partial<CompanySettings>) => void;
-
-  // Toast
   showToast: (message: string, type?: "success" | "error") => void;
   toast: { message: string; type: "success" | "error"; visible: boolean };
+  refreshData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataStore | null>(null);
@@ -204,204 +279,252 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<CompanySettings>(defaultSettings);
   const [users, setUsers] = useState<User[]>([]);
   const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error"; visible: boolean }>({ message: "", type: "success", visible: false });
-
-  // Load from localStorage on mount
-  useEffect(() => {
-    setProducts(loadFromStorage("products", seedProducts));
-    setClients(loadFromStorage("clients", seedClients));
-    setReps(loadFromStorage("reps", seedReps));
-    setWarehouses(loadFromStorage("warehouses", seedWarehouses));
-    setSuppliers(loadFromStorage("suppliers", seedSuppliers));
-    setOrders(loadFromStorage("orders", seedOrders));
-    setDeliveries(loadFromStorage("deliveries", seedDeliveries));
-    setTransactions(loadFromStorage("transactions", seedTransactions));
-    setSettings(loadFromStorage("settings", defaultSettings));
-    setUsers(loadFromStorage("users", seedUsers));
-    setInvoiceTemplates(loadFromStorage("invoiceTemplates", []));
-    setLoaded(true);
-  }, []);
-
-  // Auto-save on change
-  useEffect(() => { if (loaded) saveToStorage("products", products); }, [products, loaded]);
-  useEffect(() => { if (loaded) saveToStorage("clients", clients); }, [clients, loaded]);
-  useEffect(() => { if (loaded) saveToStorage("reps", reps); }, [reps, loaded]);
-  useEffect(() => { if (loaded) saveToStorage("warehouses", warehouses); }, [warehouses, loaded]);
-  useEffect(() => { if (loaded) saveToStorage("suppliers", suppliers); }, [suppliers, loaded]);
-  useEffect(() => { if (loaded) saveToStorage("orders", orders); }, [orders, loaded]);
-  useEffect(() => { if (loaded) saveToStorage("deliveries", deliveries); }, [deliveries, loaded]);
-  useEffect(() => { if (loaded) saveToStorage("transactions", transactions); }, [transactions, loaded]);
-  useEffect(() => { if (loaded) saveToStorage("settings", settings); }, [settings, loaded]);
-  useEffect(() => { if (loaded) saveToStorage("users", users); }, [users, loaded]);
-  useEffect(() => { if (loaded) saveToStorage("invoiceTemplates", invoiceTemplates); }, [invoiceTemplates, loaded]);
 
   const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
     setToast({ message, type, visible: true });
     setTimeout(() => setToast((t) => ({ ...t, visible: false })), 3000);
   }, []);
 
-  // === CRUD Functions ===
-  const addProduct = useCallback((p: Omit<Product, "id" | "createdAt">) => {
+  // Fetch all data from Supabase
+  const refreshData = useCallback(async () => {
+    try {
+      const [pRes, cRes, rRes, wRes, sRes, oRes, dRes, tRes, stRes, prRes, itRes] = await Promise.all([
+        supabase.from("products").select("*"),
+        supabase.from("clients").select("*"),
+        supabase.from("reps").select("*"),
+        supabase.from("warehouses").select("*"),
+        supabase.from("suppliers").select("*"),
+        supabase.from("orders").select("*"),
+        supabase.from("deliveries").select("*"),
+        supabase.from("transactions").select("*"),
+        supabase.from("company_settings").select("*").single(),
+        supabase.from("profiles").select("*"),
+        supabase.from("invoice_templates").select("*"),
+      ]);
+
+      if (pRes.data) setProducts(pRes.data.map(toProduct));
+      if (cRes.data) setClients(cRes.data.map(toClient));
+      if (rRes.data) setReps(rRes.data.map(toRep));
+      if (wRes.data) setWarehouses(wRes.data.map(toWarehouse));
+      if (sRes.data) setSuppliers(sRes.data.map(toSupplier));
+      if (oRes.data) setOrders(oRes.data.map(toOrder));
+      if (dRes.data) setDeliveries(dRes.data.map(toDelivery));
+      if (tRes.data) setTransactions(tRes.data.map(toTransaction));
+      if (stRes.data) setSettings(toSettings(stRes.data));
+      if (prRes.data) setUsers(prRes.data.map(toUser));
+      if (itRes.data) setInvoiceTemplates(itRes.data.map(toTemplate));
+    } catch (err) {
+      console.error("Failed to fetch data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refreshData(); }, [refreshData]);
+
+  // === CRUD with Supabase ===
+  const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt">) => {
     const np: Product = { ...p, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
-    setProducts((prev) => [np, ...prev]);
-    showToast("بەرهەم زیادکرا");
+    setProducts((prev) => [np, ...prev]); // Optimistic
+    const { error } = await supabase.from("products").insert(fromProduct(np));
+    if (error) { showToast("هەڵە: " + error.message, "error"); } else { showToast("بەرهەم زیادکرا"); }
     return np;
   }, [showToast]);
 
-  const updateProduct = useCallback((id: string, p: Partial<Product>) => {
+  const updateProduct = useCallback(async (id: string, p: Partial<Product>) => {
     setProducts((prev) => prev.map((x) => (x.id === id ? { ...x, ...p } : x)));
-    showToast("بەرهەم نوێکرایەوە");
+    const { error } = await supabase.from("products").update(fromProduct(p)).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("بەرهەم نوێکرایەوە");
   }, [showToast]);
 
-  const deleteProduct = useCallback((id: string) => {
+  const deleteProduct = useCallback(async (id: string) => {
     setProducts((prev) => prev.filter((x) => x.id !== id));
-    showToast("بەرهەم سڕایەوە");
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("بەرهەم سڕایەوە");
   }, [showToast]);
 
-  const addClient = useCallback((c: Omit<Client, "id" | "createdAt">) => {
+  const addClient = useCallback(async (c: Omit<Client, "id" | "createdAt">) => {
     const nc: Client = { ...c, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
     setClients((prev) => [nc, ...prev]);
-    showToast("کڕیار زیادکرا");
+    const { error } = await supabase.from("clients").insert(fromClient(nc));
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("کڕیار زیادکرا");
     return nc;
   }, [showToast]);
 
-  const updateClient = useCallback((id: string, c: Partial<Client>) => {
+  const updateClient = useCallback(async (id: string, c: Partial<Client>) => {
     setClients((prev) => prev.map((x) => (x.id === id ? { ...x, ...c } : x)));
-    showToast("کڕیار نوێکرایەوە");
+    const { error } = await supabase.from("clients").update(fromClient(c)).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("کڕیار نوێکرایەوە");
   }, [showToast]);
 
-  const deleteClient = useCallback((id: string) => {
+  const deleteClient = useCallback(async (id: string) => {
     setClients((prev) => prev.filter((x) => x.id !== id));
-    showToast("کڕیار سڕایەوە");
+    const { error } = await supabase.from("clients").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("کڕیار سڕایەوە");
   }, [showToast]);
 
-  const addRep = useCallback((r: Omit<Rep, "id" | "createdAt">) => {
+  const addRep = useCallback(async (r: Omit<Rep, "id" | "createdAt">) => {
     const nr: Rep = { ...r, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
     setReps((prev) => [nr, ...prev]);
-    showToast("نوێنەر زیادکرا");
+    const { error } = await supabase.from("reps").insert(fromRep(nr));
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("نوێنەر زیادکرا");
     return nr;
   }, [showToast]);
 
-  const updateRep = useCallback((id: string, r: Partial<Rep>) => {
+  const updateRep = useCallback(async (id: string, r: Partial<Rep>) => {
     setReps((prev) => prev.map((x) => (x.id === id ? { ...x, ...r } : x)));
-    showToast("نوێنەر نوێکرایەوە");
+    const { error } = await supabase.from("reps").update(fromRep(r)).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("نوێنەر نوێکرایەوە");
   }, [showToast]);
 
-  const deleteRep = useCallback((id: string) => {
+  const deleteRep = useCallback(async (id: string) => {
     setReps((prev) => prev.filter((x) => x.id !== id));
-    showToast("نوێنەر سڕایەوە");
+    const { error } = await supabase.from("reps").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("نوێنەر سڕایەوە");
   }, [showToast]);
 
-  const addWarehouse = useCallback((w: Omit<Warehouse, "id" | "createdAt">) => {
+  const addWarehouse = useCallback(async (w: Omit<Warehouse, "id" | "createdAt">) => {
     const nw: Warehouse = { ...w, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
     setWarehouses((prev) => [nw, ...prev]);
-    showToast("کۆگا زیادکرا");
+    const { error } = await supabase.from("warehouses").insert(fromWarehouse(nw));
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("کۆگا زیادکرا");
     return nw;
   }, [showToast]);
 
-  const updateWarehouse = useCallback((id: string, w: Partial<Warehouse>) => {
+  const updateWarehouse = useCallback(async (id: string, w: Partial<Warehouse>) => {
     setWarehouses((prev) => prev.map((x) => (x.id === id ? { ...x, ...w } : x)));
-    showToast("کۆگا نوێکرایەوە");
+    const { error } = await supabase.from("warehouses").update(fromWarehouse(w)).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("کۆگا نوێکرایەوە");
   }, [showToast]);
 
-  const deleteWarehouse = useCallback((id: string) => {
+  const deleteWarehouse = useCallback(async (id: string) => {
     setWarehouses((prev) => prev.filter((x) => x.id !== id));
-    showToast("کۆگا سڕایەوە");
+    const { error } = await supabase.from("warehouses").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("کۆگا سڕایەوە");
   }, [showToast]);
 
-  const addSupplier = useCallback((s: Omit<Supplier, "id" | "createdAt">) => {
+  const addSupplier = useCallback(async (s: Omit<Supplier, "id" | "createdAt">) => {
     const ns: Supplier = { ...s, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
     setSuppliers((prev) => [ns, ...prev]);
-    showToast("دابینکەر زیادکرا");
+    const { error } = await supabase.from("suppliers").insert(fromSupplier(ns));
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("دابینکەر زیادکرا");
     return ns;
   }, [showToast]);
 
-  const updateSupplier = useCallback((id: string, s: Partial<Supplier>) => {
+  const updateSupplier = useCallback(async (id: string, s: Partial<Supplier>) => {
     setSuppliers((prev) => prev.map((x) => (x.id === id ? { ...x, ...s } : x)));
-    showToast("دابینکەر نوێکرایەوە");
+    const { error } = await supabase.from("suppliers").update(fromSupplier(s)).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("دابینکەر نوێکرایەوە");
   }, [showToast]);
 
-  const deleteSupplier = useCallback((id: string) => {
+  const deleteSupplier = useCallback(async (id: string) => {
     setSuppliers((prev) => prev.filter((x) => x.id !== id));
-    showToast("دابینکەر سڕایەوە");
+    const { error } = await supabase.from("suppliers").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("دابینکەر سڕایەوە");
   }, [showToast]);
 
-  const addOrder = useCallback((o: Omit<Order, "id" | "orderNumber" | "createdAt">) => {
+  const addOrder = useCallback(async (o: Omit<Order, "id" | "orderNumber" | "createdAt">) => {
     const no: Order = { ...o, id: genId(), orderNumber: getNextOrderNumber(orders), createdAt: new Date().toISOString().split("T")[0] };
     setOrders((prev) => [no, ...prev]);
-    showToast("داواکاری زیادکرا");
+    const { error } = await supabase.from("orders").insert(fromOrder(no));
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داواکاری زیادکرا");
     return no;
   }, [orders, showToast]);
 
-  const updateOrder = useCallback((id: string, o: Partial<Order>) => {
+  const updateOrder = useCallback(async (id: string, o: Partial<Order>) => {
     setOrders((prev) => prev.map((x) => (x.id === id ? { ...x, ...o } : x)));
-    showToast("داواکاری نوێکرایەوە");
+    const { error } = await supabase.from("orders").update(fromOrder(o)).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داواکاری نوێکرایەوە");
   }, [showToast]);
 
-  const deleteOrder = useCallback((id: string) => {
+  const deleteOrder = useCallback(async (id: string) => {
     setOrders((prev) => prev.filter((x) => x.id !== id));
-    showToast("داواکاری سڕایەوە");
+    const { error } = await supabase.from("orders").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داواکاری سڕایەوە");
   }, [showToast]);
 
-  const addDelivery = useCallback((d: Omit<Delivery, "id" | "createdAt">) => {
+  const addDelivery = useCallback(async (d: Omit<Delivery, "id" | "createdAt">) => {
     const nd: Delivery = { ...d, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
     setDeliveries((prev) => [nd, ...prev]);
-    showToast("گەیاندن زیادکرا");
+    const { error } = await supabase.from("deliveries").insert(fromDelivery(nd));
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("گەیاندن زیادکرا");
     return nd;
   }, [showToast]);
 
-  const updateDelivery = useCallback((id: string, d: Partial<Delivery>) => {
+  const updateDelivery = useCallback(async (id: string, d: Partial<Delivery>) => {
     setDeliveries((prev) => prev.map((x) => (x.id === id ? { ...x, ...d } : x)));
-    showToast("گەیاندن نوێکرایەوە");
+    const { error } = await supabase.from("deliveries").update(fromDelivery(d)).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("گەیاندن نوێکرایەوە");
   }, [showToast]);
 
-  const addTransaction = useCallback((t: Omit<Transaction, "id" | "createdAt">) => {
+  const addTransaction = useCallback(async (t: Omit<Transaction, "id" | "createdAt">) => {
     const nt: Transaction = { ...t, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
     setTransactions((prev) => [nt, ...prev]);
-    showToast(t.type === "INCOME" ? "داهات تۆمارکرا" : "خەرجی تۆمارکرا");
+    const { error } = await supabase.from("transactions").insert(fromTransaction(nt));
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast(t.type === "INCOME" ? "داهات تۆمارکرا" : "خەرجی تۆمارکرا");
     return nt;
   }, [showToast]);
 
-  const updateSettings = useCallback((s: Partial<CompanySettings>) => {
+  const updateSettings = useCallback(async (s: Partial<CompanySettings>) => {
     setSettings((prev) => ({ ...prev, ...s }));
-    showToast("ڕێکخستنەکان پاشەکەوتکران");
+    const { error } = await supabase.from("company_settings").update(fromSettings(s)).eq("id", 1);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("ڕێکخستنەکان پاشەکەوتکران");
   }, [showToast]);
 
-  const addUser = useCallback((u: Omit<User, "id" | "createdAt">) => {
-    const nu: User = { ...u, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
+  // Users — managed via Supabase Auth + profiles table
+  const addUser = useCallback(async (u: Omit<User, "id" | "createdAt">) => {
+    const res = await fetch("/api/auth/create-user", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: u.email, password: u.password, name: u.name, role: u.role, phone: u.phone, city: u.city }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast("هەڵە: " + data.error, "error"); return { ...u, id: "", createdAt: "" }; }
+    const nu: User = { ...u, id: data.user.id, createdAt: new Date().toISOString().split("T")[0] };
     setUsers((prev) => [nu, ...prev]);
     showToast("بەکارهێنەر زیادکرا");
     return nu;
   }, [showToast]);
 
-  const updateUser = useCallback((id: string, u: Partial<User>) => {
+  const updateUser = useCallback(async (id: string, u: Partial<User>) => {
     setUsers((prev) => prev.map((x) => (x.id === id ? { ...x, ...u } : x)));
-    showToast("بەکارهێنەر نوێکرایەوە");
+    const dbData: Record<string, unknown> = {};
+    if (u.name !== undefined) dbData.name = u.name;
+    if (u.email !== undefined) dbData.email = u.email;
+    if (u.role !== undefined) dbData.role = u.role;
+    if (u.phone !== undefined) dbData.phone = u.phone;
+    if (u.city !== undefined) dbData.city = u.city;
+    if (u.isActive !== undefined) dbData.is_active = u.isActive;
+    const { error } = await supabase.from("profiles").update(dbData).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("بەکارهێنەر نوێکرایەوە");
   }, [showToast]);
 
-  const deleteUser = useCallback((id: string) => {
+  const deleteUser = useCallback(async (id: string) => {
     setUsers((prev) => prev.filter((x) => x.id !== id));
-    showToast("بەکارهێنەر سڕایەوە");
+    const { error } = await supabase.from("profiles").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("بەکارهێنەر سڕایەوە");
   }, [showToast]);
 
-  const addTemplate = useCallback((t: Omit<InvoiceTemplate, "id" | "createdAt">) => {
+  const addTemplate = useCallback(async (t: Omit<InvoiceTemplate, "id" | "createdAt">) => {
     const nt: InvoiceTemplate = { ...t, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
     setInvoiceTemplates((prev) => [nt, ...prev]);
-    showToast("داڕێژە پاشەکەوتکرا");
+    const { error } = await supabase.from("invoice_templates").insert(fromTemplate(nt));
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داڕێژە پاشەکەوتکرا");
     return nt;
   }, [showToast]);
 
-  const deleteTemplate = useCallback((id: string) => {
+  const deleteTemplate = useCallback(async (id: string) => {
     setInvoiceTemplates((prev) => prev.filter((x) => x.id !== id));
-    showToast("داڕێژە سڕایەوە");
+    const { error } = await supabase.from("invoice_templates").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داڕێژە سڕایەوە");
   }, [showToast]);
 
   return (
     <DataContext.Provider
       value={{
         products, clients, reps, warehouses, suppliers, orders, deliveries, transactions, settings,
-        users, invoiceTemplates,
+        users, invoiceTemplates, loading,
         addProduct, updateProduct, deleteProduct,
         addClient, updateClient, deleteClient,
         addRep, updateRep, deleteRep,
@@ -413,7 +536,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         addUser, updateUser, deleteUser,
         addTemplate, deleteTemplate,
         updateSettings,
-        showToast, toast,
+        showToast, toast, refreshData,
       }}
     >
       {children}

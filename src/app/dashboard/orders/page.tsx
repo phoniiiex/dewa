@@ -34,7 +34,7 @@ export default function OrdersPage() {
   const removeItemRow = (i: number) => setOrderItems(orderItems.filter((_, j) => j !== i));
   const updateItemRow = (i: number, field: string, value: string) => setOrderItems(orderItems.map((item, j) => j === i ? { ...item, [field]: value } : item));
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const client = clients.find(c => c.id === form.clientId);
     const rep = reps.find(r => r.id === form.repId);
@@ -55,7 +55,7 @@ export default function OrdersPage() {
     const totalAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
     const bonusNotation = items.map(i => `${i.quantity}+${i.bonusQty}`).join(", ");
 
-    const newOrder = addOrder({
+    const newOrder = await addOrder({
       clientId: client.id, clientName: client.name, repId: rep.id, repName: rep.name,
       warehouseId: wh?.id || null, warehouseName: wh?.name || null,
       items, status: "PENDING", routingMode: form.routingMode,

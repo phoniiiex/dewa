@@ -5,6 +5,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import Toast from "@/components/ui/Toast";
 import { DataProvider } from "@/lib/store";
+import { supabase } from "@/lib/supabase";
 import "@/styles/dashboard.css";
 
 // Layout context for sidebar collapse + global search + notifications
@@ -16,6 +17,7 @@ interface LayoutContextType {
   notifOpen: boolean;
   setNotifOpen: (v: boolean) => void;
   logout: () => void;
+  currentUser: { id: string; email: string; name: string; role: string } | null;
 }
 
 const LayoutContext = createContext<LayoutContextType | null>(null);
@@ -35,19 +37,43 @@ export default function DashboardLayout({
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: string } | null>(null);
 
-  // Auth guard — redirect to login if no session
+  // Auth guard — redirect to login if no Supabase session
   useEffect(() => {
-    const session = localStorage.getItem("dewa_session");
-    if (!session) {
-      router.replace("/");
-    } else {
-      setAuthed(true);
-    }
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) {
+        router.replace("/");
+      } else {
+        // Get user profile from profiles table
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("name, role")
+          .eq("id", session.user.id)
+          .single();
+
+        setCurrentUser({
+          id: session.user.id,
+          email: session.user.email || "",
+          name: profile?.name || session.user.user_metadata?.name || "",
+          role: profile?.role || session.user.user_metadata?.role || "REP",
+        });
+        setAuthed(true);
+      }
+    });
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.replace("/");
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [router]);
 
-  const logout = () => {
-    localStorage.removeItem("dewa_session");
+  const logout = async () => {
+    await supabase.auth.signOut();
     router.replace("/");
   };
 
@@ -66,6 +92,7 @@ export default function DashboardLayout({
         searchOpen, setSearchOpen,
         notifOpen, setNotifOpen,
         logout,
+        currentUser,
       }}>
         <div className={`app-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
           <Sidebar />
