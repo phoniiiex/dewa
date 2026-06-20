@@ -1,18 +1,31 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Mail, Lock, Eye, EyeOff, User, Globe } from "lucide-react";
+import { useRouter } from "next/navigation";
 import "@/styles/login.css";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [checking, setChecking] = useState(true);
 
   // MVP demo credentials
   const DEMO_EMAIL = "admin@dewa.com";
   const DEMO_PASSWORD = "dewa2025";
+
+  // Check if already logged in
+  useEffect(() => {
+    const session = localStorage.getItem("dewa_session");
+    if (session) {
+      router.replace("/dashboard");
+    } else {
+      setChecking(false);
+    }
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,13 +34,26 @@ export default function LoginPage() {
 
     setTimeout(() => {
       if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
-        window.location.href = "/dashboard";
+        // Save session
+        localStorage.setItem("dewa_session", JSON.stringify({
+          email,
+          name: "ئاسۆ",
+          loggedInAt: new Date().toISOString(),
+        }));
+        router.push("/dashboard");
       } else {
         setError("ئیمەیڵ یان وشەی نهێنی هەڵەیە");
         setIsLoading(false);
       }
     }, 800);
   };
+
+  if (checking) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F8F9FA" }}>
+      <div style={{ width: 40, height: 40, border: "3px solid #DEE2E6", borderTopColor: "#4263EB", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
 
   return (
     <div className="login-page">
@@ -50,6 +76,14 @@ export default function LoginPage() {
 
           <h1>چوونە ژوورەوە</h1>
           <p>زانیارییەکانت بنووسە بۆ چوونە ژوورەوە</p>
+
+          {/* Demo credentials hint */}
+          <div style={{
+            background: "#EDF2FF", border: "1px solid #D0BFFF", borderRadius: 10,
+            padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#4263EB",
+          }}>
+            <strong>دێمۆ:</strong> admin@dewa.com / dewa2025
+          </div>
 
           <form className="login-form" onSubmit={handleSubmit}>
             <div className="form-group">
@@ -121,15 +155,9 @@ export default function LoginPage() {
 
             {error && (
               <div style={{
-                background: "#FFF5F5",
-                color: "#FA5252",
-                padding: "10px 16px",
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                textAlign: "center",
-                border: "1px solid #FFE3E3",
-                animation: "fadeInUp 0.3s ease",
+                background: "#FFF5F5", color: "#FA5252", padding: "10px 16px",
+                borderRadius: 8, fontSize: 13, fontWeight: 600, textAlign: "center",
+                border: "1px solid #FFE3E3", animation: "fadeInUp 0.3s ease",
               }}>
                 {error}
               </div>

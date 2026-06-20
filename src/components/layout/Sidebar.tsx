@@ -7,7 +7,7 @@ import { useData } from "@/lib/store";
 import {
   LayoutDashboard, BarChart3, Package, ShoppingCart, Truck, Users, Building2,
   Factory, Gift, UserCog, Wallet, Settings, HelpCircle, ChevronLeft, ChevronRight,
-  BadgeCheck, MoreHorizontal, FileText, Bot, Camera,
+  BadgeCheck, MoreHorizontal, FileText, Bot, Camera, LogOut,
 } from "lucide-react";
 
 interface NavItem { label: string; href: string; icon: React.ReactNode; badge?: number; }
@@ -52,7 +52,7 @@ const footerItems: NavItem[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { settings, updateSettings, showToast } = useData();
-  const { sidebarCollapsed, toggleSidebar } = useLayout();
+  const { sidebarCollapsed, toggleSidebar, logout } = useLayout();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleProfileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,8 +153,8 @@ export default function Sidebar() {
               </span>
               <span className="sidebar-user-email">admin@dewa.com</span>
             </div>
-            <button className="sidebar-user-more" aria-label="More options">
-              <MoreHorizontal size={16} />
+            <button className="sidebar-user-more" aria-label="Logout" onClick={logout} title="چوونەدەرەوە">
+              <LogOut size={16} />
             </button>
           </>
         )}
