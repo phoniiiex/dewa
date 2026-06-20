@@ -77,8 +77,10 @@ export default function TopBar() {
     { id: 3, text: "پارەدانی نوێ لە دەرمانخانەی ئازادی", time: "٣ کاتژمێر لەمەوپێش", read: true },
   ];
 
-  const today = new Date();
-  const formattedDate = today.toLocaleDateString("ckb", { year: "numeric", month: "long", day: "numeric" });
+  const [formattedDate, setFormattedDate] = useState("");
+  useEffect(() => {
+    setFormattedDate(new Date().toLocaleDateString("ckb", { year: "numeric", month: "long", day: "numeric" }));
+  }, []);
 
   return (
     <>
