@@ -7,7 +7,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import type {
   Product, Client, Rep, Warehouse, Supplier, Order,
-  Delivery, Transaction, CompanySettings, User, OrderItem
+  Delivery, Transaction, CompanySettings, User, OrderItem,
+  InvoiceTemplate,
 } from "./types";
 
 // ===== SEED DATA =====
@@ -71,6 +72,10 @@ const seedTransactions: Transaction[] = [
   { id: "t4", type: "EXPENSE", description: "مووچەی نوێنەران", amount: 3200000, method: "CASH", relatedOrderId: null, createdAt: "2025-10-28" },
 ];
 
+const seedUsers: User[] = [
+  { id: "u-admin", name: "ئاسۆ ئەحمەد", email: "admin@dewa.com", password: "dewa2025", role: "ADMIN", phone: "0770 000 1234", city: "سلێمانی", isActive: true, createdAt: "2025-01-01" },
+];
+
 const defaultSettings: CompanySettings = {
   name: "دەوا فارما",
   nameEn: "Dewa Pharma",
@@ -122,6 +127,8 @@ interface DataStore {
   deliveries: Delivery[];
   transactions: Transaction[];
   settings: CompanySettings;
+  users: User[];
+  invoiceTemplates: InvoiceTemplate[];
 
   // Product CRUD
   addProduct: (p: Omit<Product, "id" | "createdAt">) => Product;
@@ -160,6 +167,15 @@ interface DataStore {
   // Transaction CRUD
   addTransaction: (t: Omit<Transaction, "id" | "createdAt">) => Transaction;
 
+  // User CRUD
+  addUser: (u: Omit<User, "id" | "createdAt">) => User;
+  updateUser: (id: string, u: Partial<User>) => void;
+  deleteUser: (id: string) => void;
+
+  // Template CRUD
+  addTemplate: (t: Omit<InvoiceTemplate, "id" | "createdAt">) => InvoiceTemplate;
+  deleteTemplate: (id: string) => void;
+
   // Settings
   updateSettings: (s: Partial<CompanySettings>) => void;
 
@@ -186,6 +202,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(defaultSettings);
+  const [users, setUsers] = useState<User[]>([]);
+  const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error"; visible: boolean }>({ message: "", type: "success", visible: false });
 
@@ -200,6 +218,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setDeliveries(loadFromStorage("deliveries", seedDeliveries));
     setTransactions(loadFromStorage("transactions", seedTransactions));
     setSettings(loadFromStorage("settings", defaultSettings));
+    setUsers(loadFromStorage("users", seedUsers));
+    setInvoiceTemplates(loadFromStorage("invoiceTemplates", []));
     setLoaded(true);
   }, []);
 
@@ -213,6 +233,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { if (loaded) saveToStorage("deliveries", deliveries); }, [deliveries, loaded]);
   useEffect(() => { if (loaded) saveToStorage("transactions", transactions); }, [transactions, loaded]);
   useEffect(() => { if (loaded) saveToStorage("settings", settings); }, [settings, loaded]);
+  useEffect(() => { if (loaded) saveToStorage("users", users); }, [users, loaded]);
+  useEffect(() => { if (loaded) saveToStorage("invoiceTemplates", invoiceTemplates); }, [invoiceTemplates, loaded]);
 
   const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
     setToast({ message, type, visible: true });
@@ -346,10 +368,40 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     showToast("ڕێکخستنەکان پاشەکەوتکران");
   }, [showToast]);
 
+  const addUser = useCallback((u: Omit<User, "id" | "createdAt">) => {
+    const nu: User = { ...u, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
+    setUsers((prev) => [nu, ...prev]);
+    showToast("بەکارهێنەر زیادکرا");
+    return nu;
+  }, [showToast]);
+
+  const updateUser = useCallback((id: string, u: Partial<User>) => {
+    setUsers((prev) => prev.map((x) => (x.id === id ? { ...x, ...u } : x)));
+    showToast("بەکارهێنەر نوێکرایەوە");
+  }, [showToast]);
+
+  const deleteUser = useCallback((id: string) => {
+    setUsers((prev) => prev.filter((x) => x.id !== id));
+    showToast("بەکارهێنەر سڕایەوە");
+  }, [showToast]);
+
+  const addTemplate = useCallback((t: Omit<InvoiceTemplate, "id" | "createdAt">) => {
+    const nt: InvoiceTemplate = { ...t, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
+    setInvoiceTemplates((prev) => [nt, ...prev]);
+    showToast("داڕێژە پاشەکەوتکرا");
+    return nt;
+  }, [showToast]);
+
+  const deleteTemplate = useCallback((id: string) => {
+    setInvoiceTemplates((prev) => prev.filter((x) => x.id !== id));
+    showToast("داڕێژە سڕایەوە");
+  }, [showToast]);
+
   return (
     <DataContext.Provider
       value={{
         products, clients, reps, warehouses, suppliers, orders, deliveries, transactions, settings,
+        users, invoiceTemplates,
         addProduct, updateProduct, deleteProduct,
         addClient, updateClient, deleteClient,
         addRep, updateRep, deleteRep,
@@ -358,6 +410,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         addOrder, updateOrder, deleteOrder,
         addDelivery, updateDelivery,
         addTransaction,
+        addUser, updateUser, deleteUser,
+        addTemplate, deleteTemplate,
         updateSettings,
         showToast, toast,
       }}

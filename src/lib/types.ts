@@ -15,6 +15,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string;
   role: UserRole;
   phone: string;
   city: string;
@@ -151,4 +152,24 @@ export interface CompanySettings {
   language: string;
   logo?: string;
   profilePic?: string;
+}
+
+export interface InvoiceBlockConfig {
+  id: string;
+  label: string;
+  visible: boolean;
+  required?: boolean;
+  type: "builtin" | "custom";
+  customText?: string;
+}
+
+export interface InvoiceTemplate {
+  id: string;
+  name: string;
+  blocks: InvoiceBlockConfig[];
+  showBonusCol: boolean;
+  defaultNote: string;
+  defaultTerms: string;
+  defaultDiscount: number;
+  createdAt: string;
 }

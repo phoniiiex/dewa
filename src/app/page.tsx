@@ -13,10 +13,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(true);
 
-  // MVP demo credentials
-  const DEMO_EMAIL = "admin@dewa.com";
-  const DEMO_PASSWORD = "dewa2025";
-
   // Check if already logged in
   useEffect(() => {
     const session = localStorage.getItem("dewa_session");
@@ -33,11 +29,26 @@ export default function LoginPage() {
     setIsLoading(true);
 
     setTimeout(() => {
-      if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
-        // Save session
+      // Read users from localStorage (shared with the store)
+      let users: Array<{ id: string; name: string; email: string; password?: string; role: string; isActive: boolean }> = [];
+      try {
+        const raw = localStorage.getItem("dewa_users");
+        if (raw) users = JSON.parse(raw);
+      } catch { /* ignore */ }
+
+      // Fallback admin if no users exist
+      if (users.length === 0) {
+        users = [{ id: "u-admin", name: "ئاسۆ ئەحمەد", email: "admin@dewa.com", password: "dewa2025", role: "ADMIN", isActive: true }];
+      }
+
+      // Find matching user
+      const user = users.find(u => u.email === email && u.password === password && u.isActive);
+      if (user) {
         localStorage.setItem("dewa_session", JSON.stringify({
-          email,
-          name: "ئاسۆ",
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
           loggedInAt: new Date().toISOString(),
         }));
         router.push("/dashboard");
@@ -45,7 +56,7 @@ export default function LoginPage() {
         setError("ئیمەیڵ یان وشەی نهێنی هەڵەیە");
         setIsLoading(false);
       }
-    }, 800);
+    }, 600);
   };
 
   if (checking) return (
@@ -57,108 +68,52 @@ export default function LoginPage() {
 
   return (
     <div className="login-page">
-      {/* Right side (RTL) — Form */}
       <div className="login-form-section">
         <div className="login-header">
-          <div className="login-logo">
-            <div className="login-logo-icon">د</div>
-          </div>
-          <div className="login-register-link">
-            <span>هەژمارت نییە؟</span>
-            <a href="#">تۆمارکردن</a>
-          </div>
+          <div className="login-logo"><div className="login-logo-icon">د</div></div>
+          <div className="login-register-link"><span>هەژمارت نییە؟</span><a href="#">تۆمارکردن</a></div>
         </div>
 
         <div className="login-form-container">
-          <div className="login-avatar-icon">
-            <User size={28} />
-          </div>
-
+          <div className="login-avatar-icon"><User size={28} /></div>
           <h1>چوونە ژوورەوە</h1>
           <p>زانیارییەکانت بنووسە بۆ چوونە ژوورەوە</p>
 
-          {/* Demo credentials hint */}
-          <div style={{
-            background: "#EDF2FF", border: "1px solid #D0BFFF", borderRadius: 10,
-            padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#4263EB",
-          }}>
+          <div style={{ background: "#EDF2FF", border: "1px solid #D0BFFF", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#4263EB" }}>
             <strong>دێمۆ:</strong> admin@dewa.com / dewa2025
           </div>
 
           <form className="login-form" onSubmit={handleSubmit}>
             <div className="form-group">
-              <label>
-                ئیمەیڵ
-                <span className="required">*</span>
-              </label>
+              <label>ئیمەیڵ<span className="required">*</span></label>
               <div className="input-wrapper">
-                <span className="input-icon">
-                  <Mail size={18} />
-                </span>
-                <input
-                  type="email"
-                  placeholder="hello@dewa.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  id="login-email"
-                />
+                <span className="input-icon"><Mail size={18} /></span>
+                <input type="email" placeholder="hello@dewa.com" value={email} onChange={(e) => setEmail(e.target.value)} required id="login-email" />
               </div>
             </div>
 
             <div className="form-group">
-              <label>
-                وشەی نهێنی
-                <span className="required">*</span>
-              </label>
+              <label>وشەی نهێنی<span className="required">*</span></label>
               <div className="input-wrapper">
-                <span className="input-icon">
-                  <Lock size={18} />
-                </span>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="••••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  id="login-password"
-                />
-                <button
-                  type="button"
-                  className="toggle-password"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label="Toggle password visibility"
-                >
+                <span className="input-icon"><Lock size={18} /></span>
+                <input type={showPassword ? "text" : "password"} placeholder="••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required id="login-password" />
+                <button type="button" className="toggle-password" onClick={() => setShowPassword(!showPassword)} aria-label="Toggle password visibility">
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
             <div className="form-extras">
-              <div className="checkbox-group">
-                <input type="checkbox" id="keep-logged" />
-                <label htmlFor="keep-logged">لە ژوورەوە بمهێڵەوە</label>
-              </div>
-              <a href="#" className="forgot-password">
-                وشەی نهێنیت لەبیرکردووە؟
-              </a>
+              <div className="checkbox-group"><input type="checkbox" id="keep-logged" /><label htmlFor="keep-logged">لە ژوورەوە بمهێڵەوە</label></div>
+              <a href="#" className="forgot-password">وشەی نهێنیت لەبیرکردووە؟</a>
             </div>
 
-            <button
-              type="submit"
-              className="login-btn"
-              disabled={isLoading}
-              id="login-submit"
-            >
+            <button type="submit" className="login-btn" disabled={isLoading} id="login-submit">
               {isLoading ? "چاوەڕوانبە..." : "چوونە ژوورەوە"}
             </button>
 
             {error && (
-              <div style={{
-                background: "#FFF5F5", color: "#FA5252", padding: "10px 16px",
-                borderRadius: 8, fontSize: 13, fontWeight: 600, textAlign: "center",
-                border: "1px solid #FFE3E3", animation: "fadeInUp 0.3s ease",
-              }}>
+              <div style={{ background: "#FFF5F5", color: "#FA5252", padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, textAlign: "center", border: "1px solid #FFE3E3" }}>
                 {error}
               </div>
             )}
@@ -167,32 +122,19 @@ export default function LoginPage() {
 
         <div className="login-footer">
           <span>© ٢٠٢٥ دەوا</span>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <Globe size={14} />
-            <span>کوردی</span>
-          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}><Globe size={14} /><span>کوردی</span></div>
         </div>
       </div>
 
-      {/* Left side (RTL) — Orange Branding */}
       <div className="login-branding">
         <div className="branding-content">
           <div className="branding-avatar">👤</div>
           <div className="branding-quote">
             سیستەمی بەڕێوەبردنی دەرمانسازی{" "}
-            <span className="highlight">
-              کارەکانمانی ئاسان کردووە، لە پلاندانانەوە بۆ شوێنپێگرتن.
-            </span>
+            <span className="highlight">کارەکانمانی ئاسان کردووە، لە پلاندانانەوە بۆ شوێنپێگرتن.</span>
           </div>
-          <div className="branding-author">
-            <span className="name">دەوا</span>
-            <span className="role">سیستەمی بەڕێوەبردنی دەرمانسازی B2B</span>
-          </div>
-          <div className="branding-dots">
-            <span className="dot active"></span>
-            <span className="dot"></span>
-            <span className="dot"></span>
-          </div>
+          <div className="branding-author"><span className="name">دەوا</span><span className="role">سیستەمی بەڕێوەبردنی دەرمانسازی B2B</span></div>
+          <div className="branding-dots"><span className="dot active"></span><span className="dot"></span><span className="dot"></span></div>
         </div>
       </div>
     </div>

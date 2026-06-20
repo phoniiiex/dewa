@@ -1,6 +1,6 @@
 "use client";
 import { useState, FormEvent, useRef } from "react";
-import { Settings2, Building2, Save, Users, Plus, Edit3, Trash2, RefreshCw, Camera, Upload, Image as ImageIcon } from "lucide-react";
+import { Settings2, Building2, Save, Users, Plus, Edit3, Trash2, RefreshCw, Camera, Upload, Lock, Mail, Shield } from "lucide-react";
 import { useData } from "@/lib/store";
 import { FormField, FormGrid, inputStyle } from "@/components/ui/FormField";
 import Modal from "@/components/ui/Modal";
@@ -40,30 +40,14 @@ function ImageUploader({ value, onChange, label, shape }: { value?: string; onCh
 }
 
 export default function SettingsPage() {
-  const { settings, updateSettings, showToast } = useData();
+  const { settings, updateSettings, users, addUser, updateUser, deleteUser, showToast } = useData();
   const [companyForm, setCompanyForm] = useState(settings);
   const [usersTab, setUsersTab] = useState(false);
 
-  const [users, setUsers] = useState<{ id: string; name: string; email: string; role: string; isActive: boolean }[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const raw = localStorage.getItem("dewa_users");
-      return raw ? JSON.parse(raw) : [
-        { id: "u1", name: "ئاسۆ ئەدمین", email: "admin@dewa.com", role: "ADMIN", isActive: true },
-        { id: "u2", name: "ئاکۆ مەحموود", email: "ako@dewa.com", role: "REP", isActive: true },
-      ];
-    } catch { return []; }
-  });
-
   const [userModal, setUserModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<{ id: string; name: string; email: string; role: string; isActive: boolean } | null>(null);
-  const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "REP" });
+  const [editingUser, setEditingUser] = useState<{ id: string; name: string; email: string; role: string } | null>(null);
+  const [userForm, setUserForm] = useState({ name: "", email: "", password: "", role: "REP", phone: "", city: "" });
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
-
-  const saveUsers = (newUsers: typeof users) => {
-    setUsers(newUsers);
-    if (typeof window !== "undefined") localStorage.setItem("dewa_users", JSON.stringify(newUsers));
-  };
 
   const handleCompanySave = (e: FormEvent) => {
     e.preventDefault();
@@ -73,20 +57,29 @@ export default function SettingsPage() {
   const handleAddUser = (e: FormEvent) => {
     e.preventDefault();
     if (editingUser) {
-      const updated = users.map(u => u.id === editingUser.id ? { ...u, name: userForm.name, email: userForm.email, role: userForm.role } : u);
-      saveUsers(updated);
-      showToast("بەکارهێنەر نوێکرایەوە");
+      const update: Record<string, unknown> = { name: userForm.name, email: userForm.email, role: userForm.role, phone: userForm.phone, city: userForm.city };
+      if (userForm.password) update.password = userForm.password;
+      updateUser(editingUser.id, update);
     } else {
-      const newUser = { id: Math.random().toString(36).substring(2, 10), name: userForm.name, email: userForm.email, role: userForm.role, isActive: true };
-      saveUsers([...users, newUser]);
-      showToast("بەکارهێنەر زیادکرا");
+      if (!userForm.password) { showToast("وشەی نهێنی پێویستە", "error"); return; }
+      addUser({
+        name: userForm.name, email: userForm.email, password: userForm.password,
+        role: userForm.role as "ADMIN" | "MANAGER" | "REP",
+        phone: userForm.phone, city: userForm.city, isActive: true,
+      });
     }
     setUserModal(false);
   };
 
   const handleDeleteUser = (id: string) => {
-    saveUsers(users.filter(u => u.id !== id));
-    showToast("بەکارهێنەر سڕایەوە");
+    // Don't allow deleting the last admin
+    const admins = users.filter(u => u.role === "ADMIN");
+    const target = users.find(u => u.id === id);
+    if (target?.role === "ADMIN" && admins.length <= 1) {
+      showToast("ناتوانی تاکە ئەدمینەکە بسڕیتەوە", "error");
+      return;
+    }
+    deleteUser(id);
   };
 
   const handleResetData = () => {
@@ -96,6 +89,12 @@ export default function SettingsPage() {
       showToast("هەموو داتاکان سڕانەوە. لاپەڕەکە نوێ دەبێتەوە...");
       setTimeout(() => window.location.reload(), 1500);
     }
+  };
+
+  const roleLabels: Record<string, { label: string; bg: string; color: string }> = {
+    ADMIN: { label: "ئەدمین", bg: "#FFE3E3", color: "#C92A2A" },
+    MANAGER: { label: "بەڕێوەبەر", bg: "#EDF2FF", color: "#4263EB" },
+    REP: { label: "نوێنەر", bg: "#D3F9D8", color: "#2B8A3E" },
   };
 
   return (
@@ -116,7 +115,6 @@ export default function SettingsPage() {
           <div style={{ background: "white", borderRadius: 14, padding: 28, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}><Building2 size={18} /> زانیاری کۆمپانیا</h3>
 
-            {/* Logo Upload */}
             <div style={{ display: "flex", gap: 32, marginBottom: 28, padding: 20, background: "#F8F9FA", borderRadius: 12, justifyContent: "center" }}>
               <ImageUploader value={companyForm.logo} onChange={(v) => setCompanyForm({ ...companyForm, logo: v })} label="لۆگۆی کۆمپانیا" shape="square" />
               <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 4 }}>
@@ -152,29 +150,59 @@ export default function SettingsPage() {
       ) : (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700 }}>بەکارهێنەرانی سیستەم</h3>
-            <button onClick={() => { setEditingUser(null); setUserForm({ name: "", email: "", password: "", role: "REP" }); setUserModal(true); }} className="topbar-add-btn"><Plus size={16} /><span>بەکارهێنەری نوێ</span></button>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700 }}>بەکارهێنەرانی سیستەم</h3>
+              <p style={{ fontSize: 12, color: "#ADB5BD", marginTop: 2 }}>بەکارهێنەران دەتوانن بە ئیمەیڵ و وشەی نهێنییان بچنە ژوورەوە</p>
+            </div>
+            <button onClick={() => { setEditingUser(null); setUserForm({ name: "", email: "", password: "", role: "REP", phone: "", city: "" }); setUserModal(true); }} className="topbar-add-btn"><Plus size={16} /><span>بەکارهێنەری نوێ</span></button>
           </div>
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead><tr><th>ناو</th><th>ئیمەیڵ</th><th>ڕۆل</th><th>بارودۆخ</th><th></th></tr></thead>
-              <tbody>
-                {users.map(u => (
-                  <tr key={u.id}>
-                    <td style={{ fontWeight: 600 }}>{u.name}</td>
-                    <td style={{ fontSize: 13, color: "#6C757D" }}>{u.email}</td>
-                    <td><span style={{ padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: u.role === "ADMIN" ? "#FFE3E3" : u.role === "MANAGER" ? "#EDF2FF" : "#D3F9D8", color: u.role === "ADMIN" ? "#C92A2A" : u.role === "MANAGER" ? "#4263EB" : "#2B8A3E" }}>{u.role === "ADMIN" ? "ئەدمین" : u.role === "MANAGER" ? "بەڕێوەبەر" : "نوێنەر"}</span></td>
-                    <td><span className={`status-badge ${u.isActive ? "paid" : "cancelled"}`}>{u.isActive ? "چالاک" : "ناچالاک"}</span></td>
-                    <td>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={() => { setEditingUser(u); setUserForm({ name: u.name, email: u.email, password: "", role: u.role }); setUserModal(true); }} style={{ padding: 4, color: "#6C757D", background: "none", border: "none", cursor: "pointer" }}><Edit3 size={14} /></button>
-                        <button onClick={() => setDeleteUserId(u.id)} style={{ padding: 4, color: "#FA5252", background: "none", border: "none", cursor: "pointer" }}><Trash2 size={14} /></button>
+
+          {/* Users Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+            {users.map(u => {
+              const r = roleLabels[u.role] || roleLabels.REP;
+              return (
+                <div key={u.id} style={{ background: "white", borderRadius: 14, padding: 20, border: "1px solid #E9ECEF", display: "flex", flexDirection: "column", gap: 12, transition: "box-shadow 0.2s" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: r.bg, display: "flex", alignItems: "center", justifyContent: "center", color: r.color, fontWeight: 800, fontSize: 14 }}>{u.name.charAt(0)}</div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{u.name}</div>
+                        <div style={{ fontSize: 11, color: "#6C757D", display: "flex", alignItems: "center", gap: 4 }}><Mail size={10} />{u.email}</div>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                    <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: r.bg, color: r.color }}>{r.label}</span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, fontSize: 11, color: "#6C757D" }}>
+                    {u.phone && <span>📞 {u.phone}</span>}
+                    {u.city && <span>📍 {u.city}</span>}
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: "1px solid #F1F3F5" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <Lock size={10} color="#ADB5BD" />
+                      <span style={{ fontSize: 10, color: "#ADB5BD" }}>{u.password ? "••••••••" : "بێ وشەی نهێنی"}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => { setEditingUser(u); setUserForm({ name: u.name, email: u.email, password: "", role: u.role, phone: u.phone || "", city: u.city || "" }); setUserModal(true); }} style={{ padding: "4px 8px", borderRadius: 6, background: "#EDF2FF", color: "#4263EB", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 3 }}><Edit3 size={11} /> دەستکاری</button>
+                      <button onClick={() => setDeleteUserId(u.id)} style={{ padding: "4px 8px", borderRadius: 6, background: "#FFE3E3", color: "#FA5252", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit" }}><Trash2 size={11} /></button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Info box */}
+          <div style={{ marginTop: 20, padding: 16, background: "#EDF2FF", borderRadius: 10, border: "1px solid #D0BFFF" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}><Shield size={14} color="#4263EB" /><span style={{ fontSize: 12, fontWeight: 700, color: "#4263EB" }}>چۆن کاردەکات؟</span></div>
+            <ul style={{ fontSize: 11, color: "#495057", lineHeight: 1.8, paddingRight: 16, margin: 0 }}>
+              <li>ئەدمین دەتوانێت بەکارهێنەر زیادبکات و ڕۆڵی دابنێت</li>
+              <li>هەر بەکارهێنەرێک دەتوانێت بە <strong>ئیمەیڵ</strong> و <strong>وشەی نهێنی</strong> خۆی بچێتە ژوورەوە</li>
+              <li>نوێنەران و بەڕێوەبەران هەر لە هەمان لاپەڕەی چوونەژوورەوە بەکاریدێنن</li>
+              <li>تاکە ئەدمینەکە ناسڕدرێتەوە</li>
+            </ul>
           </div>
 
           <Modal open={userModal} onClose={() => setUserModal(false)} title={editingUser ? "دەستکاری بەکارهێنەر" : "بەکارهێنەری نوێ"} width={480}>
@@ -182,7 +210,11 @@ export default function SettingsPage() {
               <FormGrid cols={1}>
                 <FormField label="ناو" required><input style={inputStyle} required value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} /></FormField>
                 <FormField label="ئیمەیڵ" required><input style={inputStyle} type="email" required value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></FormField>
-                {!editingUser && <FormField label="وشەی نهێنی" required><input style={inputStyle} type="password" required value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} /></FormField>}
+                <FormField label={editingUser ? "وشەی نهێنی (بۆ گۆڕین بنووسە)" : "وشەی نهێنی"} required={!editingUser}><input style={inputStyle} type="password" required={!editingUser} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} placeholder={editingUser ? "بەتاڵ بهێڵە بۆ نەگۆڕین" : ""} /></FormField>
+                <FormGrid>
+                  <FormField label="تەلەفۆن"><input style={inputStyle} value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} /></FormField>
+                  <FormField label="شار"><input style={inputStyle} value={userForm.city} onChange={(e) => setUserForm({ ...userForm, city: e.target.value })} /></FormField>
+                </FormGrid>
                 <FormField label="ڕۆل">
                   <div style={{ display: "flex", gap: 8 }}>
                     {[
