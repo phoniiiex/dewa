@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { FileText, Printer, Edit3, Eye, QrCode } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
-import { generateC2QRSvg } from "@/lib/qr-c2";
+import { generateQRSvg } from "@/lib/qr-c2";
 
 const PRINT_CSS = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -112,7 +112,7 @@ export default function InvoicesPage() {
     };
     const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
     const url = `${baseUrl}/client/${client.id}#d=${encoded}`;
-    generateC2QRSvg({ url, size: 200 }).then(svg => setQrSvg(svg)).catch(() => setQrSvg(""));
+    generateQRSvg(url, 200).then(svg => setQrSvg(svg)).catch(() => setQrSvg(""));
   }, [selectedOrder, client, orders, settings]);
 
   const buildInvoiceHTML = () => {
