@@ -1,8 +1,9 @@
 "use client";
-import { useState, useRef } from "react";
-import { FileText, Printer, Edit3, Eye } from "lucide-react";
+import { useState, useEffect } from "react";
+import { FileText, Printer, Edit3, Eye, QrCode } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
+import { generateC2QRSvg } from "@/lib/qr-c2";
 
 const PRINT_CSS = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -52,9 +53,13 @@ const PRINT_CSS = `
   .inv-note { padding: 14px 16px; background: #FFF8DB; border-radius: 10px; margin-bottom: 16px; border: 1px solid #FFE066; }
   .inv-note-title { font-size: 11px; font-weight: 700; color: #E67700; margin-bottom: 4px; }
   .inv-note-text { font-size: 12px; color: #495057; }
-  .inv-footer { border-top: 2px solid #E9ECEF; padding-top: 16px; margin-top: 24px; text-align: center; }
+  .inv-footer { border-top: 2px solid #E9ECEF; padding-top: 16px; margin-top: 24px; display: flex; justify-content: space-between; align-items: center; }
+  .inv-footer-text { text-align: center; flex: 1; }
   .inv-footer-thanks { font-size: 13px; color: #868E96; font-weight: 600; }
   .inv-footer-contact { font-size: 11px; color: #CED4DA; margin-top: 4px; }
+  .inv-qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .inv-qr-wrap svg { width: 100px; height: 100px; }
+  .inv-qr-label { font-size: 8px; color: #ADB5BD; font-weight: 600; text-align: center; }
   .inv-watermark { position: fixed; bottom: 20px; left: 20px; font-size: 10px; color: #DEE2E6; }
   @media print {
     body { padding: 0; }
@@ -74,6 +79,8 @@ export default function InvoicesPage() {
   const [customDiscount, setCustomDiscount] = useState(0);
   const [showLogo, setShowLogo] = useState(true);
   const [showBonus, setShowBonus] = useState(true);
+  const [showQR, setShowQR] = useState(true);
+  const [qrSvg, setQrSvg] = useState<string>("");
 
   const selectedOrder = orders.find(o => o.id === selectedOrderId) || null;
   const client = selectedOrder ? clients.find(c => c.id === selectedOrder.clientId) : null;
@@ -82,6 +89,14 @@ export default function InvoicesPage() {
   const subtotal = selectedOrder ? selectedOrder.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0) : 0;
   const discountAmount = subtotal * (customDiscount / 100);
   const finalTotal = subtotal - discountAmount;
+
+  // Generate QR code when order/client changes
+  useEffect(() => {
+    if (!selectedOrder || !client) { setQrSvg(""); return; }
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${baseUrl}/client/${client.id}`;
+    generateC2QRSvg({ url, size: 200 }).then(svg => setQrSvg(svg)).catch(() => setQrSvg(""));
+  }, [selectedOrder, client]);
 
   const buildInvoiceHTML = () => {
     if (!selectedOrder) return "";
@@ -107,6 +122,11 @@ export default function InvoicesPage() {
       <div class="inv-note"><div class="inv-note-title">تێبینی</div><div class="inv-note-text">${customNote}</div></div>` : "";
     const discountHTML = customDiscount > 0 ? `
       <div class="inv-summary-row"><span class="inv-summary-label">داشکاندن (${customDiscount}٪)</span><span class="inv-summary-value inv-discount-value">-${formatIQD(discountAmount)}</span></div>` : "";
+    const qrHTML = showQR && qrSvg ? `
+      <div class="inv-qr-wrap">
+        ${qrSvg}
+        <div class="inv-qr-label">سکان بکە بۆ زانیاری دارایی</div>
+      </div>` : "";
 
     return `<html dir="rtl" lang="ckb"><head><title>پسوولە — ${selectedOrder.orderNumber}</title><style>${PRINT_CSS}</style></head><body>
     <div class="inv-page">
@@ -126,7 +146,10 @@ export default function InvoicesPage() {
         <div class="inv-summary-row inv-summary-total"><span class="inv-summary-label">کۆی گشتی</span><span class="inv-summary-value">${formatIQD(finalTotal)}</span></div>
       </div></div>
       ${bonusHTML}${noteHTML}
-      <div class="inv-footer"><div class="inv-footer-thanks">سوپاس بۆ هاوکارییەکەتان — ${settings.name}</div><div class="inv-footer-contact">${settings.phone} | ${settings.email} | ${settings.address}</div></div>
+      <div class="inv-footer">
+        ${qrHTML}
+        <div class="inv-footer-text"><div class="inv-footer-thanks">سوپاس بۆ هاوکارییەکەتان — ${settings.name}</div><div class="inv-footer-contact">${settings.phone} | ${settings.email} | ${settings.address}</div></div>
+      </div>
     </div></body></html>`;
   };
 
@@ -190,7 +213,7 @@ export default function InvoicesPage() {
             <>
               {/* Toolbar */}
               <div style={{ display: "flex", gap: 8, marginBottom: 16, justifyContent: "space-between" }}>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button onClick={() => setEditMode(!editMode)} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #DEE2E6", background: editMode ? "#EDF2FF" : "white", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, color: editMode ? "#4263EB" : "#6C757D" }}>
                     {editMode ? <><Eye size={14} /> پیشاندان</> : <><Edit3 size={14} /> دەستکاری</>}
                   </button>
@@ -199,6 +222,9 @@ export default function InvoicesPage() {
                   </label>
                   <label style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, color: "#6C757D" }}>
                     <input type="checkbox" checked={showLogo} onChange={(e) => setShowLogo(e.target.checked)} style={{ width: 14, height: 14 }} /> لۆگۆ
+                  </label>
+                  <label style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #DEE2E6", background: showQR ? "#F3F0FF" : "white", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, color: showQR ? "#7C5CFC" : "#6C757D" }}>
+                    <input type="checkbox" checked={showQR} onChange={(e) => setShowQR(e.target.checked)} style={{ width: 14, height: 14 }} /> <QrCode size={14} /> QR
                   </label>
                 </div>
                 <button onClick={handlePrint} style={{ padding: "8px 20px", borderRadius: 8, background: "#4263EB", color: "white", fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
@@ -322,10 +348,18 @@ export default function InvoicesPage() {
                   </div>
                 )}
 
-                {/* Footer */}
-                <div style={{ borderTop: "2px solid #E9ECEF", paddingTop: 16, marginTop: 24, textAlign: "center" }}>
-                  <p style={{ fontSize: 13, color: "#868E96", fontWeight: 600 }}>سوپاس بۆ هاوکارییەکەتان — {settings.name}</p>
-                  <p style={{ fontSize: 11, color: "#CED4DA", marginTop: 4 }}>{settings.phone} | {settings.email} | {settings.address}</p>
+                {/* Footer with QR */}
+                <div style={{ borderTop: "2px solid #E9ECEF", paddingTop: 16, marginTop: 24, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  {showQR && qrSvg && (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                      <div dangerouslySetInnerHTML={{ __html: qrSvg }} style={{ width: 100, height: 100, lineHeight: 0 }} />
+                      <span style={{ fontSize: 8, color: "#ADB5BD", fontWeight: 600 }}>سکان بکە بۆ زانیاری دارایی</span>
+                    </div>
+                  )}
+                  <div style={{ textAlign: "center", flex: 1 }}>
+                    <p style={{ fontSize: 13, color: "#868E96", fontWeight: 600 }}>سوپاس بۆ هاوکارییەکەتان — {settings.name}</p>
+                    <p style={{ fontSize: 11, color: "#CED4DA", marginTop: 4 }}>{settings.phone} | {settings.email} | {settings.address}</p>
+                  </div>
                 </div>
               </div>
             </>
