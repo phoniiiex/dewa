@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLayout } from "@/app/dashboard/layout";
@@ -7,10 +7,10 @@ import { useData } from "@/lib/store";
 import {
   LayoutDashboard, BarChart3, Package, ShoppingCart, Truck, Users, Building2,
   Factory, Gift, UserCog, Wallet, Settings, HelpCircle, ChevronLeft, ChevronRight,
-  BadgeCheck, MoreHorizontal, FileText, Bot, Camera, LogOut,
+  BadgeCheck, FileText, Bot, Camera, LogOut,
 } from "lucide-react";
 
-interface NavItem { label: string; href: string; icon: React.ReactNode; badge?: number; }
+interface NavItem { label: string; href: string; icon: React.ReactNode; badge?: number; adminOnly?: boolean; }
 interface NavSection { title: string; items: NavItem[]; }
 
 const navSections: NavSection[] = [
@@ -18,42 +18,48 @@ const navSections: NavSection[] = [
     title: "سەرەکی",
     items: [
       { label: "پێشانگا", href: "/dashboard", icon: <LayoutDashboard size={18} /> },
-      { label: "شیکاری", href: "/dashboard/analytics", icon: <BarChart3 size={18} /> },
+      { label: "شیکاری", href: "/dashboard/analytics", icon: <BarChart3 size={18} />, adminOnly: true },
       { label: "بەرهەمەکان", href: "/dashboard/products", icon: <Package size={18} /> },
       { label: "داواکارییەکان", href: "/dashboard/orders", icon: <ShoppingCart size={18} />, badge: 3 },
       { label: "پسوولەکان", href: "/dashboard/invoices", icon: <FileText size={18} /> },
-      { label: "بۆنەس", href: "/dashboard/bonus", icon: <Gift size={18} /> },
+      { label: "بۆنەس", href: "/dashboard/bonus", icon: <Gift size={18} />, adminOnly: true },
     ],
   },
   {
     title: "بەڕێوەبردن",
     items: [
       { label: "کڕیارەکان", href: "/dashboard/clients", icon: <Users size={18} /> },
-      { label: "نوێنەری پزیشکی", href: "/dashboard/reps", icon: <UserCog size={18} /> },
-      { label: "کۆگاکان", href: "/dashboard/warehouses", icon: <Building2 size={18} /> },
-      { label: "دابینکەرەکان", href: "/dashboard/suppliers", icon: <Factory size={18} /> },
+      { label: "نوێنەری پزیشکی", href: "/dashboard/reps", icon: <UserCog size={18} />, adminOnly: true },
+      { label: "کۆگاکان", href: "/dashboard/warehouses", icon: <Building2 size={18} />, adminOnly: true },
+      { label: "دابینکەرەکان", href: "/dashboard/suppliers", icon: <Factory size={18} />, adminOnly: true },
       { label: "گواستنەوە", href: "/dashboard/logistics", icon: <Truck size={18} /> },
-      { label: "بۆتی شۆفێر", href: "/dashboard/telegram", icon: <Bot size={18} /> },
+      { label: "بۆتی شۆفێر", href: "/dashboard/telegram", icon: <Bot size={18} />, adminOnly: true },
     ],
   },
   {
     title: "کۆمپانیا",
     items: [
-      { label: "دارایی", href: "/dashboard/finance", icon: <Wallet size={18} /> },
+      { label: "دارایی", href: "/dashboard/finance", icon: <Wallet size={18} />, adminOnly: true },
     ],
   },
 ];
 
 const footerItems: NavItem[] = [
-  { label: "ڕێکخستنەکان", href: "/dashboard/settings", icon: <Settings size={18} /> },
+  { label: "ڕێکخستنەکان", href: "/dashboard/settings", icon: <Settings size={18} />, adminOnly: true },
   { label: "یارمەتی", href: "#", icon: <HelpCircle size={18} /> },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { settings, updateSettings, showToast } = useData();
-  const { sidebarCollapsed, toggleSidebar, logout } = useLayout();
+  const { sidebarCollapsed, toggleSidebar, logout, currentUser } = useLayout();
   const fileRef = useRef<HTMLInputElement>(null);
+  const isAdmin = currentUser?.role === "ADMIN";
+
+  // Get user initials for avatar
+  const userInitials = currentUser?.name
+    ? currentUser.name.split(" ").map(w => w[0]).join("").slice(0, 2)
+    : "؟";
 
   const handleProfileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -68,6 +74,18 @@ export default function Sidebar() {
     };
     reader.readAsDataURL(file);
   };
+
+  // Filter nav items based on role
+  const filteredSections = navSections.map(section => ({
+    ...section,
+    items: section.items.filter(item => !item.adminOnly || isAdmin),
+  })).filter(section => section.items.length > 0);
+
+  const filteredFooter = footerItems.filter(item => !item.adminOnly || isAdmin);
+
+  // Role badge
+  const roleBadge = isAdmin ? "بەڕێوەبەر" : "نوێنەر";
+  const roleBadgeColor = isAdmin ? "#4263EB" : "#40C057";
 
   return (
     <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`} id="sidebar">
@@ -91,7 +109,7 @@ export default function Sidebar() {
 
       {/* Nav Sections */}
       <nav className="sidebar-nav">
-        {navSections.map((section) => (
+        {filteredSections.map((section) => (
           <div key={section.title}>
             {!sidebarCollapsed && <div className="sidebar-section-label">{section.title}</div>}
             {section.items.map((item) => {
@@ -117,7 +135,7 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="sidebar-footer">
-        {footerItems.map((item) => (
+        {filteredFooter.map((item) => (
           <Link key={item.href} href={item.href}
             className={`sidebar-item ${pathname === item.href ? "active" : ""}`}
             title={sidebarCollapsed ? item.label : undefined}
@@ -134,7 +152,7 @@ export default function Sidebar() {
           {settings.profilePic ? (
             <img src={settings.profilePic} alt="profile" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
           ) : (
-            <div className="sidebar-user-avatar">ئا</div>
+            <div className="sidebar-user-avatar">{userInitials}</div>
           )}
           <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.2s" }}
             onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
@@ -148,10 +166,13 @@ export default function Sidebar() {
           <>
             <div className="sidebar-user-info">
               <span className="sidebar-user-name">
-                ئاسۆ ئەحمەد
-                <BadgeCheck size={14} className="sidebar-user-verified" style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+                {currentUser?.name || "بەکارهێنەر"}
+                {isAdmin && <BadgeCheck size={14} className="sidebar-user-verified" style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />}
               </span>
-              <span className="sidebar-user-email">admin@dewa.com</span>
+              <span className="sidebar-user-email" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ padding: "1px 6px", borderRadius: 4, background: `${roleBadgeColor}15`, color: roleBadgeColor, fontSize: 9, fontWeight: 700 }}>{roleBadge}</span>
+                {currentUser?.email || ""}
+              </span>
             </div>
             <button className="sidebar-user-more" aria-label="Logout" onClick={logout} title="چوونەدەرەوە">
               <LogOut size={16} />

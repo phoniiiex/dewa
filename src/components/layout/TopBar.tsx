@@ -27,7 +27,7 @@ interface SearchResult {
 
 export default function TopBar() {
   const router = useRouter();
-  const { searchOpen, setSearchOpen, notifOpen, setNotifOpen } = useLayout();
+  const { searchOpen, setSearchOpen, notifOpen, setNotifOpen, currentUser } = useLayout();
   const { products, clients, orders, reps } = useData();
   const [query, setQuery] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
@@ -57,6 +57,9 @@ export default function TopBar() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [setSearchOpen, setNotifOpen]);
+
+  // Get first name for greeting
+  const firstName = currentUser?.name?.split(" ")[0] || "بەکارهێنەر";
 
   // Build search results
   const allResults: SearchResult[] = [
@@ -89,7 +92,7 @@ export default function TopBar() {
           <div className="topbar-welcome">
             <div className="topbar-avatar">👋</div>
             <div className="topbar-greeting">
-              <h2>بەخێربێیتەوە، ئاسۆ</h2>
+              <h2>بەخێربێیتەوە، {firstName}</h2>
               <p>بەخێربێیتەوە بۆ دەوا 🌿</p>
             </div>
           </div>
