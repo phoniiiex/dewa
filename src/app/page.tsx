@@ -31,6 +31,9 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      // Sign out any existing session first to prevent stale session reuse
+      await supabase.auth.signOut();
+
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) {
         setError("ئیمەیڵ یان وشەی نهێنی هەڵەیە");
