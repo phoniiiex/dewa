@@ -7,7 +7,7 @@ import { useData } from "@/lib/store";
 import {
   LayoutDashboard, BarChart3, Package, ShoppingCart, Truck, Users, Building2,
   Factory, Gift, UserCog, Wallet, Settings, HelpCircle, ChevronLeft, ChevronRight,
-  BadgeCheck, FileText, Bot, Camera, LogOut,
+  BadgeCheck, FileText, Bot, Camera, LogOut, Shield,
 } from "lucide-react";
 
 interface NavItem { label: string; href: string; icon: React.ReactNode; badge?: number; adminOnly?: boolean; }
@@ -40,6 +40,7 @@ const navSections: NavSection[] = [
     title: "کۆمپانیا",
     items: [
       { label: "دارایی", href: "/dashboard/finance", icon: <Wallet size={18} />, adminOnly: true },
+      { label: "بەکارهێنەران", href: "/dashboard/users", icon: <Shield size={18} />, adminOnly: true },
     ],
   },
 ];

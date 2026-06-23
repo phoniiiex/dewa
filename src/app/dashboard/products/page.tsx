@@ -7,6 +7,18 @@ import type { Product } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
+import ExportButton from "@/components/ui/ExportButton";
+import type { ExportColumn } from "@/lib/export";
+
+const productExportCols: ExportColumn[] = [
+  { key: "name", label: "ناوی بەرهەم" },
+  { key: "sku", label: "SKU" },
+  { key: "category", label: "جۆر" },
+  { key: "price", label: "نرخ", format: (v) => String(v) },
+  { key: "stock", label: "کۆگا" },
+  { key: "origin", label: "سەرچاوە" },
+  { key: "expiryDate", label: "بەسەرچوون" },
+];
 
 const categories = ["ئەنتیبایۆتیک", "ئازارکوژ", "گەدە و هەرس", "شەکرە", "ڤیتامین", "پێستی", "هتد"];
 const unitTypes = ["پاکەت", "بوتل", "ئەمپوول", "تیوب", "قوتی"];
@@ -68,7 +80,10 @@ export default function ProductsPage() {
           <div style={{ width: 40, height: 40, background: "#EDF2FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#4263EB" }}><Package size={20} /></div>
           <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>بەرهەمەکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی هەموو بەرهەمەکان و کۆگا</p></div>
         </div>
-        <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>بەرهەمی نوێ</span></button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={productExportCols} filename="products" title="بەرهەمەکان" />
+          <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>بەرهەمی نوێ</span></button>
+        </div>
       </div>
 
       {/* KPIs */}

@@ -7,6 +7,16 @@ import type { Order, OrderStatus, RoutingMode, OrderItem } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
+import ExportButton from "@/components/ui/ExportButton";
+import PrintModal from "@/components/ui/PrintModal";
+import type { ExportColumn } from "@/lib/export";
+
+const orderExportCols: ExportColumn[] = [
+  { key: "orderNumber", label: "ژمارە" }, { key: "clientName", label: "کڕیار" },
+  { key: "repName", label: "نوێنەر" }, { key: "status", label: "بارودۆخ" },
+  { key: "totalAmount", label: "کۆی گشتی", format: (v) => String(v) },
+  { key: "createdAt", label: "بەروار" },
+];
 
 const statusLabels: Record<OrderStatus, string> = { PENDING: "چاوەڕوان", PROCESSING: "لە پڕۆسەدا", SHIPPED: "نێردرا", DELIVERED: "گەیشت", PAID: "پارەدراو", CANCELLED: "هەڵوەشاوە" };
 const statusClasses: Record<OrderStatus, string> = { PENDING: "pending", PROCESSING: "processing", SHIPPED: "shipped", DELIVERED: "delivered", PAID: "paid", CANCELLED: "cancelled" };
