@@ -186,12 +186,13 @@ function toUser(r: Record<string, unknown>): User {
 }
 
 function toTemplate(r: Record<string, unknown>): InvoiceTemplate {
-  return { id: r.id as string, name: (r.name || "") as string, blocks: (r.blocks || []) as InvoiceTemplate["blocks"], showBonusCol: r.show_bonus_col !== false, defaultNote: (r.default_note || "") as string, defaultTerms: (r.default_terms || "") as string, defaultDiscount: Number(r.default_discount || 0), createdAt: (r.created_at || "") as string };
+  return { id: r.id as string, name: (r.name || "") as string, docType: (r.doc_type || "invoice") as InvoiceTemplate["docType"], blocks: (r.blocks || []) as InvoiceTemplate["blocks"], showBonusCol: r.show_bonus_col !== false, defaultNote: (r.default_note || "") as string, defaultTerms: (r.default_terms || "") as string, defaultDiscount: Number(r.default_discount || 0), createdAt: (r.created_at || "") as string };
 }
 function fromTemplate(t: Partial<InvoiceTemplate>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
   if (t.id !== undefined) m.id = t.id;
   if (t.name !== undefined) m.name = t.name;
+  if (t.docType !== undefined) m.doc_type = t.docType;
   if (t.blocks !== undefined) m.blocks = t.blocks;
   if (t.showBonusCol !== undefined) m.show_bonus_col = t.showBonusCol;
   if (t.defaultNote !== undefined) m.default_note = t.defaultNote;

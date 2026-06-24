@@ -166,6 +166,7 @@ export interface InvoiceBlockConfig {
 export interface InvoiceTemplate {
   id: string;
   name: string;
+  docType: "invoice" | "receipt" | "delivery" | "quote";
   blocks: InvoiceBlockConfig[];
   showBonusCol: boolean;
   defaultNote: string;
