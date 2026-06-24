@@ -1,6 +1,6 @@
 "use client";
 import { useState, FormEvent } from "react";
-import { Search, Plus, ShoppingCart, Eye, Edit3, Trash2, X, Printer } from "lucide-react";
+import { Search, Plus, ShoppingCart, Eye, Edit3, Trash2, X, Printer, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Order, OrderStatus, RoutingMode, OrderItem } from "@/lib/types";
@@ -9,6 +9,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
 import ExportButton from "@/components/ui/ExportButton";
 import PrintModal from "@/components/ui/PrintModal";
+import ClientCombobox from "@/components/ui/ClientCombobox";
 import type { ExportColumn } from "@/lib/export";
 import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
 
@@ -34,12 +35,20 @@ export default function OrdersPage() {
   const [printOrder, setPrintOrder] = useState<Order | null>(null);
 
   // New order form
-  const [form, setForm] = useState({ clientId: "", repId: "", warehouseId: "", routingMode: "DIRECT" as RoutingMode, totalBonusPct: "", notes: "" });
+  const [form, setForm] = useState({ clientId: "", clientName: "", repId: "", warehouseId: "", routingMode: "DIRECT" as RoutingMode, totalBonusPct: "", notes: "" });
   const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string; }[]>([{ productId: "", quantity: "" }]);
 
+  // New client request flow
+  const [showNewClientForm, setShowNewClientForm] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({ name: "", owner: "", phone: "", city: "", type: "PHARMACY" });
+  const [newClientStatus, setNewClientStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
   const resetForm = () => {
-    setForm({ clientId: "", repId: "", warehouseId: "", routingMode: "DIRECT", totalBonusPct: "", notes: "" });
+    setForm({ clientId: "", clientName: "", repId: "", warehouseId: "", routingMode: "DIRECT", totalBonusPct: "", notes: "" });
     setOrderItems([{ productId: "", quantity: "" }]);
+    setShowNewClientForm(false);
+    setNewClientForm({ name: "", owner: "", phone: "", city: "", type: "PHARMACY" });
+    setNewClientStatus("idle");
   };
 
   const handlePrint = (o: Order) => setPrintOrder(o);
@@ -178,7 +187,19 @@ export default function OrdersPage() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="داواکاری نوێ" width={700}>
         <form onSubmit={handleSubmit}>
           <FormGrid>
-            <FormField label="کڕیار" required><select style={selectStyle} required value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}><option value="">هەڵبژاردن...</option>{clients.filter(c => c.isActive).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></FormField>
+            <FormField label="کڕیار" required>
+              <ClientCombobox
+                clients={clients}
+                value={form.clientId}
+                clientName={form.clientName}
+                onChange={(id, name) => setForm({ ...form, clientId: id, clientName: name })}
+                onRequestNew={(typedName) => {
+                  setNewClientForm({ ...newClientForm, name: typedName });
+                  setShowNewClientForm(true);
+                  setNewClientStatus("idle");
+                }}
+              />
+            </FormField>
             <FormField label="نوێنەر" required><select style={selectStyle} required value={form.repId} onChange={(e) => setForm({ ...form, repId: e.target.value })}><option value="">هەڵبژاردن...</option>{reps.filter(r => r.isActive).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></FormField>
             <FormField label="شێوازی ڕاستکردن"><select style={selectStyle} value={form.routingMode} onChange={(e) => setForm({ ...form, routingMode: e.target.value as RoutingMode })}>{Object.entries(routingLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></FormField>
             {form.routingMode === "WAREHOUSE" && (
@@ -186,6 +207,78 @@ export default function OrdersPage() {
             )}
             <FormField label="ڕێژەی بۆنەسی گشتی (٪)"><input style={inputStyle} type="number" min="0" value={form.totalBonusPct} onChange={(e) => setForm({ ...form, totalBonusPct: e.target.value })} placeholder="بۆ نموونە: ٥٠" /></FormField>
           </FormGrid>
+
+          {/* ── Inline New Client Request Form ── */}
+          {showNewClientForm && (
+            <div style={{ margin: "12px 0", padding: 16, background: "#F3F0FF", borderRadius: 12, border: "1px solid #D0BFFF" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#5C37D6", display: "flex", alignItems: "center", gap: 6 }}>
+                  <Clock size={14} /> داواکردنی کڕیاری نوێ
+                </div>
+                <button type="button" onClick={() => setShowNewClientForm(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "#ADB5BD" }}><X size={14} /></button>
+              </div>
+
+              {newClientStatus === "sent" ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#2B8A3E", fontSize: 13, fontWeight: 600 }}>
+                  <CheckCircle size={16} /> داواکاری نێردرا! بەرپرسان پێیان دەگات.
+                </div>
+              ) : newClientStatus === "error" ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#C92A2A", fontSize: 13 }}>
+                  <AlertCircle size={16} /> هەڵەیەک ڕووی دا، دووبارە هەوڵ بدەرەوە.
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>ناوی فرۆشگا *</label>
+                      <input style={{ ...inputStyle, background: "white" }} value={newClientForm.name}
+                        onChange={e => setNewClientForm({ ...newClientForm, name: e.target.value })} placeholder="داروخانەی ..." />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>خاوەن</label>
+                      <input style={{ ...inputStyle, background: "white" }} value={newClientForm.owner}
+                        onChange={e => setNewClientForm({ ...newClientForm, owner: e.target.value })} placeholder="دکتۆر ..." />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>تەلەفۆن</label>
+                      <input style={{ ...inputStyle, background: "white" }} value={newClientForm.phone}
+                        onChange={e => setNewClientForm({ ...newClientForm, phone: e.target.value })} placeholder="07..." />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>شار</label>
+                      <input style={{ ...inputStyle, background: "white" }} value={newClientForm.city}
+                        onChange={e => setNewClientForm({ ...newClientForm, city: e.target.value })} placeholder="هەولێر" />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>جۆر</label>
+                    <select style={{ ...selectStyle, background: "white" }} value={newClientForm.type}
+                      onChange={e => setNewClientForm({ ...newClientForm, type: e.target.value })}>
+                      <option value="PHARMACY">داروخانە</option>
+                      <option value="HOSPITAL">نەخۆشخانە</option>
+                      <option value="CLINIC">کلینیک</option>
+                      <option value="WHOLESALE">کڕینی گشتی</option>
+                    </select>
+                  </div>
+                  <button type="button"
+                    disabled={!newClientForm.name || newClientStatus === "sending"}
+                    onClick={async () => {
+                      setNewClientStatus("sending");
+                      const res = await fetch("/api/clients/request", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ ...newClientForm }),
+                      });
+                      setNewClientStatus(res.ok ? "sent" : "error");
+                    }}
+                    style={{ padding: "8px 20px", borderRadius: 8, background: "#5C37D6", color: "white", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", opacity: (!newClientForm.name || newClientStatus === "sending") ? 0.6 : 1 }}>
+                    {newClientStatus === "sending" ? "ناردن..." : "نێردنی داواکاری"}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Bonus Split Preview */}
           {form.totalBonusPct && form.warehouseId && (

@@ -90,7 +90,20 @@ export default function TopBar() {
       <header className="topbar" id="topbar">
         <div className="topbar-right">
           <div className="topbar-welcome">
-            <div className="topbar-avatar">👋</div>
+            {/* Profile avatar — initials from currentUser.name */}
+            <div className="topbar-avatar" style={{
+              background: "linear-gradient(135deg, #4263EB, #7C5CFC)",
+              color: "white",
+              fontWeight: 700,
+              fontSize: currentUser?.name && currentUser.name.trim().split(" ").length >= 2 ? 13 : 16,
+              letterSpacing: 0.5,
+              userSelect: "none",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {currentUser?.name
+                ? currentUser.name.trim().split(" ").slice(0, 2).map((w: string) => w[0]).join("")
+                : "؟"}
+            </div>
             <div className="topbar-greeting">
               <h2>بەخێربێیتەوە، {firstName}</h2>
               <p>بەخێربێیتەوە بۆ دەوا 🌿</p>
