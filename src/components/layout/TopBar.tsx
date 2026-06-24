@@ -1,45 +1,18 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Search,
-  Bell,
-  Calendar,
-  SlidersHorizontal,
-  Plus,
-  X,
-  Package,
-  ShoppingCart,
-  Users,
-  UserCog,
-  FileText,
-} from "lucide-react";
+import { Search, Bell, Calendar, SlidersHorizontal, Plus, X } from "lucide-react";
 import { useLayout } from "@/app/dashboard/layout";
-import { useData } from "@/lib/store";
+import CommandMenu from "@/components/ui/CommandMenu";
 
-// Global search data
-interface SearchResult {
-  label: string;
-  type: string;
-  href: string;
-  icon: React.ReactNode;
-}
 
 export default function TopBar() {
   const router = useRouter();
   const { searchOpen, setSearchOpen, notifOpen, setNotifOpen, currentUser } = useLayout();
-  const { products, clients, orders, reps } = useData();
-  const [query, setQuery] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Focus search input when opened
-  useEffect(() => {
-    if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 100);
-  }, [searchOpen]);
-
-  // Close on Escape
+  // Close on Escape / open on Ctrl+K
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -48,7 +21,6 @@ export default function TopBar() {
         setDateOpen(false);
         setFilterOpen(false);
       }
-      // Ctrl+K to open search
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
         setSearchOpen(true);
@@ -60,19 +32,6 @@ export default function TopBar() {
 
   // Get first name for greeting
   const firstName = currentUser?.name?.split(" ")[0] || "بەکارهێنەر";
-
-  // Build search results
-  const allResults: SearchResult[] = [
-    ...products.map(p => ({ label: p.name, type: "بەرهەم", href: "/dashboard/products", icon: <Package size={14} /> })),
-    ...clients.map(c => ({ label: c.name, type: "کڕیار", href: "/dashboard/clients", icon: <Users size={14} /> })),
-    ...orders.map(o => ({ label: `${o.orderNumber} — ${o.clientName}`, type: "داواکاری", href: "/dashboard/orders", icon: <ShoppingCart size={14} /> })),
-    ...reps.map(r => ({ label: r.name, type: "نوێنەر", href: "/dashboard/reps", icon: <UserCog size={14} /> })),
-    { label: "پسوولەکان", type: "لاپەڕە", href: "/dashboard/invoices", icon: <FileText size={14} /> },
-  ];
-
-  const filtered = query.trim()
-    ? allResults.filter(r => r.label.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
-    : [];
 
   const notifications = [
     { id: 1, text: "داواکاری ORD-003 چاوەڕوانی گەیاندنە", time: "٥ خولەک لەمەوپێش", read: false },
@@ -188,40 +147,8 @@ export default function TopBar() {
         </div>
       </header>
 
-      {/* Search Overlay */}
-      {searchOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", justifyContent: "center", paddingTop: 100 }} onClick={() => setSearchOpen(false)}>
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }} />
-          <div onClick={(e) => e.stopPropagation()} style={{ position: "relative", width: 560, background: "white", borderRadius: 16, boxShadow: "0 24px 60px rgba(0,0,0,0.25)", overflow: "hidden", maxHeight: "70vh" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", borderBottom: "1px solid #E9ECEF" }}>
-              <Search size={20} color="#ADB5BD" />
-              <input ref={searchInputRef} type="text" placeholder="بگەڕێ بۆ بەرهەم، کڕیار، داواکاری..." value={query} onChange={(e) => setQuery(e.target.value)} style={{ flex: 1, border: "none", outline: "none", fontSize: 15, fontFamily: "inherit", background: "transparent" }} />
-              <kbd style={{ padding: "2px 8px", borderRadius: 4, background: "#F1F3F5", fontSize: 11, fontWeight: 600, color: "#ADB5BD" }}>ESC</kbd>
-            </div>
-            <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
-              {query.trim() && filtered.length === 0 && (
-                <div style={{ padding: 32, textAlign: "center", color: "#ADB5BD", fontSize: 14 }}>هیچ ئەنجامێک نەدۆزرایەوە</div>
-              )}
-              {filtered.map((r, i) => (
-                <div key={i} onClick={() => { router.push(r.href); setSearchOpen(false); setQuery(""); }}
-                  style={{ padding: "12px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid #F8F9FA" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#EDF2FF")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
-                >
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: "#F1F3F5", display: "flex", alignItems: "center", justifyContent: "center", color: "#6C757D" }}>{r.icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{r.label}</div>
-                    <div style={{ fontSize: 11, color: "#ADB5BD" }}>{r.type}</div>
-                  </div>
-                </div>
-              ))}
-              {!query.trim() && (
-                <div style={{ padding: 32, textAlign: "center", color: "#ADB5BD", fontSize: 14 }}>بنووسە بۆ گەڕان...</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Command Menu (replaces old basic search overlay) */}
+      <CommandMenu open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   );
 }
