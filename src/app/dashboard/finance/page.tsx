@@ -6,6 +6,15 @@ import { formatIQD } from "@/lib/currency";
 import type { TransactionType, PaymentMethod } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
+import ExportButton from "@/components/ui/ExportButton";
+
+const transactionExportCols = [
+  { key: "type", label: "جۆر", format: (v: unknown) => v === "INCOME" ? "داهات" : "خەرجی" },
+  { key: "description", label: "وێنە" },
+  { key: "amount", label: "بڕە", format: (v: unknown) => String(v) },
+  { key: "method", label: "ھەڵۚەی پارەدان", format: (v: unknown) => v === "CASH" ? "کاش" : "حاواڵە" },
+  { key: "createdAt", label: "بەروار" },
+];
 
 const typeLabels: Record<TransactionType, string> = { INCOME: "داهات", EXPENSE: "خەرجی" };
 const methodLabels: Record<PaymentMethod, string> = { CASH: "کاش", TRANSFER: "حاوالە" };
@@ -41,7 +50,10 @@ export default function FinancePage() {
           <div style={{ width: 40, height: 40, background: "#EBFBEE", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#40C057" }}><DollarSign size={20} /></div>
           <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>دارایی و حیساب</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەدواداچوونی داهات، خەرجی، و قازانج</p></div>
         </div>
-        <button onClick={() => setModalOpen(true)} className="topbar-add-btn"><Plus size={16} /><span>مامەڵەی نوێ</span></button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={transactionExportCols} filename="finance" title="دارایی" />
+          <button onClick={() => setModalOpen(true)} className="topbar-add-btn"><Plus size={16} /><span>مامەڵەی نوێ</span></button>
+        </div>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>

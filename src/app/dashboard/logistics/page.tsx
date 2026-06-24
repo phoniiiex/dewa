@@ -5,6 +5,13 @@ import { useData } from "@/lib/store";
 import type { DeliveryStatus } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
+import ExportButton from "@/components/ui/ExportButton";
+
+const deliveryExportCols = [
+  { key: "orderNumber", label: "ژمارە" }, { key: "destination", label: "مەبەند" },
+  { key: "driver", label: "شۆفێر" }, { key: "driverPhone", label: "تەلەفۆن" },
+  { key: "status", label: "بارودۆخ" }, { key: "dispatchedAt", label: "نێردرا" },
+];
 
 const statusLabels: Record<DeliveryStatus, string> = { PENDING: "چاوەڕوان", IN_TRANSIT: "لە ڕێگادا", DELIVERED: "گەیشت", FAILED: "شکستی هێنا" };
 const statusColors: Record<DeliveryStatus, { bg: string; color: string }> = { PENDING: { bg: "#FFF3BF", color: "#F08C00" }, IN_TRANSIT: { bg: "#D0EBFF", color: "#1971C2" }, DELIVERED: { bg: "#D3F9D8", color: "#2B8A3E" }, FAILED: { bg: "#FFE3E3", color: "#C92A2A" } };
@@ -48,6 +55,7 @@ export default function LogisticsPage() {
           <div style={{ width: 40, height: 40, background: "#D0EBFF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#1971C2" }}><Truck size={20} /></div>
           <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>لۆجستیک و گەیاندن</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەدواداچوونی هەموو گەیاندنەکان</p></div>
         </div>
+        <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={deliveryExportCols} filename="logistics" title="گەیاندنەکان" />
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>

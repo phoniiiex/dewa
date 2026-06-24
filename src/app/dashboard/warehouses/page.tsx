@@ -6,6 +6,14 @@ import type { Warehouse } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
+import ExportButton from "@/components/ui/ExportButton";
+
+const warehouseExportCols = [
+  { key: "name", label: "ناو" }, { key: "city", label: "شار" },
+  { key: "contact", label: "پەیوەند" }, { key: "phone", label: "تەلەفۆن" },
+  { key: "bonusPct", label: "ڕێژەی بۆنەس", format: (v: unknown) => `${v}%` },
+];
+
 
 const cities = ["سلێمانی", "هەولێر", "دهۆک", "کەرکوک", "هەڵەبجە"];
 
@@ -37,7 +45,10 @@ export default function WarehousesPage() {
           <div style={{ width: 40, height: 40, background: "#F3F0FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#7C5CFC" }}><WarehouseIcon size={20} /></div>
           <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>کۆگاکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی هاوبەشی کۆگاکان و ڕێژەی بۆنەس</p></div>
         </div>
-        <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>کۆگای نوێ</span></button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <ExportButton data={warehouses as unknown as Record<string, unknown>[]} columns={warehouseExportCols} filename="warehouses" title="کۆگاکان" />
+          <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>کۆگای نوێ</span></button>
+        </div>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 24 }}>

@@ -7,6 +7,13 @@ import type { Supplier } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle } from "@/components/ui/FormField";
+import ExportButton from "@/components/ui/ExportButton";
+
+const supplierExportCols = [
+  { key: "name", label: "ناو" }, { key: "contact", label: "پەیوەند" },
+  { key: "phone", label: "تەلەفۆن" }, { key: "email", label: "ئیمەیل" },
+  { key: "country", label: "کۆمەڵ" }, { key: "balance", label: "باڵانس", format: (v: unknown) => String(v) },
+];
 
 export default function SuppliersPage() {
   const { suppliers, addSupplier, updateSupplier, deleteSupplier } = useData();
@@ -37,7 +44,10 @@ export default function SuppliersPage() {
           <div style={{ width: 40, height: 40, background: "#FFF3BF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#FAB005" }}><Globe size={20} /></div>
           <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>دابینکەرەکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی دابینکەرانی نێودەوڵەتی</p></div>
         </div>
-        <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>دابینکەری نوێ</span></button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={supplierExportCols} filename="suppliers" title="دابینکەرەکان" />
+          <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>دابینکەری نوێ</span></button>
+        </div>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 24 }}>

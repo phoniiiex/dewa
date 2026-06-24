@@ -7,6 +7,13 @@ import type { Client, ClientType, PaymentTerms } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
+import ExportButton from "@/components/ui/ExportButton";
+
+const clientExportCols = [
+  { key: "name", label: "ناو" }, { key: "owner", label: "خاوەن" },
+  { key: "phone", label: "تەلەفۆن" }, { key: "city", label: "شار" },
+  { key: "type", label: "جۆر" }, { key: "balance", label: "باڵانس", format: (v: unknown) => String(v) },
+];
 
 const typeLabels: Record<ClientType, string> = { PHARMACY: "دەرمانخانە", HOSPITAL: "نەخۆشخانە", CLINIC: "کلینیک" };
 const typeColors: Record<ClientType, { bg: string; color: string }> = { PHARMACY: { bg: "#EDF2FF", color: "#4263EB" }, HOSPITAL: { bg: "#FEF3EB", color: "#F47B35" }, CLINIC: { bg: "#EBFBEE", color: "#40C057" } };
@@ -52,7 +59,10 @@ export default function ClientsPage() {
           <div style={{ width: 40, height: 40, background: "#EDF2FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#4263EB" }}><Users size={20} /></div>
           <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>کڕیارەکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی دەرمانخانە، نەخۆشخانە، و کلینیکەکان</p></div>
         </div>
-        <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>کڕیاری نوێ</span></button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={clientExportCols} filename="clients" title="کڕیارەکان" />
+          <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>کڕیاری نوێ</span></button>
+        </div>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>

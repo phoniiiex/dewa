@@ -7,6 +7,12 @@ import type { Rep } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
+import ExportButton from "@/components/ui/ExportButton";
+
+const repExportCols = [
+  { key: "name", label: "ناو" }, { key: "phone", label: "تەلەفۆن" },
+  { key: "city", label: "شار" }, { key: "isActive", label: "بارودۆخ", format: (v: unknown) => v ? "چالاک" : "ناچالاک" },
+];
 
 const cities = ["سلێمانی", "هەولێر", "دهۆک", "کەرکوک", "هەڵەبجە"];
 
@@ -43,7 +49,10 @@ export default function RepsPage() {
           <div style={{ width: 40, height: 40, background: "#EBFBEE", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#40C057" }}><UserCheck size={20} /></div>
           <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>نوێنەرانی فرۆشتن</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی نوێنەرانی فرۆشتنی دەرمان</p></div>
         </div>
-        <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>نوێنەری نوێ</span></button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={repExportCols} filename="reps" title="نوێنەران" />
+          <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>نوێنەری نوێ</span></button>
+        </div>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
