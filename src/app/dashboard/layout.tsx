@@ -8,7 +8,8 @@ import { DataProvider } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import "@/styles/dashboard.css";
 
-// Layout context for sidebar collapse + global search + notifications
+type SidebarPosition = "right" | "left" | "top";
+
 interface LayoutContextType {
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
@@ -18,6 +19,10 @@ interface LayoutContextType {
   setNotifOpen: (v: boolean) => void;
   logout: () => void;
   currentUser: { id: string; email: string; name: string; role: string } | null;
+  darkMode: boolean;
+  toggleDarkMode: () => void;
+  sidebarPosition: SidebarPosition;
+  setSidebarPosition: (pos: SidebarPosition) => void;
 }
 
 const LayoutContext = createContext<LayoutContextType | null>(null);
@@ -27,25 +32,45 @@ export function useLayout() {
   return ctx;
 }
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: string } | null>(null);
+  const [darkMode, setDarkMode] = useState(false);
+  const [sidebarPosition, setSidebarPositionState] = useState<SidebarPosition>("right");
 
-  // Auth guard — redirect to login if no Supabase session
+  // Load appearance preferences from localStorage
+  useEffect(() => {
+    const savedDark = localStorage.getItem("dewa_dark_mode") === "true";
+    const savedPos = (localStorage.getItem("dewa_sidebar_pos") || "right") as SidebarPosition;
+    setDarkMode(savedDark);
+    setSidebarPositionState(savedPos);
+    document.documentElement.setAttribute("data-theme", savedDark ? "dark" : "light");
+    document.documentElement.setAttribute("data-sidebar", savedPos);
+  }, []);
+
+  const toggleDarkMode = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    localStorage.setItem("dewa_dark_mode", String(next));
+    document.documentElement.setAttribute("data-theme", next ? "dark" : "light");
+  };
+
+  const setSidebarPosition = (pos: SidebarPosition) => {
+    setSidebarPositionState(pos);
+    localStorage.setItem("dewa_sidebar_pos", pos);
+    document.documentElement.setAttribute("data-sidebar", pos);
+  };
+
+  // Auth guard
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
         router.replace("/");
       } else {
-        // Get user profile from profiles table
         const { data: profile } = await supabase
           .from("profiles")
           .select("name, role")
@@ -62,11 +87,8 @@ export default function DashboardLayout({
       }
     });
 
-    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        router.replace("/");
-      }
+      if (!session) router.replace("/");
     });
 
     return () => subscription.unsubscribe();
@@ -93,6 +115,10 @@ export default function DashboardLayout({
         notifOpen, setNotifOpen,
         logout,
         currentUser,
+        darkMode,
+        toggleDarkMode,
+        sidebarPosition,
+        setSidebarPosition,
       }}>
         <div className={`app-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
           <Sidebar />

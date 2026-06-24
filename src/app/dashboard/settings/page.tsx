@@ -1,7 +1,11 @@
 "use client";
 import { useState, FormEvent, useRef } from "react";
-import { Settings2, Building2, Save, RefreshCw, Camera, Upload, Users, ArrowLeft } from "lucide-react";
+import {
+  Settings2, Building2, Save, RefreshCw, Camera, Upload, Users, ArrowLeft,
+  Sun, Moon, Monitor, AlignRight, AlignLeft, AlignCenter, Check,
+} from "lucide-react";
 import { useData } from "@/lib/store";
+import { useLayout } from "@/app/dashboard/layout";
 import { FormField, FormGrid, inputStyle } from "@/components/ui/FormField";
 import Link from "next/link";
 
@@ -38,8 +42,29 @@ function ImageUploader({ value, onChange, label, shape }: { value?: string; onCh
   );
 }
 
+// Toggle switch component
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!value)}
+      style={{
+        width: 48, height: 26, borderRadius: 13, border: "none", cursor: "pointer",
+        background: value ? "linear-gradient(135deg, #4263EB, #7C5CFC)" : "#DEE2E6",
+        position: "relative", transition: "background 0.2s", flexShrink: 0,
+      }}
+    >
+      <div style={{
+        position: "absolute", top: 3, right: value ? 3 : undefined, left: value ? undefined : 3,
+        width: 20, height: 20, borderRadius: "50%", background: "white",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.2)", transition: "all 0.2s",
+      }} />
+    </button>
+  );
+}
+
 export default function SettingsPage() {
   const { settings, updateSettings, showToast } = useData();
+  const { darkMode, toggleDarkMode, sidebarPosition, setSidebarPosition } = useLayout();
   const [companyForm, setCompanyForm] = useState(settings);
 
   const handleCompanySave = (e: FormEvent) => {
@@ -57,25 +82,139 @@ export default function SettingsPage() {
     }
   };
 
+  const sidebarOptions: { value: "right" | "left" | "top"; label: string; icon: React.ReactNode; desc: string }[] = [
+    { value: "right", label: "ڕاست", icon: <AlignRight size={20} />, desc: "ئەستانداردی کوردی (RTL)" },
+    { value: "left",  label: "چەپ",  icon: <AlignLeft size={20} />,  desc: "چەپی پەیجی" },
+    { value: "top",   label: "سەرەوە", icon: <AlignCenter size={20} />, desc: "ناڤیگەیشنی ئاسۆیی" },
+  ];
+
+  const cardStyle: React.CSSProperties = {
+    background: "var(--color-bg-card)",
+    borderRadius: 14,
+    padding: 28,
+    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+    border: "1px solid var(--color-border-light)",
+    marginBottom: 24,
+  };
+
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <div style={{ width: 40, height: 40, background: "#F1F3F5", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#495057" }}><Settings2 size={20} /></div>
-        <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>ڕێکخستنەکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>ڕێکخستنی زانیاری کۆمپانیا</p></div>
+        <div style={{ width: 40, height: 40, background: "var(--color-bg-hover)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)" }}>
+          <Settings2 size={20} />
+        </div>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 700 }}>ڕێکخستنەکان</h1>
+          <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>ڕێکخستنی سیستەم و جوانکاری</p>
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 24 }}>
         <div style={{ flex: 1, maxWidth: 700 }}>
-          {/* Company Info Card */}
-          <div style={{ background: "white", borderRadius: 14, padding: 28, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF", marginBottom: 24 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}><Building2 size={18} /> زانیاری کۆمپانیا</h3>
 
-            <div style={{ display: "flex", gap: 32, marginBottom: 28, padding: 20, background: "#F8F9FA", borderRadius: 12, justifyContent: "center" }}>
+          {/* ─── Appearance Card ─── */}
+          <div style={cardStyle}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>
+              {darkMode ? <Moon size={18} color="#7C5CFC" /> : <Sun size={18} color="#F47B35" />}
+              دیداری سیستەم
+            </h3>
+
+            {/* Dark mode row */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", background: "var(--color-bg)", borderRadius: 12, marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: darkMode ? "linear-gradient(135deg, #1A1A2E, #2D2B55)" : "linear-gradient(135deg, #FEF3EB, #FFD6A5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {darkMode ? <Moon size={20} color="#7C5CFC" /> : <Sun size={20} color="#F47B35" />}
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{darkMode ? "دۆخی تاریک" : "دۆخی ڕووناک"}</div>
+                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
+                    {darkMode ? "دیدارێکی تاریک بۆ کارکردن لە شەو" : "دیدارێکی ڕووناک بۆ رۆژانە"}
+                  </div>
+                </div>
+              </div>
+              <Toggle value={darkMode} onChange={toggleDarkMode} />
+            </div>
+
+            {/* Sidebar position */}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: 12 }}>شوێنی سایدبار</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                {sidebarOptions.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setSidebarPosition(opt.value)}
+                    style={{
+                      padding: "14px 12px",
+                      borderRadius: 12,
+                      border: sidebarPosition === opt.value ? "2px solid #4263EB" : "2px solid var(--color-border)",
+                      background: sidebarPosition === opt.value ? "linear-gradient(135deg, #EDF2FF, #F3F0FF)" : "var(--color-bg)",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 8,
+                      position: "relative",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {sidebarPosition === opt.value && (
+                      <div style={{ position: "absolute", top: 6, left: 6, width: 18, height: 18, borderRadius: "50%", background: "#4263EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Check size={10} color="white" strokeWidth={3} />
+                      </div>
+                    )}
+                    {/* Mini layout preview */}
+                    <div style={{ width: 64, height: 40, borderRadius: 6, border: "1px solid var(--color-border)", overflow: "hidden", background: "var(--color-bg-card)", display: "flex", position: "relative" }}>
+                      {opt.value === "right" && (
+                        <>
+                          <div style={{ width: 16, height: "100%", background: "#4263EB15", borderRight: "1px solid #4263EB30", position: "absolute", right: 0 }} />
+                          <div style={{ flex: 1, marginRight: 16, padding: 4 }}>
+                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, marginBottom: 3 }} />
+                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, width: "70%" }} />
+                          </div>
+                        </>
+                      )}
+                      {opt.value === "left" && (
+                        <>
+                          <div style={{ width: 16, height: "100%", background: "#4263EB15", borderLeft: "1px solid #4263EB30", position: "absolute", left: 0 }} />
+                          <div style={{ flex: 1, marginLeft: 16, padding: 4 }}>
+                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, marginBottom: 3 }} />
+                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, width: "70%" }} />
+                          </div>
+                        </>
+                      )}
+                      {opt.value === "top" && (
+                        <>
+                          <div style={{ height: 10, width: "100%", background: "#4263EB15", borderBottom: "1px solid #4263EB30", position: "absolute", top: 0 }} />
+                          <div style={{ flex: 1, marginTop: 10, padding: 4 }}>
+                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, marginBottom: 3 }} />
+                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, width: "70%" }} />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: sidebarPosition === opt.value ? "#4263EB" : "var(--color-text-primary)" }}>
+                      {opt.label}
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textAlign: "center" }}>{opt.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Company Info Card ─── */}
+          <div style={cardStyle}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
+              <Building2 size={18} /> زانیاری کۆمپانیا
+            </h3>
+
+            <div style={{ display: "flex", gap: 32, marginBottom: 28, padding: 20, background: "var(--color-bg)", borderRadius: 12, justifyContent: "center" }}>
               <ImageUploader value={companyForm.logo} onChange={(v) => setCompanyForm({ ...companyForm, logo: v })} label="لۆگۆی کۆمپانیا" shape="square" />
               <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#495057" }}>لۆگۆی کۆمپانیا</span>
-                <span style={{ fontSize: 11, color: "#ADB5BD" }}>وێنەیەک بۆ پسوولەکان و سایدبار</span>
-                <span style={{ fontSize: 11, color: "#ADB5BD" }}>وێنەی پرۆفایل: کلیک بکە لەسەر وێنەکەت لە سایدبار</span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>لۆگۆی کۆمپانیا</span>
+                <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>وێنەیەک بۆ پسوولەکان و سایدبار</span>
+                <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>وێنەی پرۆفایل: کلیک بکە لەسەر وێنەکەت لە سایدبار</span>
               </div>
             </div>
 
@@ -90,19 +229,21 @@ export default function SettingsPage() {
               </FormGrid>
               <FormField label="ناونیشان"><input style={{ ...inputStyle, marginTop: 16 }} value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} /></FormField>
               <div style={{ marginTop: 24 }}>
-                <button type="submit" style={{ padding: "10px 28px", borderRadius: 8, background: "#4263EB", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}><Save size={14} /> پاشەکەوتکردن</button>
+                <button type="submit" style={{ padding: "10px 28px", borderRadius: 8, background: "#4263EB", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+                  <Save size={14} /> پاشەکەوتکردن
+                </button>
               </div>
             </form>
           </div>
 
-          {/* Users shortcut card */}
-          <div style={{ background: "white", borderRadius: 14, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF", marginBottom: 24 }}>
+          {/* ─── Users shortcut ─── */}
+          <div style={cardStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 40, height: 40, background: "#F3F0FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#7C5CFC" }}><Users size={20} /></div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>بەڕێوەبردنی بەکارهێنەران</div>
-                  <div style={{ fontSize: 12, color: "#6C757D", marginTop: 2 }}>زیادکردن، دەستکاری، و مۆڵەتدانی بەکارهێنەران</div>
+                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>زیادکردن، دەستکاری، و مۆڵەتدانی بەکارهێنەران</div>
                 </div>
               </div>
               <Link href="/dashboard/users" style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8, background: "#F3F0FF", color: "#7C5CFC", fontSize: 13, fontWeight: 600, textDecoration: "none", border: "1px solid #E5DBFF" }}>
@@ -111,11 +252,13 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Danger Zone */}
-          <div style={{ background: "white", borderRadius: 14, padding: 28, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #FFC9C9" }}>
+          {/* ─── Danger Zone ─── */}
+          <div style={{ ...cardStyle, border: "1px solid #FFC9C9" }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: "#FA5252" }}>ناوچەی مەترسیدار</h3>
-            <p style={{ fontSize: 13, color: "#6C757D", marginBottom: 16 }}>ئەم کردارانە هەموو داتاکان دەسڕنەوە و ناگەڕێنەوە.</p>
-            <button onClick={handleResetData} style={{ padding: "10px 24px", borderRadius: 8, background: "#FA5252", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}><RefreshCw size={14} /> سڕینەوەی هەموو داتاکان</button>
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 16 }}>ئەم کردارانە هەموو داتاکان دەسڕنەوە و ناگەڕێنەوە.</p>
+            <button onClick={handleResetData} style={{ padding: "10px 24px", borderRadius: 8, background: "#FA5252", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+              <RefreshCw size={14} /> سڕینەوەی هەموو داتاکان
+            </button>
           </div>
         </div>
       </div>
