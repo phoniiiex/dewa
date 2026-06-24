@@ -9,12 +9,23 @@ import { supabase } from "./supabase";
 import type {
   Product, Client, Rep, Warehouse, Supplier, Order,
   Delivery, Transaction, CompanySettings, User, InvoiceTemplate,
+  PriceType, ProductPrice,
 } from "./types";
 
 // ===== DB ↔ APP MAPPERS =====
 // Supabase uses snake_case, our app uses camelCase
 function toProduct(r: Record<string, unknown>): Product {
-  return { id: r.id as string, name: r.name as string, sku: r.sku as string, category: (r.category || "") as string, price: Number(r.price || 0), stock: Number(r.stock || 0), unitType: (r.unit_type || "") as string, origin: (r.origin || "") as string, supplier: (r.supplier || "") as string, expiryDate: (r.expiry_date || "") as string, batchNumber: (r.batch_number || "") as string, isSample: !!r.is_sample, isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
+  return {
+    id: r.id as string, name: r.name as string, sku: r.sku as string,
+    category: (r.category || "") as string, company: (r.company || "") as string,
+    price: Number(r.price || 0), prices: (r.prices || []) as ProductPrice[],
+    stock: Number(r.stock || 0), unitType: (r.unit_type || "") as string,
+    origin: (r.origin || "") as string, supplier: (r.supplier || "") as string,
+    issueDate: (r.issue_date || "") as string, expiryDate: (r.expiry_date || "") as string,
+    batchNumber: (r.batch_number || "") as string, isSample: !!r.is_sample,
+    isActive: r.is_active !== false, imageUrl: (r.image_url || "") as string,
+    createdAt: (r.created_at || "") as string,
+  };
 }
 function fromProduct(p: Partial<Product>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
@@ -22,15 +33,19 @@ function fromProduct(p: Partial<Product>): Record<string, unknown> {
   if (p.name !== undefined) m.name = p.name;
   if (p.sku !== undefined) m.sku = p.sku;
   if (p.category !== undefined) m.category = p.category;
+  if (p.company !== undefined) m.company = p.company;
   if (p.price !== undefined) m.price = p.price;
+  if (p.prices !== undefined) m.prices = p.prices;
   if (p.stock !== undefined) m.stock = p.stock;
   if (p.unitType !== undefined) m.unit_type = p.unitType;
   if (p.origin !== undefined) m.origin = p.origin;
   if (p.supplier !== undefined) m.supplier = p.supplier;
+  if (p.issueDate !== undefined) m.issue_date = p.issueDate || null;
   if (p.expiryDate !== undefined) m.expiry_date = p.expiryDate;
   if (p.batchNumber !== undefined) m.batch_number = p.batchNumber;
   if (p.isSample !== undefined) m.is_sample = p.isSample;
   if (p.isActive !== undefined) m.is_active = p.isActive;
+  if (p.imageUrl !== undefined) m.image_url = p.imageUrl;
   if (p.createdAt !== undefined) m.created_at = p.createdAt;
   return m;
 }
@@ -226,11 +241,13 @@ interface DataStore {
   products: Product[]; clients: Client[]; reps: Rep[]; warehouses: Warehouse[];
   suppliers: Supplier[]; orders: Order[]; deliveries: Delivery[];
   transactions: Transaction[]; settings: CompanySettings; users: User[];
-  invoiceTemplates: InvoiceTemplate[]; loading: boolean;
+  invoiceTemplates: InvoiceTemplate[]; priceTypes: PriceType[]; loading: boolean;
 
   addProduct: (p: Omit<Product, "id" | "createdAt">) => Promise<Product>;
   updateProduct: (id: string, p: Partial<Product>) => void;
   deleteProduct: (id: string) => void;
+  addPriceType: (name: string) => Promise<PriceType>;
+  deletePriceType: (id: string) => void;
   addClient: (c: Omit<Client, "id" | "createdAt">) => Promise<Client>;
   updateClient: (id: string, c: Partial<Client>) => void;
   deleteClient: (id: string) => void;
@@ -278,6 +295,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(defaultSettings);
+  const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,7 +309,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Fetch all data from Supabase
   const refreshData = useCallback(async () => {
     try {
-      const [pRes, cRes, rRes, wRes, sRes, oRes, dRes, tRes, stRes, prRes, itRes] = await Promise.all([
+      const [pRes, cRes, rRes, wRes, sRes, oRes, dRes, tRes, stRes, prRes, itRes, ptRes] = await Promise.all([
         supabase.from("products").select("*"),
         supabase.from("clients").select("*"),
         supabase.from("reps").select("*"),
@@ -303,6 +321,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         supabase.from("company_settings").select("*").single(),
         supabase.from("profiles").select("*"),
         supabase.from("invoice_templates").select("*"),
+        supabase.from("price_types").select("*").order("created_at"),
       ]);
 
       if (pRes.data) setProducts(pRes.data.map(toProduct));
@@ -316,6 +335,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (stRes.data) setSettings(toSettings(stRes.data));
       if (prRes.data) setUsers(prRes.data.map(toUser));
       if (itRes.data) setInvoiceTemplates(itRes.data.map(toTemplate));
+      if (ptRes.data) setPriceTypes(ptRes.data.map((r) => ({ id: r.id as string, name: r.name as string, createdAt: (r.created_at || "") as string })));
     } catch (err) {
       console.error("Failed to fetch data:", err);
     } finally {
@@ -344,6 +364,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setProducts((prev) => prev.filter((x) => x.id !== id));
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("بەرهەم سڕایەوە");
+  }, [showToast]);
+
+  const addPriceType = useCallback(async (name: string): Promise<PriceType> => {
+    const nt: PriceType = { id: genId(), name, createdAt: new Date().toISOString() };
+    setPriceTypes((prev) => [...prev, nt]);
+    const { error } = await supabase.from("price_types").insert({ id: nt.id, name });
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("جۆری نرخ زیادکرا");
+    return nt;
+  }, [showToast]);
+
+  const deletePriceType = useCallback(async (id: string) => {
+    setPriceTypes((prev) => prev.filter((x) => x.id !== id));
+    const { error } = await supabase.from("price_types").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error");
   }, [showToast]);
 
   const addClient = useCallback(async (c: Omit<Client, "id" | "createdAt">) => {
@@ -525,8 +559,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     <DataContext.Provider
       value={{
         products, clients, reps, warehouses, suppliers, orders, deliveries, transactions, settings,
-        users, invoiceTemplates, loading,
-        addProduct, updateProduct, deleteProduct,
+        users, invoiceTemplates, priceTypes, loading,
+        addProduct, updateProduct, deleteProduct, addPriceType, deletePriceType,
         addClient, updateClient, deleteClient,
         addRep, updateRep, deleteRep,
         addWarehouse, updateWarehouse, deleteWarehouse,

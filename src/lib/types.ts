@@ -23,20 +23,36 @@ export interface User {
   createdAt: string;
 }
 
+export interface ProductPrice {
+  typeId: string;
+  typeName: string;
+  amount: number;
+}
+
+export interface PriceType {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
 export interface Product {
   id: string;
   name: string;
   sku: string;
   category: string;
+  company: string;
   price: number;
+  prices: ProductPrice[];
   stock: number;
   unitType: string;
   origin: string;
   supplier: string;
+  issueDate: string;
   expiryDate: string;
   batchNumber: string;
   isSample: boolean;
   isActive: boolean;
+  imageUrl?: string;
   createdAt: string;
 }
 
