@@ -76,3 +76,30 @@ export async function PATCH(req: NextRequest) {
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
   return NextResponse.json({ success: true, status: newStatus });
 }
+
+// DELETE — delete one request (by id) or all non-pending (clear history)
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+  const clearAll = searchParams.get("clearAll");
+
+  if (clearAll === "true") {
+    // Delete all APPROVED and REJECTED requests (keep PENDING intact)
+    const { error } = await supabase
+      .from("client_requests")
+      .delete()
+      .in("status", ["APPROVED", "REJECTED"]);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, cleared: true });
+  }
+
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  const { error } = await supabase
+    .from("client_requests")
+    .delete()
+    .eq("id", id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
+}

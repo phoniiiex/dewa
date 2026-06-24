@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, FormEvent } from "react";
-import { Search, Plus, Users, Phone, MapPin, Edit3, Trash2, Eye, X, Building2, Stethoscope, ShoppingBag, Clock, CheckCircle, XCircle, RefreshCw, AlertCircle } from "lucide-react";
+import { Search, Plus, Users, Phone, MapPin, Edit3, Trash2, Eye, X, Building2, Stethoscope, ShoppingBag, Clock, CheckCircle, XCircle, RefreshCw, AlertCircle, History } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
@@ -55,6 +55,9 @@ export default function ClientsPage() {
   const [requests, setRequests] = useState<ClientRequest[]>([]);
   const [reqLoading, setReqLoading] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [deleteReqId, setDeleteReqId] = useState<string | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
 
   const resetForm = () => setForm({ name: "", owner: "", phone: "", city: cities[0], type: "PHARMACY", repId: reps[0]?.id || "", paymentTerms: "IMMEDIATE", balance: "0", isActive: true });
   const openAdd = () => { resetForm(); setEditing(null); setModalOpen(true); };
@@ -103,6 +106,21 @@ export default function ClientsPage() {
     await loadRequests();
   };
 
+  const handleDeleteRequest = async (id: string) => {
+    setDeleteReqId(id);
+    await fetch(`/api/clients/request?id=${id}`, { method: "DELETE" });
+    setRequests(prev => prev.filter(r => r.id !== id));
+    setDeleteReqId(null);
+  };
+
+  const handleClearHistory = async () => {
+    setClearingHistory(true);
+    await fetch("/api/clients/request?clearAll=true", { method: "DELETE" });
+    await loadRequests();
+    setClearingHistory(false);
+    setShowClearConfirm(false);
+  };
+
   const statusBadge = (status: string) => {
     if (status === "PENDING")  return { label: "چاوەڕوان", bg: "#FFF3BF", color: "#E67700", Icon: Clock };
     if (status === "APPROVED") return { label: "پەسەندکرا", bg: "#D3F9D8", color: "#2B8A3E", Icon: CheckCircle };
@@ -125,9 +143,19 @@ export default function ClientsPage() {
             </>
           )}
           {tab === "requests" && (
-            <button onClick={loadRequests} style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#6C757D" }}>
-              <RefreshCw size={13} /> نوێکردنەوە
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              {requests.filter(r => r.status !== "PENDING").length > 0 && (
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 8, border: "1px solid #FFE3E3", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#C92A2A", fontWeight: 600 }}
+                >
+                  <History size={13} /> سڕینەوەی مێژوو
+                </button>
+              )}
+              <button onClick={loadRequests} style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#6C757D" }}>
+                <RefreshCw size={13} /> نوێکردنەوە
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -271,10 +299,26 @@ export default function ClientsPage() {
                               style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 12px", borderRadius: 6, background: "#FFE3E3", color: "#C92A2A", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit", opacity: actionId === r.id ? 0.6 : 1 }}>
                               <XCircle size={12} /> ڕەت
                             </button>
+                            <button
+                              disabled={deleteReqId === r.id}
+                              onClick={() => handleDeleteRequest(r.id)}
+                              title="سڕینەوە"
+                              style={{ width: 28, height: 28, borderRadius: 6, background: "#F1F3F5", color: "#ADB5BD", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: deleteReqId === r.id ? 0.5 : 1 }}>
+                              <Trash2 size={11} />
+                            </button>
                           </div>
                         )}
                         {r.status !== "PENDING" && (
-                          <span style={{ fontSize: 11, color: "#ADB5BD" }}>تێپەڕاوە</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 11, color: "#ADB5BD" }}>تێپەڕاوە</span>
+                            <button
+                              disabled={deleteReqId === r.id}
+                              onClick={() => handleDeleteRequest(r.id)}
+                              title="سڕینەوەی مێژوو"
+                              style={{ width: 26, height: 26, borderRadius: 6, background: "#FFE3E3", color: "#C92A2A", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: deleteReqId === r.id ? 0.5 : 1 }}>
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -352,6 +396,42 @@ export default function ClientsPage() {
       )}
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={() => { if (deleteId) deleteClient(deleteId); setDeleteId(null); }} message="ئایا دڵنیایت لە سڕینەوەی ئەم کڕیارە؟" />
+
+      {/* Clear history confirm */}
+      {showClearConfirm && (
+        <div onClick={() => setShowClearConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "white", borderRadius: 16, padding: 28, width: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: "#FFE3E3", display: "flex", alignItems: "center", justifyContent: "center", color: "#C92A2A", flexShrink: 0 }}>
+                <History size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>سڕینەوەی مێژووی داواکارییەکان</div>
+                <div style={{ fontSize: 12, color: "#6C757D", marginTop: 2 }}>هەموو داواکارییەکانی پەسەندکراو و ڕەتکراوەیەوە دەسڕێتەوە</div>
+              </div>
+            </div>
+            <div style={{ padding: "12px 14px", background: "#FFF8DB", borderRadius: 8, fontSize: 12, color: "#856404", marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
+              <AlertCircle size={14} />
+              داواکارییەکانی چاوەڕوان دەمێننەوە — تەنها مێژوو دەسڕێتەوە
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={handleClearHistory}
+                disabled={clearingHistory}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 9, background: "#C92A2A", color: "white", fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit", opacity: clearingHistory ? 0.7 : 1 }}
+              >
+                {clearingHistory ? "بارکردن..." : "بەڵێ، بیسڕەوە"}
+              </button>
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 9, background: "#F1F3F5", color: "#495057", fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit" }}
+              >
+                پاشگەزبوونەوە
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
