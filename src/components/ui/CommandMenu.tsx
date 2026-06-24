@@ -3,9 +3,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search, ShoppingCart, Users, Package, Truck,
-  Clock, ArrowLeft, Plus, ChevronLeft, ChevronRight,
-  LayoutDashboard, FileText, Warehouse, UserCog, BarChart2,
-  X
+  ChevronLeft, LayoutDashboard, FileText, Warehouse,
+  UserCog, BarChart2, X, Building2, User, BadgeCheck,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 
@@ -40,16 +39,24 @@ const QAIcon = ({ icon, color }: { icon: string; color: string }) => {
 
 // ──────────── Nav Pages ────────────
 const navPages = [
-  { label: "داشبۆرد",     href: "/dashboard",            icon: <LayoutDashboard size={16} />, iconBg: "#EBF1FF" },
-  { label: "داواکارییەکان", href: "/dashboard/orders",   icon: <ShoppingCart size={16} />,    iconBg: "#FEF3EB" },
-  { label: "بەرهەمەکان",   href: "/dashboard/products",  icon: <Package size={16} />,         iconBg: "#E3F7EC" },
-  { label: "کڕیارەکان",    href: "/dashboard/clients",   icon: <Users size={16} />,           iconBg: "#EBF1FF" },
-  { label: "نوێنەرەکان",   href: "/dashboard/reps",      icon: <UserCog size={16} />,         iconBg: "#F8F0FF" },
-  { label: "کۆگاکان",     href: "/dashboard/warehouses", icon: <Warehouse size={16} />,       iconBg: "#FFF3BF" },
-  { label: "گواستنەوەکان", href: "/dashboard/logistics", icon: <Truck size={16} />,           iconBg: "#FFE3E3" },
-  { label: "ڕاپۆرت",      href: "/dashboard/analytics",  icon: <BarChart2 size={16} />,       iconBg: "#E3F7EC" },
-  { label: "پسووڵەکان",   href: "/dashboard/invoices",   icon: <FileText size={16} />,        iconBg: "#FFF3BF" },
+  { label: "داشبۆرد",       href: "/dashboard",            icon: <LayoutDashboard size={16} />, iconBg: "#EBF1FF" },
+  { label: "داواکارییەکان", href: "/dashboard/orders",     icon: <ShoppingCart size={16} />,    iconBg: "#FEF3EB" },
+  { label: "بەرهەمەکان",   href: "/dashboard/products",   icon: <Package size={16} />,         iconBg: "#E3F7EC" },
+  { label: "کڕیارەکان",    href: "/dashboard/clients",    icon: <Users size={16} />,           iconBg: "#EBF1FF" },
+  { label: "نوێنەرەکان",   href: "/dashboard/reps",       icon: <UserCog size={16} />,         iconBg: "#F8F0FF" },
+  { label: "کۆگاکان",      href: "/dashboard/warehouses", icon: <Warehouse size={16} />,       iconBg: "#FFF3BF" },
+  { label: "گواستنەوەکان", href: "/dashboard/logistics",  icon: <Truck size={16} />,           iconBg: "#FFE3E3" },
+  { label: "ڕاپۆرت",       href: "/dashboard/analytics",  icon: <BarChart2 size={16} />,       iconBg: "#E3F7EC" },
+  { label: "پسووڵەکان",    href: "/dashboard/invoices",   icon: <FileText size={16} />,        iconBg: "#FFF3BF" },
+  { label: "بەکارهێنەرەکان", href: "/dashboard/users",   icon: <User size={16} />,            iconBg: "#FFF0F6" },
+  { label: "پاڵگرەکان",    href: "/dashboard/suppliers",  icon: <Building2 size={16} />,       iconBg: "#E8F4FD" },
 ];
+
+const roleLabels: Record<string, string> = {
+  ADMIN: "بەڕێوەبەر",
+  MANAGER: "بەڕێوەبەری ناوەڕاست",
+  REP: "نوێنەر",
+};
 
 interface Props {
   open: boolean;
@@ -58,7 +65,7 @@ interface Props {
 
 export default function CommandMenu({ open, onClose }: Props) {
   const router = useRouter();
-  const { products, clients, orders, reps } = useData();
+  const { products, clients, orders, reps, users, warehouses, suppliers } = useData();
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,26 +80,78 @@ export default function CommandMenu({ open, onClose }: Props) {
     }
   }, [open]);
 
+  // Case-insensitive search helper
+  const match = (text: string | undefined | null, q: string) =>
+    (text || "").toLowerCase().includes(q.toLowerCase());
+
   // Build flat result list for keyboard nav
   const results: CMItem[] = query.trim()
     ? [
-        ...products.filter(p => p.isActive && (p.name.includes(query) || p.sku?.toLowerCase().includes(query.toLowerCase()))).slice(0, 4).map(p => ({
-          id: p.id, label: p.name, sublabel: `${p.sku} • ${p.stock} بەردەست`,
+        // ── بەکارهێنەرەکان (Users / Profiles) ──
+        ...users.filter(u =>
+          match(u.name, query) || match(u.email, query) || match(u.phone, query) || match(u.city, query)
+        ).slice(0, 5).map(u => ({
+          id: u.id, label: u.name,
+          sublabel: `${roleLabels[u.role] || u.role} • ${u.email}`,
+          icon: <User size={15} />, iconBg: "#FFF0F6", href: "/dashboard/users", group: "بەکارهێنەرەکان"
+        })),
+
+        // ── بەرهەمەکان ──
+        ...products.filter(p =>
+          match(p.name, query) || match(p.sku, query) || match(p.category, query)
+        ).slice(0, 4).map(p => ({
+          id: p.id, label: p.name,
+          sublabel: `${p.sku}${p.category ? " • " + p.category : ""} • ${p.stock} بەردەست`,
           icon: <Package size={15} />, iconBg: "#E3F7EC", href: "/dashboard/products", group: "بەرهەمەکان"
         })),
-        ...clients.filter(c => c.isActive && (c.name.includes(query) || c.city?.includes(query))).slice(0, 4).map(c => ({
-          id: c.id, label: c.name, sublabel: c.city,
+
+        // ── کڕیارەکان ──
+        ...clients.filter(c =>
+          match(c.name, query) || match(c.city, query) || match(c.phone, query) || match(c.owner, query)
+        ).slice(0, 4).map(c => ({
+          id: c.id, label: c.name,
+          sublabel: `${c.owner ? c.owner + " • " : ""}${c.city} • ${c.phone}`,
           icon: <Users size={15} />, iconBg: "#EBF1FF", href: "/dashboard/clients", group: "کڕیارەکان"
         })),
-        ...orders.filter(o => o.orderNumber?.includes(query) || o.clientName?.includes(query)).slice(0, 3).map(o => ({
-          id: o.id, label: o.orderNumber, sublabel: o.clientName,
+
+        // ── داواکارییەکان ──
+        ...orders.filter(o =>
+          match(o.orderNumber, query) || match(o.clientName, query) || match(o.repName, query)
+        ).slice(0, 3).map(o => ({
+          id: o.id, label: o.orderNumber,
+          sublabel: `${o.clientName}${o.repName ? " • " + o.repName : ""}`,
           icon: <ShoppingCart size={15} />, iconBg: "#FEF3EB", href: "/dashboard/orders", group: "داواکارییەکان"
         })),
-        ...reps.filter(r => r.name.includes(query)).slice(0, 2).map(r => ({
-          id: r.id, label: r.name, sublabel: r.city,
+
+        // ── نوێنەرەکان ──
+        ...reps.filter(r =>
+          match(r.name, query) || match(r.city, query) || match(r.phone, query)
+        ).slice(0, 3).map(r => ({
+          id: r.id, label: r.name,
+          sublabel: `${r.city} • ${r.phone}`,
           icon: <UserCog size={15} />, iconBg: "#F8F0FF", href: "/dashboard/reps", group: "نوێنەرەکان"
         })),
-        ...navPages.filter(p => p.label.includes(query)).slice(0, 3).map((p, i) => ({
+
+        // ── کۆگاکان ──
+        ...warehouses.filter(w =>
+          match(w.name, query) || match(w.city, query) || match(w.contact, query)
+        ).slice(0, 2).map(w => ({
+          id: w.id, label: w.name,
+          sublabel: `${w.city}${w.bonusPct ? " • %" + w.bonusPct + " بۆنەس" : ""}`,
+          icon: <Warehouse size={15} />, iconBg: "#FFF3BF", href: "/dashboard/warehouses", group: "کۆگاکان"
+        })),
+
+        // ── پاڵگرەکان ──
+        ...suppliers.filter(s =>
+          match(s.name, query) || match(s.country, query) || match(s.contact, query)
+        ).slice(0, 2).map(s => ({
+          id: s.id, label: s.name,
+          sublabel: `${s.country} • ${s.contact}`,
+          icon: <Building2 size={15} />, iconBg: "#E8F4FD", href: "/dashboard/suppliers", group: "پاڵگرەکان"
+        })),
+
+        // ── لاپەڕەکان ──
+        ...navPages.filter(p => match(p.label, query)).slice(0, 3).map((p, i) => ({
           id: `nav-${i}`, label: p.label, icon: p.icon, iconBg: p.iconBg, href: p.href, group: "لاپەڕەکان"
         })),
       ]
@@ -187,7 +246,7 @@ export default function CommandMenu({ open, onClose }: Props) {
             type="text"
             value={query}
             onChange={e => { setQuery(e.target.value); setActiveIdx(0); }}
-            placeholder="بگەڕێ بۆ بەرهەم، کڕیار، داواکاری یان فەرمان..."
+            placeholder="بگەڕێ بۆ بەرهەم، کڕیار، بەکارهێنەر، داواکاری، کۆگا یان فەرمان..."
             style={{
               flex: 1,
               border: "none", outline: "none",
@@ -272,10 +331,13 @@ export default function CommandMenu({ open, onClose }: Props) {
                 display: "flex", alignItems: "center", gap: 6,
               }}>
                 {group === "داواکارییەکان" && <ShoppingCart size={10} />}
-                {group === "بەرهەمەکان" && <Package size={10} />}
-                {group === "کڕیارەکان" && <Users size={10} />}
-                {group === "نوێنەرەکان" && <UserCog size={10} />}
-                {group === "لاپەڕەکان" && <LayoutDashboard size={10} />}
+                {group === "بەرهەمەکان"    && <Package size={10} />}
+                {group === "کڕیارەکان"     && <Users size={10} />}
+                {group === "نوێنەرەکان"    && <UserCog size={10} />}
+                {group === "بەکارهێنەرەکان" && <User size={10} />}
+                {group === "کۆگاکان"       && <Warehouse size={10} />}
+                {group === "پاڵگرەکان"     && <Building2 size={10} />}
+                {group === "لاپەڕەکان"     && <LayoutDashboard size={10} />}
                 {group}
               </div>
 
