@@ -7,6 +7,7 @@ import {
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, inputStyle, selectStyle } from "@/components/ui/FormField";
+import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
 
 const ALL_PERMISSIONS = [
   { key: "dashboard", label: "پێشانگا", group: "سەرەکی" },
@@ -206,10 +207,16 @@ export default function UsersPage() {
 
       {/* KPIs */}
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
-        <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>کۆی بەکارهێنەران</div><div className="kpi-card-value" style={{ fontSize: "1.4rem" }}>{users.length}</div></div>
-        <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>چالاک</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#40C057" }}>{activeCount}</div></div>
-        <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>ئەدمین</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#C92A2A" }}>{adminCount}</div></div>
-        <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>بێ پرۆفایل</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#F08C00" }}>{users.filter(u => !u.has_profile).length}</div></div>
+        {loading ? (
+          <>{[0,1,2,3].map(i => <SkeletonKPI key={i} />)}</>
+        ) : (
+          <>
+            <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>کۆی بەکارهێنەران</div><div className="kpi-card-value" style={{ fontSize: "1.4rem" }}>{users.length}</div></div>
+            <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>چالاک</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#40C057" }}>{activeCount}</div></div>
+            <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>ئەدمین</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#C92A2A" }}>{adminCount}</div></div>
+            <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>بێ پرۆفایل</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#F08C00" }}>{users.filter(u => !u.has_profile).length}</div></div>
+          </>
+        )}
       </div>
 
       {error && (
@@ -226,7 +233,7 @@ export default function UsersPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} style={{ textAlign: "center", padding: 40, color: "#ADB5BD" }}>بارکردن...</td></tr>
+              <SkeletonTableRows rows={5} cols={6} />
             ) : users.length === 0 ? (
               <tr><td colSpan={6} style={{ textAlign: "center", padding: 40, color: "#ADB5BD" }}>هیچ بەکارهێنەرێک نییە</td></tr>
             ) : users.map(u => {

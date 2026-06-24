@@ -10,6 +10,7 @@ import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/com
 import ExportButton from "@/components/ui/ExportButton";
 import PrintModal from "@/components/ui/PrintModal";
 import type { ExportColumn } from "@/lib/export";
+import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
 
 
 const orderExportCols: ExportColumn[] = [
@@ -24,7 +25,7 @@ const statusClasses: Record<OrderStatus, string> = { PENDING: "pending", PROCESS
 const routingLabels: Record<RoutingMode, string> = { DIRECT: "ڕاستەوخۆ", WAREHOUSE: "لە ڕێگای کۆگا", REP_DELIVERY: "گەیاندنی نوێنەر" };
 
 export default function OrdersPage() {
-  const { orders, clients, reps, warehouses, products, addOrder, updateOrder, deleteOrder, addDelivery, addTransaction, settings } = useData();
+  const { orders, clients, reps, warehouses, products, addOrder, updateOrder, deleteOrder, addDelivery, addTransaction, settings, loading } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("هەموو");
   const [modalOpen, setModalOpen] = useState(false);
@@ -116,7 +117,9 @@ export default function OrdersPage() {
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
-        {[
+        {loading ? (
+          <>{[0,1,2,3].map(i => <SkeletonKPI key={i} />)}</>
+        ) : [
           { title: "کۆی داواکاری", value: String(orders.length) },
           { title: "چاوەڕوان", value: String(orders.filter(o => o.status === "PENDING").length), color: "#FD7E14" },
           { title: "لە پڕۆسەدا", value: String(orders.filter(o => o.status === "PROCESSING" || o.status === "SHIPPED").length), color: "#339AF0" },
@@ -142,7 +145,9 @@ export default function OrdersPage() {
         <table className="data-table">
           <thead><tr><th>ژمارە</th><th>کڕیار</th><th>نوێنەر</th><th>شێواز</th><th>بۆنەس</th><th>کۆی گشتی</th><th>بارودۆخ</th><th></th></tr></thead>
           <tbody>
-            {filtered.map((o) => (
+            {loading ? (
+              <SkeletonTableRows rows={5} cols={8} />
+            ) : filtered.map((o) => (
               <tr key={o.id}>
                 <td style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{o.orderNumber}</td>
                 <td style={{ fontWeight: 600, fontSize: 13 }}>{o.clientName}</td>

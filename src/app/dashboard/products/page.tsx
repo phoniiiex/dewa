@@ -9,6 +9,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
 import ExportButton from "@/components/ui/ExportButton";
 import type { ExportColumn } from "@/lib/export";
+import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
 
 const productExportCols: ExportColumn[] = [
   { key: "name", label: "ناوی بەرهەم" },
@@ -34,7 +35,7 @@ function isExpired(date: string): boolean {
 }
 
 export default function ProductsPage() {
-  const { products, suppliers, addProduct, updateProduct, deleteProduct } = useData();
+  const { products, suppliers, addProduct, updateProduct, deleteProduct, loading } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("هەموو");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
@@ -88,7 +89,9 @@ export default function ProductsPage() {
 
       {/* KPIs */}
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
-        {[
+        {loading ? (
+          <>{[0,1,2,3].map(i => <SkeletonKPI key={i} />)}</>
+        ) : [
           { title: "کۆی بەرهەم", value: String(products.length) },
           { title: "کۆی کۆگا", value: products.reduce((s, p) => s + p.stock, 0).toLocaleString() },
           { title: "نزیکی بەسەرچوون", value: String(products.filter(p => isNearExpiry(p.expiryDate)).length), color: "#FD7E14" },
@@ -122,7 +125,9 @@ export default function ProductsPage() {
         <table className="data-table">
           <thead><tr><th>بەرهەم</th><th>SKU</th><th>جۆر</th><th>نرخ</th><th>کۆگا</th><th>بارودۆخ</th><th>ولاتی بەرهەم</th><th>بەسەرچوون</th><th></th></tr></thead>
           <tbody>
-            {filtered.map((p) => (
+            {loading ? (
+              <SkeletonTableRows rows={6} cols={9} />
+            ) : filtered.map((p) => (
               <tr key={p.id}>
                 <td style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</td>
                 <td style={{ fontSize: 12, color: "#6C757D", fontFamily: "monospace" }}>{p.sku}</td>
