@@ -21,14 +21,11 @@ export default function Sidebar() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const isTop = sidebarPosition === "top";
-  // In top mode always show text; otherwise respect collapsed state
-  const showText = !sidebarCollapsed || isTop;
 
   const isAdmin = currentUser?.role === "ADMIN";
   const isManager = currentUser?.role === "MANAGER";
   const isAdminOrManager = isAdmin || isManager;
 
-  // Fetch pending client requests count
   useEffect(() => {
     const fetchCount = async () => {
       const { count } = await supabase
@@ -38,7 +35,6 @@ export default function Sidebar() {
       setPendingRequestsCount(count || 0);
     };
     fetchCount();
-    // Refresh every 30 seconds
     const interval = setInterval(fetchCount, 30_000);
     return () => clearInterval(interval);
   }, []);
@@ -47,45 +43,47 @@ export default function Sidebar() {
     {
       title: "سەرەکی",
       items: [
-        { label: "پێشانگا",    href: "/dashboard",            icon: <LayoutDashboard size={18} /> },
-        { label: "شیکاری",    href: "/dashboard/analytics",  icon: <BarChart3 size={18} />,  managerOnly: true },
-        { label: "بەرهەمەکان", href: "/dashboard/products",   icon: <Package size={18} /> },
-        { label: "داواکارییەکان", href: "/dashboard/orders",  icon: <ShoppingCart size={18} /> },
-        { label: "پسوولەکان", href: "/dashboard/invoices",   icon: <FileText size={18} /> },
-        { label: "بۆنەس",     href: "/dashboard/bonus",      icon: <Gift size={18} />,       managerOnly: true },
+        { label: "پێشانگا",       href: "/dashboard",           icon: <LayoutDashboard size={18} /> },
+        { label: "شیکاری",       href: "/dashboard/analytics", icon: <BarChart3 size={18} />,   managerOnly: true },
+        { label: "بەرهەمەکان",   href: "/dashboard/products",  icon: <Package size={18} /> },
+        { label: "داواکارییەکان", href: "/dashboard/orders",   icon: <ShoppingCart size={18} /> },
+        { label: "پسوولەکان",    href: "/dashboard/invoices",  icon: <FileText size={18} /> },
+        { label: "بۆنەس",        href: "/dashboard/bonus",     icon: <Gift size={18} />,        managerOnly: true },
       ],
     },
     {
       title: "بەڕێوەبردن",
       items: [
-        { label: "کڕیارەکان",       href: "/dashboard/clients",    icon: <Users size={18} />,   badge: pendingRequestsCount > 0 ? pendingRequestsCount : undefined },
-        { label: "نوێنەری پزیشکی", href: "/dashboard/reps",       icon: <UserCog size={18} />, managerOnly: true },
+        { label: "کڕیارەکان",       href: "/dashboard/clients",    icon: <Users size={18} />,     badge: pendingRequestsCount > 0 ? pendingRequestsCount : undefined },
+        { label: "نوێنەری پزیشکی", href: "/dashboard/reps",       icon: <UserCog size={18} />,   managerOnly: true },
         { label: "کۆگاکان",         href: "/dashboard/warehouses", icon: <Building2 size={18} />, managerOnly: true },
-        { label: "دابینکەرەکان",   href: "/dashboard/suppliers",  icon: <Factory size={18} />,  managerOnly: true },
+        { label: "دابینکەرەکان",   href: "/dashboard/suppliers",  icon: <Factory size={18} />,   managerOnly: true },
         { label: "گواستنەوە",       href: "/dashboard/logistics",  icon: <Truck size={18} /> },
-        { label: "بۆتی شۆفێر",     href: "/dashboard/telegram",   icon: <Bot size={18} />,      managerOnly: true },
+        { label: "بۆتی شۆفێر",     href: "/dashboard/telegram",   icon: <Bot size={18} />,       managerOnly: true },
       ],
     },
     {
       title: "کۆمپانیا",
       items: [
-        { label: "دارایی",      href: "/dashboard/finance", icon: <Wallet size={18} />,  managerOnly: true },
-        { label: "بەکارهێنەران", href: "/dashboard/users",   icon: <Shield size={18} />,  managerOnly: true },
+        { label: "دارایی",        href: "/dashboard/finance", icon: <Wallet size={18} />, managerOnly: true },
+        { label: "بەکارهێنەران", href: "/dashboard/users",   icon: <Shield size={18} />, managerOnly: true },
       ],
     },
   ];
 
   const footerItems: NavItem[] = [
     { label: "ڕێکخستنەکان", href: "/dashboard/settings", icon: <Settings size={18} />, managerOnly: true },
-    { label: "یارمەتی",     href: "#",                   icon: <HelpCircle size={18} /> },
+    { label: "یارمەتی",      href: "#",                   icon: <HelpCircle size={18} /> },
   ];
 
-  const filteredSections = navSections.map(section => ({
-    ...section,
-    items: section.items.filter(item => !item.managerOnly || isAdminOrManager),
-  })).filter(section => section.items.length > 0);
+  const filteredSections = navSections.map(s => ({
+    ...s,
+    items: s.items.filter(i => !i.managerOnly || isAdminOrManager),
+  })).filter(s => s.items.length > 0);
 
-  const filteredFooter = footerItems.filter(item => !item.managerOnly || isAdminOrManager);
+  const filteredFooter = footerItems.filter(i => !i.managerOnly || isAdminOrManager);
+
+  const allNavItems = filteredSections.flatMap(s => s.items);
 
   const userInitials = currentUser?.name
     ? currentUser.name.split(" ").map(w => w[0]).join("").slice(0, 2)
@@ -108,6 +106,103 @@ export default function Sidebar() {
   const roleBadge = isAdmin ? "بەڕێوەبەر" : isManager ? "بەڕێوەبەری مامناوەند" : "نوێنەر";
   const roleBadgeColor = isAdmin ? "#4263EB" : isManager ? "#7C5CFC" : "#40C057";
 
+  /* ─────────────────────────────────────────
+     TOP NAV MODE — completely separate render
+  ───────────────────────────────────────── */
+  if (isTop) {
+    return (
+      <header className="top-nav" id="sidebar">
+        {/* Logo */}
+        <div className="top-nav-logo">
+          {settings.logo ? (
+            <img src={settings.logo} alt="logo" style={{ width: 28, height: 28, borderRadius: 8, objectFit: "cover" }} />
+          ) : (
+            <div className="sidebar-logo" style={{ width: 28, height: 28, fontSize: 13 }}>د</div>
+          )}
+          <span className="top-nav-brand">{settings.name || "دەوا"}</span>
+        </div>
+
+        {/* Nav items — flat list, no section wrappers */}
+        <nav className="top-nav-items">
+          {allNavItems.map((item) => {
+            const isActive = pathname === item.href ||
+              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`top-nav-item ${isActive ? "active" : ""}`}
+                id={`nav-top-${item.href.split("/").pop()}`}
+              >
+                <span className="top-nav-item-icon">{item.icon}</span>
+                <span className="top-nav-item-text">{item.label}</span>
+                {item.badge ? (
+                  <span style={{
+                    background: "#FA5252", color: "white",
+                    minWidth: 16, height: 16, borderRadius: 8,
+                    fontSize: 9, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    padding: "0 4px",
+                  }}>
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Right side: footer links + user */}
+        <div className="top-nav-end">
+          {filteredFooter.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`top-nav-item ${pathname === item.href ? "active" : ""}`}
+            >
+              <span className="top-nav-item-icon">{item.icon}</span>
+              <span className="top-nav-item-text">{item.label}</span>
+            </Link>
+          ))}
+
+          {/* User avatar */}
+          <div
+            className="top-nav-user"
+            onClick={() => fileRef.current?.click()}
+            title="گۆڕینی وێنەی پرۆفایل"
+          >
+            {settings.profilePic ? (
+              <img src={settings.profilePic} alt="profile" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover" }} />
+            ) : (
+              <div className="sidebar-user-avatar" style={{ width: 30, height: 30, fontSize: 12 }}>{userInitials}</div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-text-primary)" }}>{currentUser?.name || "بەکارهێنەر"}</span>
+              <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3, background: `${roleBadgeColor}20`, color: roleBadgeColor, fontWeight: 700 }}>{roleBadge}</span>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleProfileUpload} style={{ display: "none" }} />
+          </div>
+
+          <button
+            onClick={logout}
+            title="چوونەدەرەوە"
+            style={{
+              width: 32, height: 32, borderRadius: 8, border: "none",
+              background: "var(--color-bg-hover)", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--color-text-secondary)", marginRight: 8,
+            }}
+          >
+            <LogOut size={15} />
+          </button>
+        </div>
+      </header>
+    );
+  }
+
+  /* ─────────────────────────────────────────
+     STANDARD VERTICAL SIDEBAR
+  ───────────────────────────────────────── */
   return (
     <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`} id="sidebar">
       {/* Header */}
@@ -132,7 +227,7 @@ export default function Sidebar() {
       <nav className="sidebar-nav">
         {filteredSections.map((section) => (
           <div key={section.title}>
-            {!isTop && !sidebarCollapsed && <div className="sidebar-section-label">{section.title}</div>}
+            {!sidebarCollapsed && <div className="sidebar-section-label">{section.title}</div>}
             {section.items.map((item) => {
               const isActive = pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -143,20 +238,13 @@ export default function Sidebar() {
                   title={sidebarCollapsed ? item.label : undefined}
                 >
                   <span className="sidebar-item-icon">{item.icon}</span>
-                  {showText && <span className="sidebar-item-text">{item.label}</span>}
+                  {!sidebarCollapsed && <span className="sidebar-item-text">{item.label}</span>}
                   {item.badge ? (
                     <span className="sidebar-item-badge" style={{
                       background: isActive ? "rgba(255,255,255,0.3)" : "#4263EB",
-                      color: "white",
-                      minWidth: 18,
-                      height: 18,
-                      borderRadius: 9,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "0 5px",
+                      color: "white", minWidth: 18, height: 18, borderRadius: 9,
+                      fontSize: 10, fontWeight: 700, display: "flex",
+                      alignItems: "center", justifyContent: "center", padding: "0 5px",
                       marginRight: sidebarCollapsed ? 0 : "auto",
                       animation: "pulse 2s ease infinite",
                     }}>
@@ -178,7 +266,7 @@ export default function Sidebar() {
             title={sidebarCollapsed ? item.label : undefined}
           >
             <span className="sidebar-item-icon">{item.icon}</span>
-            {showText && <span className="sidebar-item-text">{item.label}</span>}
+            {!sidebarCollapsed && <span className="sidebar-item-text">{item.label}</span>}
           </Link>
         ))}
       </div>
@@ -199,7 +287,7 @@ export default function Sidebar() {
           </div>
           <input ref={fileRef} type="file" accept="image/*" onChange={handleProfileUpload} style={{ display: "none" }} />
         </div>
-        {!isTop && !sidebarCollapsed && (
+        {!sidebarCollapsed && (
           <>
             <div className="sidebar-user-info">
               <span className="sidebar-user-name">
