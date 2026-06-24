@@ -10,6 +10,7 @@ import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/com
 import ExportButton from "@/components/ui/ExportButton";
 import type { ExportColumn } from "@/lib/export";
 import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
+import AddProductWizard, { type WizardFormData } from "@/components/ui/AddProductWizard";
 
 const productExportCols: ExportColumn[] = [
   { key: "name", label: "ناوی بەرهەم" },
@@ -39,7 +40,8 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("هەموو");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);       // wizard
+  const [editModalOpen, setEditModalOpen] = useState(false); // edit only
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -49,19 +51,28 @@ export default function ProductsPage() {
 
   const resetForm = () => setForm({ name: "", sku: "", category: categories[0], price: "", stock: "", unitType: unitTypes[0], origin: origins[0], supplier: "", expiryDate: "", batchNumber: "", isSample: false, isActive: true });
 
-  const openAdd = () => { resetForm(); setEditingProduct(null); setModalOpen(true); };
+  const openAdd = () => setModalOpen(true);
   const openEdit = (p: Product) => {
     setEditingProduct(p);
     setForm({ name: p.name, sku: p.sku, category: p.category, price: String(p.price), stock: String(p.stock), unitType: p.unitType, origin: p.origin, supplier: p.supplier, expiryDate: p.expiryDate, batchNumber: p.batchNumber, isSample: p.isSample, isActive: p.isActive });
-    setModalOpen(true);
+    setEditModalOpen(true);
+  };
+
+  const handleWizardSubmit = (data: WizardFormData) => {
+    addProduct({
+      name: data.name, sku: data.sku, category: data.category,
+      price: Number(data.price), stock: Number(data.stock),
+      unitType: data.unitType, origin: data.origin, supplier: data.supplier,
+      expiryDate: data.expiryDate, batchNumber: data.batchNumber,
+      isSample: data.isSample, isActive: true,
+    });
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const data = { name: form.name, sku: form.sku, category: form.category, price: Number(form.price), stock: Number(form.stock), unitType: form.unitType, origin: form.origin, supplier: form.supplier, expiryDate: form.expiryDate, batchNumber: form.batchNumber, isSample: form.isSample, isActive: form.isActive };
     if (editingProduct) updateProduct(editingProduct.id, data);
-    else addProduct(data);
-    setModalOpen(false);
+    setEditModalOpen(false);
   };
 
   const filtered = products.filter((p) => {
@@ -159,8 +170,11 @@ export default function ProductsPage() {
         <div className="pagination"><span className="pagination-info">{filtered.length} بەرهەم</span></div>
       </div>
 
-      {/* Add/Edit Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingProduct ? "دەستکاری بەرهەم" : "بەرهەمی نوێ"} width={640}>
+      {/* ── Wizard: Add product ── */}
+      <AddProductWizard open={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleWizardSubmit} />
+
+      {/* ── Edit Modal (simple) ── */}
+      <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} title="دەستکاری بەرهەم" width={640}>
         <form onSubmit={handleSubmit}>
           <FormGrid>
             <FormField label="ناوی بەرهەم" required><input style={inputStyle} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
@@ -180,7 +194,7 @@ export default function ProductsPage() {
               نموونە (بۆ بەخشین)
             </label>
           </div>
-          <FormActions onCancel={() => setModalOpen(false)} isEdit={!!editingProduct} />
+          <FormActions onCancel={() => setEditModalOpen(false)} isEdit={true} />
         </form>
       </Modal>
 
