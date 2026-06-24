@@ -17,9 +17,12 @@ interface NavSection { title: string; items: NavItem[]; }
 export default function Sidebar() {
   const pathname = usePathname();
   const { settings, updateSettings, showToast } = useData();
-  const { sidebarCollapsed, toggleSidebar, logout, currentUser } = useLayout();
+  const { sidebarCollapsed, toggleSidebar, logout, currentUser, sidebarPosition } = useLayout();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const isTop = sidebarPosition === "top";
+  // In top mode always show text; otherwise respect collapsed state
+  const showText = !sidebarCollapsed || isTop;
 
   const isAdmin = currentUser?.role === "ADMIN";
   const isManager = currentUser?.role === "MANAGER";
@@ -129,7 +132,7 @@ export default function Sidebar() {
       <nav className="sidebar-nav">
         {filteredSections.map((section) => (
           <div key={section.title}>
-            {!sidebarCollapsed && <div className="sidebar-section-label">{section.title}</div>}
+            {!isTop && !sidebarCollapsed && <div className="sidebar-section-label">{section.title}</div>}
             {section.items.map((item) => {
               const isActive = pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -140,7 +143,7 @@ export default function Sidebar() {
                   title={sidebarCollapsed ? item.label : undefined}
                 >
                   <span className="sidebar-item-icon">{item.icon}</span>
-                  {!sidebarCollapsed && <span className="sidebar-item-text">{item.label}</span>}
+                  {showText && <span className="sidebar-item-text">{item.label}</span>}
                   {item.badge ? (
                     <span className="sidebar-item-badge" style={{
                       background: isActive ? "rgba(255,255,255,0.3)" : "#4263EB",
@@ -175,7 +178,7 @@ export default function Sidebar() {
             title={sidebarCollapsed ? item.label : undefined}
           >
             <span className="sidebar-item-icon">{item.icon}</span>
-            {!sidebarCollapsed && <span className="sidebar-item-text">{item.label}</span>}
+            {showText && <span className="sidebar-item-text">{item.label}</span>}
           </Link>
         ))}
       </div>
@@ -196,7 +199,7 @@ export default function Sidebar() {
           </div>
           <input ref={fileRef} type="file" accept="image/*" onChange={handleProfileUpload} style={{ display: "none" }} />
         </div>
-        {!sidebarCollapsed && (
+        {!isTop && !sidebarCollapsed && (
           <>
             <div className="sidebar-user-info">
               <span className="sidebar-user-name">
