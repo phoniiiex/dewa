@@ -1,6 +1,6 @@
 "use client";
-import { useState, FormEvent, useRef } from "react";
-import { Search, Plus, ShoppingCart, Eye, Edit3, Trash2, X, Printer, FileText, Package } from "lucide-react";
+import { useState, FormEvent } from "react";
+import { Search, Plus, ShoppingCart, Eye, Edit3, Trash2, X, Printer } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Order, OrderStatus, RoutingMode, OrderItem } from "@/lib/types";
@@ -10,6 +10,7 @@ import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/com
 import ExportButton from "@/components/ui/ExportButton";
 import PrintModal from "@/components/ui/PrintModal";
 import type { ExportColumn } from "@/lib/export";
+
 
 const orderExportCols: ExportColumn[] = [
   { key: "orderNumber", label: "ژمارە" }, { key: "clientName", label: "کڕیار" },
@@ -39,6 +40,8 @@ export default function OrdersPage() {
     setForm({ clientId: "", repId: "", warehouseId: "", routingMode: "DIRECT", totalBonusPct: "", notes: "" });
     setOrderItems([{ productId: "", quantity: "" }]);
   };
+
+  const handlePrint = (o: Order) => setPrintOrder(o);
 
   const addItemRow = () => setOrderItems([...orderItems, { productId: "", quantity: "" }]);
   const removeItemRow = (i: number) => setOrderItems(orderItems.filter((_, j) => j !== i));
@@ -101,10 +104,6 @@ export default function OrdersPage() {
     return matchSearch && matchStatus;
   });
 
-  const handlePrint = (order: Order) => {
-    setPrintOrder(order);
-    setTimeout(() => window.print(), 300);
-  };
 
   return (
     <>
@@ -277,38 +276,8 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* Print Invoice (hidden on screen, visible on print) */}
-      {printOrder && (
-        <div id="print-invoice" style={{ display: "none" }}>
-          <style>{`@media print { body * { visibility: hidden !important; } #print-invoice, #print-invoice * { visibility: visible !important; display: block !important; } #print-invoice { position: fixed !important; left: 0; top: 0; width: 100%; padding: 24px; font-family: inherit; direction: rtl; } }`}</style>
-          <div style={{ maxWidth: 600, margin: "0 auto" }}>
-            <div style={{ textAlign: "center", marginBottom: 24 }}>
-              <h1 style={{ fontSize: 24, fontWeight: 800 }}>{settings.name}</h1>
-              <p style={{ fontSize: 14, color: "#6C757D" }}>{settings.phone} | {settings.email}</p>
-              <p style={{ fontSize: 12, color: "#ADB5BD" }}>{settings.address}</p>
-            </div>
-            <hr style={{ border: "1px solid #E9ECEF", margin: "16px 0" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-              <div><strong>ژمارەی داواکاری:</strong> {printOrder.orderNumber}</div>
-              <div><strong>بەروار:</strong> {printOrder.createdAt}</div>
-            </div>
-            <div style={{ marginBottom: 16 }}><strong>کڕیار:</strong> {printOrder.clientName} | <strong>نوێنەر:</strong> {printOrder.repName}</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead><tr style={{ borderBottom: "2px solid #1A1A2E" }}><th style={{ textAlign: "right", padding: 8 }}>بەرهەم</th><th style={{ textAlign: "right", padding: 8 }}>بڕ</th><th style={{ textAlign: "right", padding: 8 }}>بۆنەس</th><th style={{ textAlign: "right", padding: 8 }}>نرخ</th><th style={{ textAlign: "right", padding: 8 }}>کۆ</th></tr></thead>
-              <tbody>
-                {printOrder.items.map((item, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid #E9ECEF" }}>
-                    <td style={{ padding: 8 }}>{item.productName}</td><td style={{ padding: 8 }}>{item.quantity}</td><td style={{ padding: 8 }}>+{item.bonusQty}</td><td style={{ padding: 8 }}>{formatIQD(item.unitPrice)}</td><td style={{ padding: 8, fontWeight: 700 }}>{formatIQD(item.quantity * item.unitPrice)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{ textAlign: "left", marginTop: 16, fontSize: 20, fontWeight: 800 }}>کۆی گشتی: {formatIQD(printOrder.totalAmount)}</div>
-            <hr style={{ border: "1px solid #E9ECEF", margin: "24px 0" }} />
-            <p style={{ textAlign: "center", fontSize: 12, color: "#ADB5BD" }}>سوپاس بۆ هاوکارییەکەتان — {settings.name}</p>
-          </div>
-        </div>
-      )}
+      {/* Print Modal */}
+      <PrintModal open={!!printOrder} onClose={() => setPrintOrder(null)} order={printOrder} />
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={() => { if (deleteId) deleteOrder(deleteId); setDeleteId(null); }} message="ئایا دڵنیایت لە سڕینەوەی ئەم داواکارییە؟" />
     </>
