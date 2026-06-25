@@ -79,6 +79,12 @@ export interface Rep {
   createdAt: string;
 }
 
+export interface BonusRule {
+  productId: string;
+  productName: string;
+  percent: number;
+}
+
 export interface Warehouse {
   id: string;
   name: string;
@@ -87,6 +93,7 @@ export interface Warehouse {
   contact: string;
   phone: string;
   bonusPct: number;
+  bonusRules: BonusRule[];
   isActive: boolean;
   createdAt: string;
 }
@@ -109,6 +116,7 @@ export interface OrderItem {
   quantity: number;
   bonusQty: number;
   unitPrice: number;
+  bonusPct: number; // actual bonus % applied (custom rule or warehouse default)
 }
 
 export interface Order {

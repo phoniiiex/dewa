@@ -84,7 +84,7 @@ function fromRep(r: Partial<Rep>): Record<string, unknown> {
 }
 
 function toWarehouse(r: Record<string, unknown>): Warehouse {
-  return { id: r.id as string, name: r.name as string, city: (r.city || "") as string, address: (r.address || "") as string, contact: (r.contact || "") as string, phone: (r.phone || "") as string, bonusPct: Number(r.bonus_pct || 0), isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
+  return { id: r.id as string, name: r.name as string, city: (r.city || "") as string, address: (r.address || "") as string, contact: (r.contact || "") as string, phone: (r.phone || "") as string, bonusPct: Number(r.bonus_pct || 0), bonusRules: Array.isArray(r.bonus_rules) ? r.bonus_rules as import("./types").BonusRule[] : [], isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
 }
 function fromWarehouse(w: Partial<Warehouse>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
@@ -95,6 +95,7 @@ function fromWarehouse(w: Partial<Warehouse>): Record<string, unknown> {
   if (w.contact !== undefined) m.contact = w.contact;
   if (w.phone !== undefined) m.phone = w.phone;
   if (w.bonusPct !== undefined) m.bonus_pct = w.bonusPct;
+  if (w.bonusRules !== undefined) m.bonus_rules = w.bonusRules;
   if (w.isActive !== undefined) m.is_active = w.isActive;
   if (w.createdAt !== undefined) m.created_at = w.createdAt;
   return m;

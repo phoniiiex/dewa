@@ -1,7 +1,8 @@
 "use client";
 import { useState, FormEvent } from "react";
-import { Search, Plus, ShoppingCart, Eye, Edit3, Trash2, X, Printer, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Search, Plus, ShoppingCart, Eye, Trash2, X, Printer, CheckCircle, Clock, AlertCircle, Tag } from "lucide-react";
 import { useData } from "@/lib/store";
+import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
 import type { Order, OrderStatus, RoutingMode, OrderItem } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
@@ -12,7 +13,6 @@ import PrintModal from "@/components/ui/PrintModal";
 import ClientCombobox from "@/components/ui/ClientCombobox";
 import type { ExportColumn } from "@/lib/export";
 import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
-
 
 const orderExportCols: ExportColumn[] = [
   { key: "orderNumber", label: "ژمارە" }, { key: "clientName", label: "کڕیار" },
@@ -27,6 +27,12 @@ const routingLabels: Record<RoutingMode, string> = { DIRECT: "ڕاستەوخۆ",
 
 export default function OrdersPage() {
   const { orders, clients, reps, warehouses, products, addOrder, updateOrder, deleteOrder, addDelivery, addTransaction, settings, loading } = useData();
+  const { currentUser } = useLayout();
+
+  const isRep = currentUser?.role === "REP";
+  // Find the Rep record that matches the logged-in REP user by name
+  const myRep = isRep ? reps.find(r => r.name === currentUser?.name || r.isActive) : undefined;
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("هەموو");
   const [modalOpen, setModalOpen] = useState(false);
@@ -34,8 +40,12 @@ export default function OrdersPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [printOrder, setPrintOrder] = useState<Order | null>(null);
 
-  // New order form
-  const [form, setForm] = useState({ clientId: "", clientName: "", repId: "", warehouseId: "", routingMode: "DIRECT" as RoutingMode, totalBonusPct: "", notes: "" });
+  // New order form — repId pre-filled for REP users
+  const [form, setForm] = useState({
+    clientId: "", clientName: "",
+    repId: myRep?.id || "",
+    warehouseId: "", routingMode: "DIRECT" as RoutingMode, notes: "",
+  });
   const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string; }[]>([{ productId: "", quantity: "" }]);
 
   // New client request flow
@@ -44,7 +54,7 @@ export default function OrdersPage() {
   const [newClientStatus, setNewClientStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   const resetForm = () => {
-    setForm({ clientId: "", clientName: "", repId: "", warehouseId: "", routingMode: "DIRECT", totalBonusPct: "", notes: "" });
+    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", routingMode: "DIRECT", notes: "" });
     setOrderItems([{ productId: "", quantity: "" }]);
     setShowNewClientForm(false);
     setNewClientForm({ name: "", owner: "", phone: "", city: "", type: "PHARMACY" });
@@ -52,40 +62,70 @@ export default function OrdersPage() {
   };
 
   const handlePrint = (o: Order) => setPrintOrder(o);
-
   const addItemRow = () => setOrderItems([...orderItems, { productId: "", quantity: "" }]);
   const removeItemRow = (i: number) => setOrderItems(orderItems.filter((_, j) => j !== i));
-  const updateItemRow = (i: number, field: string, value: string) => setOrderItems(orderItems.map((item, j) => j === i ? { ...item, [field]: value } : item));
+  const updateItemRow = (i: number, field: string, value: string) =>
+    setOrderItems(orderItems.map((item, j) => j === i ? { ...item, [field]: value } : item));
+
+  // Get the selected warehouse and its bonus rules
+  const selectedWarehouse = warehouses.find(w => w.id === form.warehouseId);
+  const getItemBonusPct = (productId: string): { pct: number; isCustom: boolean } => {
+    if (!selectedWarehouse) return { pct: 0, isCustom: false };
+    const customRule = (selectedWarehouse.bonusRules || []).find(r => r.productId === productId);
+    if (customRule) return { pct: customRule.percent, isCustom: true };
+    return { pct: selectedWarehouse.bonusPct, isCustom: false };
+  };
+
+  // Live bonus analysis from current form items
+  const liveBonusItems = orderItems
+    .filter(i => i.productId && i.quantity)
+    .map(i => {
+      const prod = products.find(p => p.id === i.productId);
+      const qty = Number(i.quantity);
+      const { pct, isCustom } = getItemBonusPct(i.productId);
+      const bonusQty = Math.round(qty * pct / 100);
+      return { name: prod?.name || "", qty, pct, isCustom, bonusQty };
+    });
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const client = clients.find(c => c.id === form.clientId);
-    const rep = reps.find(r => r.id === form.repId);
-    const wh = warehouses.find(w => w.id === form.warehouseId);
-    if (!client || !rep) return;
 
-    const totalBonusPct = Number(form.totalBonusPct) || 0;
+    // Rep: use myRep; Admin/Manager: use selected rep
+    let repRecord = isRep ? myRep : reps.find(r => r.id === form.repId);
+    if (!client || !repRecord) return;
+
+    const wh = warehouses.find(w => w.id === form.warehouseId);
     const warehouseBonusPct = wh ? wh.bonusPct : 0;
-    const repBonusPct = Math.max(0, totalBonusPct - warehouseBonusPct);
 
     const items: OrderItem[] = orderItems.filter(i => i.productId && i.quantity).map(i => {
       const prod = products.find(p => p.id === i.productId);
       const qty = Number(i.quantity);
-      const bonusQty = Math.round(qty * totalBonusPct / 100);
-      return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty, unitPrice: prod?.price || 0 };
+      const { pct, isCustom } = getItemBonusPct(i.productId);
+      const bonusQty = Math.round(qty * pct / 100);
+      return {
+        productId: i.productId,
+        productName: prod?.name || "",
+        quantity: qty,
+        bonusQty,
+        unitPrice: prod?.price || 0,
+        bonusPct: pct,
+      };
     });
 
     const totalAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+    const totalBonusPct = wh ? wh.bonusPct : 0;
+    const repBonusPct = 0; // bonus is per-product, not a split anymore
     const bonusNotation = items.map(i => `${i.quantity}+${i.bonusQty}`).join(", ");
 
     const newOrder = await addOrder({
-      clientId: client.id, clientName: client.name, repId: rep.id, repName: rep.name,
+      clientId: client.id, clientName: client.name,
+      repId: repRecord.id, repName: repRecord.name,
       warehouseId: wh?.id || null, warehouseName: wh?.name || null,
       items, status: "PENDING", routingMode: form.routingMode,
       bonusNotation, totalBonusPct, warehouseBonusPct, repBonusPct, totalAmount, notes: form.notes,
     });
 
-    // Auto-create delivery
     addDelivery({
       orderId: newOrder.id, orderNumber: newOrder.orderNumber,
       type: form.routingMode, driver: "", driverPhone: "",
@@ -108,12 +148,13 @@ export default function OrdersPage() {
     }
   };
 
+  // REP: only see own orders
   const filtered = orders.filter((o) => {
+    if (isRep && myRep && o.repName !== myRep.name && o.repId !== myRep.id) return false;
     const matchSearch = o.orderNumber.includes(searchTerm) || o.clientName.includes(searchTerm);
     const matchStatus = statusFilter === "هەموو" || statusLabels[o.status] === statusFilter;
     return matchSearch && matchStatus;
   });
-
 
   return (
     <>
@@ -129,10 +170,10 @@ export default function OrdersPage() {
         {loading ? (
           <>{[0,1,2,3].map(i => <SkeletonKPI key={i} />)}</>
         ) : [
-          { title: "کۆی داواکاری", value: String(orders.length) },
-          { title: "چاوەڕوان", value: String(orders.filter(o => o.status === "PENDING").length), color: "#FD7E14" },
-          { title: "لە پڕۆسەدا", value: String(orders.filter(o => o.status === "PROCESSING" || o.status === "SHIPPED").length), color: "#339AF0" },
-          { title: "کۆی داهات", value: formatIQD(orders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0)) },
+          { title: "کۆی داواکاری", value: String(filtered.length) },
+          { title: "چاوەڕوان", value: String(filtered.filter(o => o.status === "PENDING").length), color: "#FD7E14" },
+          { title: "لە پڕۆسەدا", value: String(filtered.filter(o => o.status === "PROCESSING" || o.status === "SHIPPED").length), color: "#339AF0" },
+          { title: "کۆی داهات", value: formatIQD(filtered.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0)) },
         ].map((k, i) => (
           <div className="kpi-card" key={i}><div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: k.color }}>{k.value}</div></div>
         ))}
@@ -152,15 +193,15 @@ export default function OrdersPage() {
 
       <div className="data-table-wrapper">
         <table className="data-table">
-          <thead><tr><th>ژمارە</th><th>کڕیار</th><th>نوێنەر</th><th>شێواز</th><th>بۆنەس</th><th>کۆی گشتی</th><th>بارودۆخ</th><th></th></tr></thead>
+          <thead><tr><th>ژمارە</th><th>کڕیار</th>{!isRep && <th>نوێنەر</th>}<th>شێواز</th><th>بۆنەس</th><th>کۆی گشتی</th><th>بارودۆخ</th><th></th></tr></thead>
           <tbody>
             {loading ? (
-              <SkeletonTableRows rows={5} cols={8} />
+              <SkeletonTableRows rows={5} cols={isRep ? 7 : 8} />
             ) : filtered.map((o) => (
               <tr key={o.id}>
                 <td style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{o.orderNumber}</td>
                 <td style={{ fontWeight: 600, fontSize: 13 }}>{o.clientName}</td>
-                <td style={{ fontSize: 13, color: "#6C757D" }}>{o.repName}</td>
+                {!isRep && <td style={{ fontSize: 13, color: "#6C757D" }}>{o.repName}</td>}
                 <td><span style={{ padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: o.routingMode === "WAREHOUSE" ? "#EDF2FF" : o.routingMode === "DIRECT" ? "#EBFBEE" : "#FEF3EB", color: o.routingMode === "WAREHOUSE" ? "#4263EB" : o.routingMode === "DIRECT" ? "#40C057" : "#F47B35" }}>{routingLabels[o.routingMode]}</span></td>
                 <td style={{ fontWeight: 600, fontSize: 13, color: "#7C5CFC" }}>{o.bonusNotation}</td>
                 <td style={{ fontWeight: 600, fontSize: 14 }}>{formatIQD(o.totalAmount)}</td>
@@ -173,7 +214,7 @@ export default function OrdersPage() {
                   <div style={{ display: "flex", gap: 4 }}>
                     <button onClick={() => setDetailOrder(o)} style={{ padding: 4, color: "#4263EB", background: "none", border: "none", cursor: "pointer" }} title="وردەکاری"><Eye size={14} /></button>
                     <button onClick={() => handlePrint(o)} style={{ padding: 4, color: "#40C057", background: "none", border: "none", cursor: "pointer" }} title="چاپکردن"><Printer size={14} /></button>
-                    <button onClick={() => setDeleteId(o.id)} style={{ padding: 4, color: "#FA5252", background: "none", border: "none", cursor: "pointer" }} title="سڕینەوە"><Trash2 size={14} /></button>
+                    {!isRep && <button onClick={() => setDeleteId(o.id)} style={{ padding: 4, color: "#FA5252", background: "none", border: "none", cursor: "pointer" }} title="سڕینەوە"><Trash2 size={14} /></button>}
                   </div>
                 </td>
               </tr>
@@ -200,76 +241,72 @@ export default function OrdersPage() {
                 }}
               />
             </FormField>
-            <FormField label="نوێنەر" required><select style={selectStyle} required value={form.repId} onChange={(e) => setForm({ ...form, repId: e.target.value })}><option value="">هەڵبژاردن...</option>{reps.filter(r => r.isActive).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></FormField>
+
+            {/* Rep field: hidden for REP users (auto-filled) */}
+            {isRep ? (
+              <FormField label="نوێنەر">
+                <div style={{ ...inputStyle, background: "#F8F4FF", color: "#7C5CFC", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                  👤 {myRep?.name || currentUser?.name} (ئەمەی من)
+                </div>
+              </FormField>
+            ) : (
+              <FormField label="نوێنەر" required>
+                <select style={selectStyle} required value={form.repId} onChange={(e) => setForm({ ...form, repId: e.target.value })}>
+                  <option value="">هەڵبژاردن...</option>
+                  {reps.filter(r => r.isActive).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </FormField>
+            )}
+
             <FormField label="شێوازی ڕاستکردن"><select style={selectStyle} value={form.routingMode} onChange={(e) => setForm({ ...form, routingMode: e.target.value as RoutingMode })}>{Object.entries(routingLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></FormField>
             {form.routingMode === "WAREHOUSE" && (
-              <FormField label="کۆگا"><select style={selectStyle} value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}><option value="">هەڵبژاردن...</option>{warehouses.filter(w => w.isActive).map((w) => <option key={w.id} value={w.id}>{w.name} ({w.bonusPct}٪)</option>)}</select></FormField>
+              <FormField label="کۆگا">
+                <select style={selectStyle} value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}>
+                  <option value="">هەڵبژاردن...</option>
+                  {warehouses.filter(w => w.isActive).map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({w.bonusPct}٪{(w.bonusRules || []).length > 0 ? ` + ${w.bonusRules.length} یاسای تایبەت` : ""})
+                    </option>
+                  ))}
+                </select>
+              </FormField>
             )}
-            <FormField label="ڕێژەی بۆنەسی گشتی (٪)"><input style={inputStyle} type="number" min="0" value={form.totalBonusPct} onChange={(e) => setForm({ ...form, totalBonusPct: e.target.value })} placeholder="بۆ نموونە: ٥٠" /></FormField>
           </FormGrid>
 
-          {/* ── Inline New Client Request Form ── */}
+          {/* Inline New Client Request Form */}
           {showNewClientForm && (
             <div style={{ margin: "12px 0", padding: 16, background: "#F3F0FF", borderRadius: 12, border: "1px solid #D0BFFF" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#5C37D6", display: "flex", alignItems: "center", gap: 6 }}>
                   <Clock size={14} /> داواکردنی کڕیاری نوێ
                 </div>
-                <button type="button" onClick={() => setShowNewClientForm(false)}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "#ADB5BD" }}><X size={14} /></button>
+                <button type="button" onClick={() => setShowNewClientForm(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ADB5BD" }}><X size={14} /></button>
               </div>
-
               {newClientStatus === "sent" ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#2B8A3E", fontSize: 13, fontWeight: 600 }}>
-                  <CheckCircle size={16} /> داواکاری نێردرا! بەرپرسان پێیان دەگات.
-                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#2B8A3E", fontSize: 13, fontWeight: 600 }}><CheckCircle size={16} /> داواکاری نێردرا! بەرپرسان پێیان دەگات.</div>
               ) : newClientStatus === "error" ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#C92A2A", fontSize: 13 }}>
-                  <AlertCircle size={16} /> هەڵەیەک ڕووی دا، دووبارە هەوڵ بدەرەوە.
-                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#C92A2A", fontSize: 13 }}><AlertCircle size={16} /> هەڵەیەک ڕووی دا، دووبارە هەوڵ بدەرەوە.</div>
               ) : (
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>ناوی فرۆشگا *</label>
-                      <input style={{ ...inputStyle, background: "white" }} value={newClientForm.name}
-                        onChange={e => setNewClientForm({ ...newClientForm, name: e.target.value })} placeholder="داروخانەی ..." />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>خاوەن</label>
-                      <input style={{ ...inputStyle, background: "white" }} value={newClientForm.owner}
-                        onChange={e => setNewClientForm({ ...newClientForm, owner: e.target.value })} placeholder="دکتۆر ..." />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>تەلەفۆن</label>
-                      <input style={{ ...inputStyle, background: "white" }} value={newClientForm.phone}
-                        onChange={e => setNewClientForm({ ...newClientForm, phone: e.target.value })} placeholder="07..." />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>شار</label>
-                      <input style={{ ...inputStyle, background: "white" }} value={newClientForm.city}
-                        onChange={e => setNewClientForm({ ...newClientForm, city: e.target.value })} placeholder="هەولێر" />
-                    </div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>ناوی فرۆشگا *</label><input style={{ ...inputStyle, background: "white" }} value={newClientForm.name} onChange={e => setNewClientForm({ ...newClientForm, name: e.target.value })} placeholder="داروخانەی ..." /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>خاوەن</label><input style={{ ...inputStyle, background: "white" }} value={newClientForm.owner} onChange={e => setNewClientForm({ ...newClientForm, owner: e.target.value })} placeholder="دکتۆر ..." /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>تەلەفۆن</label><input style={{ ...inputStyle, background: "white" }} value={newClientForm.phone} onChange={e => setNewClientForm({ ...newClientForm, phone: e.target.value })} placeholder="07..." /></div>
+                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>شار</label><input style={{ ...inputStyle, background: "white" }} value={newClientForm.city} onChange={e => setNewClientForm({ ...newClientForm, city: e.target.value })} placeholder="هەولێر" /></div>
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>جۆر</label>
-                    <select style={{ ...selectStyle, background: "white" }} value={newClientForm.type}
-                      onChange={e => setNewClientForm({ ...newClientForm, type: e.target.value })}>
+                    <select style={{ ...selectStyle, background: "white" }} value={newClientForm.type} onChange={e => setNewClientForm({ ...newClientForm, type: e.target.value })}>
                       <option value="PHARMACY">داروخانە</option>
                       <option value="HOSPITAL">نەخۆشخانە</option>
                       <option value="CLINIC">کلینیک</option>
                       <option value="WHOLESALE">کڕینی گشتی</option>
                     </select>
                   </div>
-                  <button type="button"
-                    disabled={!newClientForm.name || newClientStatus === "sending"}
+                  <button type="button" disabled={!newClientForm.name || newClientStatus === "sending"}
                     onClick={async () => {
                       setNewClientStatus("sending");
-                      const res = await fetch("/api/clients/request", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ ...newClientForm }),
-                      });
+                      const res = await fetch("/api/clients/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...newClientForm }) });
                       setNewClientStatus(res.ok ? "sent" : "error");
                     }}
                     style={{ padding: "8px 20px", borderRadius: 8, background: "#5C37D6", color: "white", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", opacity: (!newClientForm.name || newClientStatus === "sending") ? 0.6 : 1 }}>
@@ -280,37 +317,75 @@ export default function OrdersPage() {
             </div>
           )}
 
-          {/* Bonus Split Preview */}
-          {form.totalBonusPct && form.warehouseId && (
-            <div style={{ marginTop: 16, padding: 16, background: "#F8F9FA", borderRadius: 10, border: "1px solid #E9ECEF" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>شیکاری بۆنەس:</div>
-              <div style={{ display: "flex", gap: 24 }}>
-                <div><span style={{ fontSize: 12, color: "#6C757D" }}>بۆنەسی گشتی:</span> <span style={{ fontWeight: 700, color: "#4263EB" }}>{form.totalBonusPct}٪</span></div>
-                <div><span style={{ fontSize: 12, color: "#6C757D" }}>بۆنەسی کۆگا:</span> <span style={{ fontWeight: 700, color: "#F47B35" }}>{warehouses.find(w => w.id === form.warehouseId)?.bonusPct || 0}٪</span></div>
-                <div><span style={{ fontSize: 12, color: "#6C757D" }}>بۆنەسی نوێنەر:</span> <span style={{ fontWeight: 700, color: "#40C057" }}>{Math.max(0, Number(form.totalBonusPct) - (warehouses.find(w => w.id === form.warehouseId)?.bonusPct || 0))}٪</span></div>
-              </div>
-            </div>
-          )}
-
           {/* Order Items */}
           <div style={{ marginTop: 24, borderTop: "1px solid #E9ECEF", paddingTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <h4 style={{ fontSize: 14, fontWeight: 700 }}>بەرهەمەکان</h4>
               <button type="button" onClick={addItemRow} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #DEE2E6", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}><Plus size={12} /> ڕیز</button>
             </div>
-            {orderItems.map((item, i) => (
-              <div key={i} style={{ display: "flex", gap: 12, marginBottom: 8, alignItems: "center" }}>
-                <select style={{ ...selectStyle, flex: 2 }} value={item.productId} onChange={(e) => updateItemRow(i, "productId", e.target.value)}>
-                  <option value="">بەرهەم هەڵبژێرە...</option>
-                  {products.filter(p => p.isActive && p.stock > 0).map((p) => <option key={p.id} value={p.id}>{p.name} — {formatIQD(p.price)} ({p.stock} بەردەست)</option>)}
-                </select>
-                <input style={{ ...inputStyle, flex: 1 }} type="number" min="1" placeholder="بڕ" value={item.quantity} onChange={(e) => updateItemRow(i, "quantity", e.target.value)} />
-                {orderItems.length > 1 && (
-                  <button type="button" onClick={() => removeItemRow(i)} style={{ padding: 4, color: "#FA5252", background: "none", border: "none", cursor: "pointer" }}><Trash2 size={14} /></button>
-                )}
-              </div>
-            ))}
+            {orderItems.map((item, i) => {
+              const { pct, isCustom } = item.productId ? getItemBonusPct(item.productId) : { pct: 0, isCustom: false };
+              const bonusQty = item.productId && item.quantity && pct > 0 ? Math.round(Number(item.quantity) * pct / 100) : 0;
+              return (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                  <select style={{ ...selectStyle, flex: 2 }} value={item.productId} onChange={(e) => updateItemRow(i, "productId", e.target.value)}>
+                    <option value="">بەرهەم هەڵبژێرە...</option>
+                    {products.filter(p => p.isActive && p.stock > 0).map((p) => <option key={p.id} value={p.id}>{p.name} — {formatIQD(p.price)} ({p.stock} بەردەست)</option>)}
+                  </select>
+                  <input style={{ ...inputStyle, flex: 1 }} type="number" min="1" placeholder="بڕ" value={item.quantity} onChange={(e) => updateItemRow(i, "quantity", e.target.value)} />
+                  {/* Bonus badge per product */}
+                  {item.productId && form.warehouseId && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+                      <span style={{ padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, background: isCustom ? "#7C5CFC" : "#4263EB", color: "white", display: "flex", alignItems: "center", gap: 3 }}>
+                        {isCustom && <Tag size={9} />}
+                        {pct}٪
+                      </span>
+                      {bonusQty > 0 && <span style={{ fontSize: 10, color: "#40C057", fontWeight: 700 }}>+{bonusQty}</span>}
+                    </div>
+                  )}
+                  {orderItems.length > 1 && (
+                    <button type="button" onClick={() => removeItemRow(i)} style={{ padding: 4, color: "#FA5252", background: "none", border: "none", cursor: "pointer" }}><Trash2 size={14} /></button>
+                  )}
+                </div>
+              );
+            })}
           </div>
+
+          {/* Live bonus analysis */}
+          {liveBonusItems.length > 0 && form.warehouseId && liveBonusItems.some(x => x.pct > 0) && (
+            <div style={{ marginTop: 16, padding: 14, background: "#F8F4FF", borderRadius: 10, border: "1px solid #E9D7FF" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: "#7C5CFC", display: "flex", alignItems: "center", gap: 6 }}>
+                <Tag size={14} /> شیکاری بۆنەس
+              </div>
+              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid #E9D7FF" }}>
+                    <th style={{ textAlign: "right", padding: "4px 6px", color: "#6C757D", fontWeight: 600 }}>بەرهەم</th>
+                    <th style={{ textAlign: "center", padding: "4px 6px", color: "#6C757D", fontWeight: 600 }}>بڕ</th>
+                    <th style={{ textAlign: "center", padding: "4px 6px", color: "#6C757D", fontWeight: 600 }}>ڕێژەی بۆنەس</th>
+                    <th style={{ textAlign: "center", padding: "4px 6px", color: "#6C757D", fontWeight: 600 }}>دانەی بۆنەس</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {liveBonusItems.map((x, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid #F3EEFF" }}>
+                      <td style={{ padding: "6px 6px", fontWeight: 600 }}>{x.name}</td>
+                      <td style={{ textAlign: "center", padding: "6px 6px" }}>{x.qty}</td>
+                      <td style={{ textAlign: "center", padding: "6px 6px" }}>
+                        <span style={{ padding: "2px 8px", borderRadius: 4, background: x.isCustom ? "#7C5CFC" : "#4263EB", color: "white", fontWeight: 700, fontSize: 11, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                          {x.isCustom && <Tag size={9} />}
+                          {x.pct}٪ {x.isCustom ? "(تایبەت)" : "(بنەڕەت)"}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "center", padding: "6px 6px", fontWeight: 800, color: "#40C057", fontSize: 14 }}>
+                        +{x.bonusQty} <span style={{ fontSize: 10, fontWeight: 400, color: "#6C757D" }}>دانە</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <FormField label="تێبینی"><textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی دڵخوازانە..." /></FormField>
           <FormActions onCancel={() => setModalOpen(false)} submitLabel="تۆمارکردنی داواکاری" />
@@ -342,18 +417,40 @@ export default function OrdersPage() {
                 ))}
               </div>
 
-              {/* Bonus Breakdown */}
-              <div style={{ padding: 16, background: "#F8F9FA", borderRadius: 10, marginBottom: 20 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>شیکاری بۆنەس</div>
-                <div style={{ display: "flex", gap: 20 }}>
-                  <div><span style={{ fontSize: 12, color: "#6C757D" }}>گشتی:</span> <span style={{ fontWeight: 700, color: "#4263EB" }}>{detailOrder.totalBonusPct}٪</span></div>
-                  <div><span style={{ fontSize: 12, color: "#6C757D" }}>کۆگا:</span> <span style={{ fontWeight: 700, color: "#F47B35" }}>{detailOrder.warehouseBonusPct}٪</span></div>
-                  <div><span style={{ fontSize: 12, color: "#6C757D" }}>نوێنەر:</span> <span style={{ fontWeight: 700, color: "#40C057" }}>{detailOrder.repBonusPct}٪</span></div>
-                </div>
+              {/* Per-product bonus breakdown */}
+              <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}><Tag size={14} color="#7C5CFC" /> شیکاری بۆنەس بەرهەم بەرهەم</h4>
+              <div style={{ marginBottom: 20 }}>
+                <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#F8F4FF", borderBottom: "1px solid #E9D7FF" }}>
+                      <th style={{ textAlign: "right", padding: "6px 8px", fontWeight: 600, color: "#5C37D6" }}>بەرهەم</th>
+                      <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#5C37D6" }}>بڕ</th>
+                      <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#5C37D6" }}>ڕێژەی بۆنەس</th>
+                      <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#5C37D6" }}>دانەی بۆنەس</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailOrder.items.map((item, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid #F1F3F5" }}>
+                        <td style={{ padding: "8px", fontWeight: 600 }}>{item.productName}</td>
+                        <td style={{ textAlign: "center", padding: "8px" }}>{item.quantity}</td>
+                        <td style={{ textAlign: "center", padding: "8px" }}>
+                          {item.bonusPct > 0 ? (
+                            <span style={{ padding: "2px 8px", borderRadius: 4, background: "#4263EB", color: "white", fontWeight: 700, fontSize: 11 }}>
+                              {item.bonusPct}٪
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td style={{ textAlign: "center", padding: "8px", fontWeight: 800, color: "#40C057", fontSize: 14 }}>
+                          +{item.bonusQty} <span style={{ fontSize: 10, fontWeight: 400, color: "#6C757D" }}>دانە</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
-              {/* Items */}
-              <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>بەرهەمەکان</h4>
+              <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>کۆی بەرهەمەکان</h4>
               <table style={{ width: "100%", fontSize: 13 }}>
                 <thead><tr style={{ borderBottom: "1px solid #E9ECEF" }}><th style={{ textAlign: "right", padding: 8, fontWeight: 600 }}>بەرهەم</th><th style={{ textAlign: "right", padding: 8 }}>بڕ</th><th style={{ textAlign: "right", padding: 8 }}>بۆنەس</th><th style={{ textAlign: "right", padding: 8 }}>نرخ</th><th style={{ textAlign: "right", padding: 8 }}>کۆ</th></tr></thead>
                 <tbody>
@@ -374,9 +471,7 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* Print Modal */}
       <PrintModal open={!!printOrder} onClose={() => setPrintOrder(null)} order={printOrder} />
-
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={() => { if (deleteId) deleteOrder(deleteId); setDeleteId(null); }} message="ئایا دڵنیایت لە سڕینەوەی ئەم داواکارییە؟" />
     </>
   );
