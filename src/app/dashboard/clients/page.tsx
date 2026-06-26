@@ -412,11 +412,11 @@ export default function ClientsPage() {
       </Modal>
 
       {/* ════════════════════════════════════════════════════════════════
-          DETAIL DRAWER — redesigned
+      {/* ════════════════════════════════════════════════════════════════
+          DETAIL MODAL
       ════════════════════════════════════════════════════════════════ */}
       {detailRow && (() => {
-        const isWH    = detailRow.entityType === "WAREHOUSE";
-        // For warehouse: strip the "wh_" prefix to get the real warehouse id
+        const isWH     = detailRow.entityType === "WAREHOUSE";
         const realWHId = isWH ? detailRow.id.replace("wh_", "") : "";
         const rowOrders = isWH ? getWarehouseOrders(realWHId) : getClientOrders(detailRow.id);
         const delivered = rowOrders.filter(o => o.status === "DELIVERED");
@@ -424,119 +424,110 @@ export default function ClientsPage() {
         const totalPaid = paid.reduce((s, o) => s + o.totalAmount, 0);
         const totalDebt = delivered.reduce((s, o) => s + o.totalAmount, 0);
         const tc        = typeColors[detailRow.displayType] || { bg: "#F1F3F5", color: "#6C757D" };
+
+        const modalTitle = (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>{detailRow.name}</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: tc.bg, color: tc.color }}>
+              {typeIcons[detailRow.displayType]} {typeDisplayNames[detailRow.displayType]}
+            </span>
+            <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: detailRow.isActive ? "#D1FAE5" : "#FFE3E3", color: detailRow.isActive ? "#059669" : "#C92A2A" }}>
+              {detailRow.isActive ? "چالاک" : "ناچالاک"}
+            </span>
+          </div>
+        );
+
         return (
-          <>
-            {/* Overlay */}
-            <div onClick={() => setDetailRow(null)}
-              style={{ position: "fixed", inset: 0, background: "rgba(15,20,40,0.35)", backdropFilter: "blur(2px)", zIndex: 400 }} />
-            {/* Drawer */}
-            <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 480, background: "#FAFAFA", zIndex: 401, display: "flex", flexDirection: "column", boxShadow: "-8px 0 40px rgba(0,0,0,0.15)", overflow: "hidden" }}>
+          <Modal open={true} onClose={() => setDetailRow(null)} title={modalTitle as unknown as string} width={600}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-              {/* Drawer header */}
-              <div style={{ background: "#fff", borderBottom: "1px solid #F1F3F5", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-                <button onClick={() => setDetailRow(null)} style={{ width: 34, height: 34, borderRadius: 8, background: "#F1F3F5", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#6C757D" }}>
-                  <ArrowLeft size={16} />
-                </button>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: "#1A1A2E" }}>{detailRow.name}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: tc.bg, color: tc.color }}>
-                      {typeIcons[detailRow.displayType]} {typeDisplayNames[detailRow.displayType]}
-                    </span>
-                    <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: detailRow.isActive ? "#D1FAE5" : "#FFE3E3", color: detailRow.isActive ? "#059669" : "#C92A2A" }}>
-                      {detailRow.isActive ? "چالاک" : "ناچالاک"}
-                    </span>
-                  </div>
-                </div>
-                {!isWH && detailRow.clientRef && (
+              {/* Edit button row */}
+              {!isWH && detailRow.clientRef && (
+                <div style={{ display: "flex", justifyContent: "flex-start" }}>
                   <button onClick={() => { openEdit(detailRow.clientRef!); setDetailRow(null); }}
-                    style={{ width: 34, height: 34, borderRadius: 8, background: "#EDF2FF", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#4263EB" }}>
-                    <Edit3 size={15} />
+                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "#EDF2FF", border: "none", borderRadius: 8, cursor: "pointer", color: "#4263EB", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}>
+                    <Edit3 size={14} /> دەستکاریکردن
                   </button>
-                )}
-              </div>
-
-              {/* Scrollable body */}
-              <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
-
-                {/* Info cards */}
-                <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #F1F3F5", padding: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#ADB5BD", marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>زانیاری سەرەکی</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                    {[
-                      { icon: <Users size={14} />,   label: isWH ? "پەیوەندیکەر" : "خاوەن",         value: detailRow.owner },
-                      { icon: <Phone size={14} />,   label: "تەلەفۆن",     value: detailRow.phone },
-                      { icon: <MapPin size={14} />,  label: "شار",          value: detailRow.city },
-                      ...(!isWH ? [
-                        { icon: <Users size={14} />,  label: "نوێنەر",     value: getRepName(detailRow.repId) },
-                        { icon: <Clock size={14} />,  label: "مەرجی پارەدان", value: paymentLabels[detailRow.paymentTerms] },
-                      ] : []),
-                    ].map((item, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                        <div style={{ width: 30, height: 30, background: "#F8F9FA", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#6C757D", flexShrink: 0 }}>{item.icon}</div>
-                        <div>
-                          <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 2 }}>{item.label}</div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "#1A1A2E" }}>{item.value || "—"}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
+              )}
 
-                {/* Financial summary */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              {/* Info grid */}
+              <div style={{ background: "#F8F9FA", borderRadius: 12, padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#ADB5BD", marginBottom: 12, letterSpacing: 0.8 }}>زانیاری سەرەکی</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                   {[
-                    { label: "کۆی داواکارییەکان", value: String(rowOrders.length),     color: "#4263EB", bg: "#EDF2FF", icon: <Package size={16} /> },
-                    { label: "پارەدراوە",          value: formatIQD(totalPaid),         color: "#059669", bg: "#D1FAE5", icon: <CheckCircle size={16} /> },
-                    { label: "قەرز",               value: totalDebt > 0 ? formatIQD(totalDebt) : "نییە", color: totalDebt > 0 ? "#FA5252" : "#059669", bg: totalDebt > 0 ? "#FFE3E3" : "#D1FAE5", icon: <DollarSign size={16} /> },
-                  ].map((s, i) => (
-                    <div key={i} style={{ background: "#fff", borderRadius: 12, border: "1px solid #F1F3F5", padding: "12px 14px" }}>
-                      <div style={{ width: 32, height: 32, background: s.bg, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: s.color, marginBottom: 8 }}>{s.icon}</div>
-                      <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 2 }}>{s.label}</div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: s.color }}>{s.value}</div>
+                    { icon: <Users size={14} />,  label: isWH ? "پەیوەندیکەر" : "خاوەن",      value: detailRow.owner },
+                    { icon: <Phone size={14} />,  label: "تەلەفۆن",                             value: detailRow.phone },
+                    { icon: <MapPin size={14} />, label: "شار",                                 value: detailRow.city },
+                    ...(!isWH ? [
+                      { icon: <Users size={14} />, label: "نوێنەر",         value: getRepName(detailRow.repId) },
+                      { icon: <Clock size={14} />, label: "مەرجی پارەدان",  value: paymentLabels[detailRow.paymentTerms] },
+                    ] : []),
+                  ].map((item, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                      <div style={{ width: 30, height: 30, background: "#fff", borderRadius: 8, border: "1px solid #E9ECEF", display: "flex", alignItems: "center", justifyContent: "center", color: "#6C757D", flexShrink: 0 }}>{item.icon}</div>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 1 }}>{item.label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#1A1A2E" }}>{item.value || "—"}</div>
+                      </div>
                     </div>
                   ))}
                 </div>
-
-                {/* Payment button — only for real clients with delivered orders */}
-                {!isWH && delivered.length > 0 && detailRow.clientRef && (
-                  <button onClick={() => { setPaymentClient(detailRow.clientRef!); setPaymentMode("all"); setSelectedOrderIds([]); setReceiptFile(null); setPaymentStep("select"); }}
-                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 20px", background: "linear-gradient(135deg, #059669, #10B981)", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 14, fontFamily: "inherit", boxShadow: "0 4px 14px rgba(5,150,105,.3)", transition: "opacity .15s" }}
-                    onMouseEnter={e => (e.currentTarget.style.opacity = "0.88")}
-                    onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
-                    <CreditCard size={18} /> پارەدانی {delivered.length} داواکاری گەیشتووە
-                  </button>
-                )}
-
-                {/* Orders list */}
-                <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #F1F3F5", overflow: "hidden" }}>
-                  <div style={{ padding: "14px 16px", borderBottom: "1px solid #F8F9FA", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E" }}>مێژووی داواکارییەکان</span>
-                    <span style={{ fontSize: 12, color: "#ADB5BD" }}>{rowOrders.length} داواکاری</span>
-                  </div>
-                  {rowOrders.length === 0 ? (
-                    <div style={{ padding: 32, textAlign: "center", color: "#ADB5BD", fontSize: 13 }}>هیچ داواکارییەک نییە</div>
-                  ) : (
-                    <div style={{ maxHeight: 340, overflowY: "auto" }}>
-                      {rowOrders.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(o => {
-                        const st = STATUS_LABELS[o.status] || { label: o.status, bg: "#F1F3F5", color: "#6C757D" };
-                        return (
-                          <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid #F8F9FA" }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E" }}>{o.orderNumber}</div>
-                              <div style={{ fontSize: 11, color: "#ADB5BD", marginTop: 2 }}>{new Date(o.createdAt).toLocaleDateString("ku")}</div>
-                            </div>
-                            <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20, background: st.bg, color: st.color, whiteSpace: "nowrap" }}>{st.label}</span>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E", textAlign: "right", minWidth: 90, whiteSpace: "nowrap" }}>{formatIQD(o.totalAmount)}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
               </div>
+
+              {/* Financial summary cards */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                {[
+                  { label: "کۆی داواکارییەکان", value: String(rowOrders.length),                                  color: "#4263EB", bg: "#EDF2FF", icon: <Package size={16} /> },
+                  { label: "پارەدراوە",          value: formatIQD(totalPaid),                                     color: "#059669", bg: "#D1FAE5", icon: <CheckCircle size={16} /> },
+                  { label: "قەرز",               value: totalDebt > 0 ? formatIQD(totalDebt) : "نییە",           color: totalDebt > 0 ? "#FA5252" : "#059669", bg: totalDebt > 0 ? "#FFE3E3" : "#D1FAE5", icon: <DollarSign size={16} /> },
+                ].map((s, i) => (
+                  <div key={i} style={{ background: "#F8F9FA", borderRadius: 12, padding: "12px 14px" }}>
+                    <div style={{ width: 32, height: 32, background: s.bg, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: s.color, marginBottom: 8 }}>{s.icon}</div>
+                    <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 2 }}>{s.label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: s.color }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Payment CTA */}
+              {!isWH && delivered.length > 0 && detailRow.clientRef && (
+                <button
+                  onClick={() => { setPaymentClient(detailRow.clientRef!); setPaymentMode("all"); setSelectedOrderIds([]); setReceiptFile(null); setPaymentStep("select"); setDetailRow(null); }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 20px", background: "linear-gradient(135deg, #059669, #10B981)", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 14, fontFamily: "inherit", boxShadow: "0 4px 14px rgba(5,150,105,.25)" }}>
+                  <CreditCard size={18} /> پارەدانی {delivered.length} داواکاری گەیشتووە
+                </button>
+              )}
+
+              {/* Order history */}
+              <div style={{ background: "#F8F9FA", borderRadius: 12, overflow: "hidden" }}>
+                <div style={{ padding: "12px 16px", borderBottom: "1px solid #E9ECEF", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E" }}>مێژووی داواکارییەکان</span>
+                  <span style={{ fontSize: 12, color: "#ADB5BD" }}>{rowOrders.length} داواکاری</span>
+                </div>
+                {rowOrders.length === 0 ? (
+                  <div style={{ padding: 28, textAlign: "center", color: "#ADB5BD", fontSize: 13 }}>هیچ داواکارییەک نییە</div>
+                ) : (
+                  <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                    {rowOrders.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(o => {
+                      const st = STATUS_LABELS[o.status] || { label: o.status, bg: "#F1F3F5", color: "#6C757D" };
+                      return (
+                        <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: "1px solid #E9ECEF", background: "#fff" }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E" }}>{o.orderNumber}</div>
+                            <div style={{ fontSize: 11, color: "#ADB5BD", marginTop: 1 }}>{new Date(o.createdAt).toLocaleDateString("ku")}</div>
+                          </div>
+                          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20, background: st.bg, color: st.color, whiteSpace: "nowrap" }}>{st.label}</span>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E", minWidth: 90, textAlign: "left", whiteSpace: "nowrap" }}>{formatIQD(o.totalAmount)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
             </div>
-          </>
+          </Modal>
         );
       })()}
 
