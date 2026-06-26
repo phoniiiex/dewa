@@ -593,9 +593,29 @@ export default function OrdersPage() {
           {/* Drop zone */}
           <div
             onClick={() => invoiceRef.current?.click()}
-            style={{ border: "1.5px dashed #D1D1D1", borderRadius: 12, padding: "28px 20px", textAlign: "center", cursor: "pointer", background: "#FAFAFA", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, transition: "border-color .2s" }}
+            onDragOver={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.style.borderColor = "#4263EB";
+              e.currentTarget.style.background  = "#EDF2FF";
+            }}
+            onDragLeave={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.style.borderColor = "#D1D1D1";
+              e.currentTarget.style.background  = "#FAFAFA";
+            }}
+            onDrop={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.style.borderColor = "#D1D1D1";
+              e.currentTarget.style.background  = "#FAFAFA";
+              const file = e.dataTransfer.files?.[0];
+              if (file) setInvoiceFile(file);
+            }}
             onMouseEnter={e => (e.currentTarget.style.borderColor = "#4263EB")}
             onMouseLeave={e => (e.currentTarget.style.borderColor = "#D1D1D1")}
+            style={{ border: "1.5px dashed #D1D1D1", borderRadius: 12, padding: "28px 20px", textAlign: "center", cursor: "pointer", background: "#FAFAFA", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, transition: "border-color .2s, background .2s" }}
           >
             <Upload size={24} style={{ color: "#ADB5BD" }} />
             <div>
