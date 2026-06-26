@@ -178,6 +178,7 @@ export interface CompanySettings {
   profilePic?: string;
   telegramBotToken: string;
   telegramBotUsername: string;
+  telegramNotifyChatIds: string[]; // Telegram chat IDs of admins who receive driver messages
 }
 
 export interface InvoiceBlockConfig {

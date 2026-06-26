@@ -149,7 +149,7 @@ export default function OrdersPage() {
   // ── Workflow actions ──────────────────────────────────────────────────
   const acceptOrder = (o: Order) => { updateOrder(o.id, { status: "IN_PROGRESS" }); showToast("داواکاری قبووڵکرا"); };
 
-  // Combined: mark ready + assign driver + send → all in one modal
+      // Combined: mark ready + assign driver (status = READY, not SENT yet)
   const openSendModal = (o: Order) => { setSendModalOrder(o); setSelectedDriverId(""); };
 
   const confirmSend = async () => {
@@ -158,16 +158,16 @@ export default function OrdersPage() {
     if (!driver) { showToast("تکایە شوفێرێک هەڵبژێرە", "error"); return; }
     setSending(true);
     try {
-      // Mark READY then SENT atomically
+      // Mark READY — driver confirmed but not dispatched yet
       await updateOrder(sendModalOrder.id, {
-        status: "SENT",
+        status: "READY",
         driverId: driver.id,
         driverName: driver.name,
         driverPhone: driver.phone,
       });
-      showToast("داواکاری نێردرا — شوفێر: " + driver.name);
+      showToast("شوفێر دەستنیشانكرا — داواکاری ئامادەیە ✔️");
 
-      // Auto-notify via Telegram if configured
+      // Auto-notify driver via Telegram
       if (driver.telegramChatId && settings.telegramBotToken) {
         const client = clients.find(c => c.id === sendModalOrder.clientId);
         const result = await notifyDriverOfOrder(settings.telegramBotToken, {
@@ -315,7 +315,10 @@ export default function OrdersPage() {
                         <button onClick={() => setRejectOrder(o)} style={actionBtn("#DC2626", "#FEE2E2")}><XCircle size={12} /> ڕەتکردن</button>
                       </>}
                       {isManager && o.status === "IN_PROGRESS" && (
-                        <button onClick={() => openSendModal(o)} style={actionBtn("#7C3AED", "#EDE9FE")}><Truck size={12} /> ئامادەیە+ناردن</button>
+                        <button onClick={() => openSendModal(o)} style={actionBtn("#059669", "#D1FAE5")}><CheckCircle size={12} /> ئامادەیە</button>
+                      )}
+                      {isManager && o.status === "READY" && (
+                        <button onClick={() => updateOrder(o.id, { status: "SENT" })} style={actionBtn("#7C3AED", "#EDE9FE")}><Truck size={12} /> نێردراوە ✓</button>
                       )}
                       {isManager && o.status === "SENT" && (
                         <button onClick={() => setInvoiceModalOrder(o)} style={actionBtn("#0891B2", "#CFFAFE")}><Upload size={12} /> گەیشتووە</button>
@@ -513,7 +516,7 @@ export default function OrdersPage() {
           COMBINED READY + SEND MODAL (IN_PROGRESS → SENT)
           Clicking "ئامادەیە+ناردن" opens this immediately
       ════════════════════════════════════════════════════════════════ */}
-      <Modal open={!!sendModalOrder} onClose={() => setSendModalOrder(null)} title="ئامادەیە — هەڵبژاردنی شوفێر و ناردن" width={480}>
+      <Modal open={!!sendModalOrder} onClose={() => setSendModalOrder(null)} title="ئامادەیە — هەڵبژاردنی شوفێر" width={480}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {sendModalOrder && (
             <div style={{ padding: "10px 14px", background: "#F8F9FA", borderRadius: 10, fontSize: 13 }}>
@@ -545,8 +548,8 @@ export default function OrdersPage() {
           })()}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <button onClick={() => setSendModalOrder(null)} style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
-            <button onClick={confirmSend} disabled={sending || !selectedDriverId} style={{ padding: "9px 18px", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, opacity: sending || !selectedDriverId ? 0.6 : 1 }}>
-              {sending ? "ناردن..." : "🚚 ناردن ✓"}
+            <button onClick={confirmSend} disabled={sending || !selectedDriverId} style={{ padding: "9px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, opacity: sending || !selectedDriverId ? 0.6 : 1 }}>
+              {sending ? "ناردن..." : "✔ ئامادەیە"}
             </button>
           </div>
         </div>

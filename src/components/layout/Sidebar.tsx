@@ -61,7 +61,7 @@ export default function Sidebar() {
         { label: "دابینکەرەکان",   href: "/dashboard/suppliers",  icon: <Factory size={18} />,   managerOnly: true },
         { label: "گواستنەوە",       href: "/dashboard/logistics",  icon: <Truck size={18} /> },
         { label: "شوفێرەکان",      href: "/dashboard/drivers",    icon: <BadgeCheck size={18} />, managerOnly: true },
-        { label: "بۆتی شۆفێر",     href: "/dashboard/telegram",   icon: <Bot size={18} />,       managerOnly: true },
+        { label: "بۆت",            href: "/dashboard/telegram",   icon: <Bot size={18} />,       managerOnly: true },
 
       ],
     },
