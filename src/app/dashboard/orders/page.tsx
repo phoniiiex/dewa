@@ -1,5 +1,6 @@
 "use client";
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useRef } from "react";
+
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
   CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign,
