@@ -1,5 +1,5 @@
 "use client";
-import { useState, FormEvent, useRef } from "react";
+import { useState, FormEvent } from "react";
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
   CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign,
@@ -16,7 +16,8 @@ import PrintModal from "@/components/ui/PrintModal";
 import ClientCombobox from "@/components/ui/ClientCombobox";
 import type { ExportColumn } from "@/lib/export";
 import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
-import { notifyDriverOfOrder } from "@/lib/telegram";
+import { notifyDriverOfOrder, sendTelegramMessage } from "@/lib/telegram";
+
 
 const exportCols: ExportColumn[] = [
   { key: "orderNumber", label: "ژمارە" }, { key: "clientName", label: "کڕیار" },
@@ -73,13 +74,6 @@ export default function OrdersPage() {
   const [sendModalOrder, setSendModalOrder]   = useState<Order | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState("");
   const [sending, setSending]                 = useState(false);
-
-  // Voice recorder inside the assign-driver modal
-  const [isRecording, setIsRecording]         = useState(false);
-  const [voiceBlob, setVoiceBlob]             = useState<Blob | null>(null);
-  const [voiceUrl, setVoiceUrl]               = useState<string>(""); // local preview URL
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef        = useRef<BlobPart[]>([]);
 
   // Reject modal
   const [rejectOrder, setRejectOrder] = useState<Order | null>(null);
@@ -156,54 +150,7 @@ export default function OrdersPage() {
   // ── Workflow actions ──────────────────────────────────────────────────
   const acceptOrder = (o: Order) => { updateOrder(o.id, { status: "IN_PROGRESS" }); showToast("داواکاری قبووڵکرا"); };
 
-  // Voice recorder helpers — click to start, click to stop
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg";
-      const mr = new MediaRecorder(stream, { mimeType });
-      chunksRef.current = [];
-      mr.ondataavailable = e => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        setVoiceBlob(blob);
-        setVoiceUrl(URL.createObjectURL(blob));
-        stream.getTracks().forEach(t => t.stop());
-      };
-      mr.start(250); // collect data every 250ms for reliability
-      mediaRecorderRef.current = mr;
-      setIsRecording(true);
-    } catch (err) {
-      console.error("mic error", err);
-      showToast("میکرۆفۆن دەسترەسینیبە نییە — ئێجازەکە بدە", "error");
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
-    setIsRecording(false);
-  };
-
-  const toggleRecording = () => {
-    if (isRecording) stopRecording();
-    else startRecording();
-  };
-
-  const clearVoice = () => {
-    setVoiceBlob(null);
-    if (voiceUrl) URL.revokeObjectURL(voiceUrl);
-    setVoiceUrl("");
-  };
-
-  const openSendModal = (o: Order) => {
-    setSendModalOrder(o);
-    setSelectedDriverId("");
-    clearVoice();
-  };
+  const openSendModal = (o: Order) => { setSendModalOrder(o); setSelectedDriverId(""); };
 
   const confirmSend = async () => {
     if (!sendModalOrder) return;
@@ -217,25 +164,11 @@ export default function OrdersPage() {
         driverName: driver.name,
         driverPhone: driver.phone,
       });
-      showToast("شوفێر دەستنیشانكرا — داواکاری ئامادەیە ✔️");
+      showToast("شوفێر دەستنیشانکرا — داواکاری ئامادەیە ✔️");
 
       if (driver.telegramChatId && settings.telegramBotToken) {
-        // Upload voice note first if recorded
-        let mp3Url = "";
-        if (voiceBlob) {
-          const { supabase } = await import("@/lib/supabase");
-          const ext  = voiceBlob.type.includes("webm") ? "webm" : "ogg";
-          const path = `voice-notes/${sendModalOrder.id}_${Date.now()}.${ext}`;
-          const { data: upData, error: upErr } = await supabase.storage
-            .from("order-docs")
-            .upload(path, voiceBlob, { upsert: true, contentType: voiceBlob.type });
-          if (!upErr && upData) {
-            const { data: urlData } = supabase.storage.from("order-docs").getPublicUrl(upData.path);
-            mp3Url = urlData.publicUrl;
-          }
-        }
-
         const client = clients.find(c => c.id === sendModalOrder.clientId);
+        // 1. Send text notification to driver
         const result = await notifyDriverOfOrder(settings.telegramBotToken, {
           driverChatId: driver.telegramChatId,
           driverName: driver.name,
@@ -244,17 +177,35 @@ export default function OrdersPage() {
           clientCity: client?.city,
           items: sendModalOrder.items,
           notes: sendModalOrder.notes,
-          mp3Url: mp3Url || undefined,
         });
-        if (result.ok) showToast(result.voiceSent ? "📱 تێلێگرام + ئەوازی نێردرا ✅" : "📱 ئاگاداری تێلێگرام نێردرا ✅");
+        if (result.ok) showToast("📱 ئاگاداری تێلێگرام نێردرا ✅");
+
+        // 2. If there are notify admins configured, insert a pending voice forward
+        //    and ask each admin to record a voice note for the driver
+        if (settings.telegramNotifyChatIds?.length > 0) {
+          const { supabase } = await import("@/lib/supabase");
+          await supabase.from("pending_voice_forwards").insert({
+            order_id: sendModalOrder.id,
+            order_number: sendModalOrder.orderNumber,
+            driver_chat_id: driver.telegramChatId,
+            driver_name: driver.name,
+          });
+
+          const voicePrompt = `🎙️ داواکاری <b>${sendModalOrder.orderNumber}</b> دەستنیشانکرا بۆ شوفێر <b>${driver.name}</b>\n\nئەگەر دەتەوێت نامەی ئەوازی بنێریتە بۆ شوفێرەکە، ئێستا تۆماربکە و بینێرە بۆ ئەم بۆتە — بوتەکە بەخۆدیی دەیدرێتە شوفێرەکە\n\n⚠️ پێویستە نامەکەت بنێریت `;
+          await Promise.all(
+            settings.telegramNotifyChatIds.map(chatId =>
+              sendTelegramMessage(settings.telegramBotToken, chatId, voicePrompt)
+            )
+          );
+        }
       }
     } finally {
       setSending(false);
       setSendModalOrder(null);
       setSelectedDriverId("");
-      clearVoice();
     }
   };
+
 
   const confirmDelivered = async () => {
     if (!invoiceModalOrder) return;
@@ -614,27 +565,13 @@ export default function OrdersPage() {
               </div>
             ) : null;
           })()}
-          {/* Voice note recorder */}
-          <div style={{ border: `1px solid ${isRecording ? "#DC2626" : "#E9ECEF"}`, borderRadius: 12, padding: 14, transition: "border-color .2s" }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: "#495057", display: "flex", alignItems: "center", gap: 6 }}>
-              🎙️ ئەوازی تێبینی
-              <span style={{ fontSize: 11, fontWeight: 400, color: "#ADB5BD" }}>(ئارەزووی)</span>
-              {isRecording && <span style={{ marginRight: "auto", fontSize: 12, color: "#DC2626", fontWeight: 700, animation: "pulse 1s infinite" }}>● تۆمارکردن...</span>}
+          {/* Telegram voice info banner */}
+          <div style={{ padding: "12px 14px", background: "#F0F4FF", borderRadius: 10, border: "1px solid #C5D2FF" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#4263EB", marginBottom: 4 }}>🎙️ ئەوازی تێبینی</div>
+            <div style={{ fontSize: 12, color: "#495057", lineHeight: 1.8 }}>
+              دوای کرتەکردن لەسەر <b>"✔ ئامادەیە"</b>، بۆتی تێلێگرام پەیامێک دەنێرێت بۆ ئاگادارکەرەکان داوا دەکات تۆمارکردنی ئەوازی تێبینی.
+              ئەو ئەوازەیان بینێرن بۆ بۆتەکە — بۆتەکە بەخۆی دەیدرێتە شوفێرەکە.
             </div>
-            {!voiceUrl ? (
-              <button type="button" onClick={toggleRecording}
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 18px", background: isRecording ? "#DC2626" : "#7C3AED", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 14, width: "100%", transition: "background .2s" }}>
-                {isRecording ? "⏹ هاوسوکردن" : "⏺ دەستپێکردنی تۆمارکردن"}
-              </button>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <audio src={voiceUrl} controls style={{ width: "100%" }} />
-                <button type="button" onClick={clearVoice}
-                  style={{ padding: "6px 14px", background: "#FEE2E2", color: "#DC2626", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, width: "fit-content" }}>
-                  🗑 سڕینەوە و دووبارە تۆمارکردن
-                </button>
-              </div>
-            )}
           </div>
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

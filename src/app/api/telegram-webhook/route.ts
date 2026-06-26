@@ -1,8 +1,14 @@
 // /api/telegram-webhook/route.ts
-// Receives ALL incoming Telegram messages via webhook.
-// Uses forwardMessage API to forward the ORIGINAL message (voice, photo,
-// document, sticker, text — anything) to the admin notify users.
-// Also sends a brief context header (driver name) before the forwarded message.
+//
+// Flow when admin assigns a driver:
+//   1. System inserts a row in pending_voice_forwards (orderId, driverChatId)
+//   2. Bot sends a message to each notify-admin saying "please record a voice for driver X"
+//   3. Admin records & sends a voice (or any message) in Telegram
+//   4. This webhook fires → finds an unfulfilled pending forward for that admin
+//   5. Forwards the message to the driver
+//   6. Marks the forward as fulfilled
+//
+// All other messages from drivers are also forwarded to notify-admins as before.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -26,14 +32,15 @@ export async function POST(req: NextRequest) {
     const message = body.message ?? body.channel_post;
     if (!message) return NextResponse.json({ ok: true });
 
-    const from      = message.from;
+    const from       = message.from;
     const fromChatId = String(message.chat?.id ?? from?.id ?? "");
     const messageId  = message.message_id as number;
 
     if (!fromChatId || !messageId) return NextResponse.json({ ok: true });
 
-    // Load settings
     const db = createClient(supabaseUrl, supabaseKey);
+
+    // Load settings
     const { data: settingsRow } = await db
       .from("company_settings")
       .select("telegram_bot_token, telegram_notify_chat_ids")
@@ -45,47 +52,74 @@ export async function POST(req: NextRequest) {
     const token     = settingsRow.telegram_bot_token as string;
     const notifyIds = (settingsRow.telegram_notify_chat_ids ?? []) as string[];
 
-    if (notifyIds.length === 0) return NextResponse.json({ ok: true });
+    const isNotifyUser = notifyIds.includes(fromChatId);
 
-    // Check if sender is a known driver
+    // ── Case 1: Message from a NOTIFY USER ──────────────────────────────
+    // Check if there's a pending voice forward waiting for this admin
+    if (isNotifyUser) {
+      const { data: pending } = await db
+        .from("pending_voice_forwards")
+        .select("*")
+        .eq("fulfilled", false)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (pending) {
+        // Forward admin's message to the driver
+        await tgPost(token, "sendMessage", {
+          chat_id: pending.driver_chat_id,
+          text: `📦 نامەی ئەوازی تایبەتت هەیە بۆ داواکاری <b>${pending.order_number}</b>`,
+          parse_mode: "HTML",
+        });
+        await tgPost(token, "forwardMessage", {
+          chat_id: pending.driver_chat_id,
+          from_chat_id: fromChatId,
+          message_id: messageId,
+        });
+
+        // Mark fulfilled
+        await db.from("pending_voice_forwards").update({ fulfilled: true }).eq("id", pending.id);
+
+        // Confirm back to admin
+        await tgPost(token, "sendMessage", {
+          chat_id: fromChatId,
+          text: `✅ نامەکەت نێردرا بۆ شوفێر ${pending.driver_name} — ${pending.order_number}`,
+        });
+
+        return NextResponse.json({ ok: true });
+      }
+    }
+
+    // ── Case 2: Message from a DRIVER → forward to notify admins ────────
     const { data: driverRow } = await db
       .from("drivers")
       .select("name, phone")
       .eq("telegram_chat_id", fromChatId)
       .maybeSingle();
 
-    // Detect message type for the header
-    const msgType = message.voice      ? "🎙️ ئەواز"
-                  : message.audio      ? "🎵 دەنگ"
-                  : message.photo      ? "📷 وێنە"
-                  : message.video      ? "🎥 ڤیدیۆ"
-                  : message.document   ? "📎 فایل"
-                  : message.sticker    ? "😄 Sticker"
-                  : message.location   ? "📍 شوێن"
-                  : "💬 نامە";
+    if (driverRow && notifyIds.length > 0) {
+      const msgType = message.voice    ? "🎙️ ئەواز"
+                    : message.audio    ? "🎵 دەنگ"
+                    : message.photo    ? "📷 وێنە"
+                    : message.video    ? "🎥 ڤیدیۆ"
+                    : message.document ? "📎 فایل"
+                    : message.location ? "📍 شوێن"
+                    : "💬 نامە";
 
-    const senderLabel = driverRow
-      ? `🚗 شوفێر: <b>${driverRow.name}</b> (${driverRow.phone})`
-      : `👤 <b>${[from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || fromChatId}</b>`;
-
-    // For each notify user: send a brief header, then forward the original message
-    await Promise.all(
-      notifyIds.map(async (notifyId) => {
-        // 1. Send context header (small text, so admin knows who sent what)
+      await Promise.all(notifyIds.map(async (notifyId) => {
         await tgPost(token, "sendMessage", {
           chat_id: notifyId,
-          text: `${senderLabel}\n${msgType} نێردراوە ⬇️`,
+          text: `🚗 شوفێر: <b>${driverRow.name}</b> (${driverRow.phone})\n${msgType} نێردراوە ⬇️`,
           parse_mode: "HTML",
         });
-
-        // 2. Forward the EXACT original message (preserves voice, photo, etc.)
         await tgPost(token, "forwardMessage", {
           chat_id: notifyId,
           from_chat_id: fromChatId,
           message_id: messageId,
         });
-      })
-    );
+      }));
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
