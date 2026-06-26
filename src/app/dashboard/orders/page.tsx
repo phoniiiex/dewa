@@ -587,19 +587,95 @@ export default function OrdersPage() {
       {/* ════════════════════════════════════════════════════════════════
           INVOICE UPLOAD (SENT → DELIVERED)
       ════════════════════════════════════════════════════════════════ */}
-      <Modal open={!!invoiceModalOrder} onClose={() => setInvoiceModalOrder(null)} title="بارکردنی پسوولەی واژووکراو">
+      <Modal open={!!invoiceModalOrder} onClose={() => { setInvoiceModalOrder(null); setInvoiceFile(null); }} title="بارکردنی پسوولەی واژووکراو">
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <p style={{ fontSize: 14, color: "#6C757D", margin: 0 }}>پسوولەی واژووکراو بارکە (ئەگەر هەبوو) تا بارودۆخ بگۆڕدرێت بۆ گەیشتووە.</p>
-          <div style={{ border: "2px dashed #DEE2E6", borderRadius: 12, padding: 24, textAlign: "center", cursor: "pointer" }}
-            onClick={() => invoiceRef.current?.click()}>
-            <Upload size={28} style={{ color: "#ADB5BD", display: "block", margin: "0 auto 8px" }} />
-            <div style={{ fontSize: 13, color: "#6C757D" }}>{invoiceFile ? invoiceFile.name : "کرتەکەیت لێبکە بۆ هەڵبژاردنی فایل"}</div>
-            <input ref={invoiceRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => setInvoiceFile(e.target.files?.[0] || null)} />
+
+          {/* Drop zone */}
+          <div
+            onClick={() => invoiceRef.current?.click()}
+            style={{ border: "1.5px dashed #D1D1D1", borderRadius: 12, padding: "28px 20px", textAlign: "center", cursor: "pointer", background: "#FAFAFA", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, transition: "border-color .2s" }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = "#4263EB")}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = "#D1D1D1")}
+          >
+            <Upload size={24} style={{ color: "#ADB5BD" }} />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: "#171717" }}>فایلێک هەڵبژێرە یان ئێرە بیکێشە</div>
+              <div style={{ fontSize: 12, color: "#5C5C5C", marginTop: 4 }}>وێنە، PDF، تا ٥٠ MB</div>
+            </div>
+            <div style={{ padding: "6px 14px", background: "#fff", border: "1px solid #E8E8E8", borderRadius: 8, fontSize: 13, color: "#5C5C5C", fontWeight: 500, boxShadow: "0 1px 2px rgba(10,13,20,.03)" }}>
+              هەڵبژاردنی فایل
+            </div>
+            <input ref={invoiceRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }}
+              onChange={e => setInvoiceFile(e.target.files?.[0] || null)} />
           </div>
+
+          {/* File card — shows after a file is chosen */}
+          {invoiceFile && (
+            <div style={{ border: `1px solid ${uploading ? "#E8E8E8" : "#D1FAE5"}`, borderRadius: 12, padding: "14px 16px 14px 14px", background: uploading ? "#fff" : "#F0FDF4", display: "flex", flexDirection: "column", gap: 12, transition: "all .3s" }}>
+              {/* Top row */}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                {/* File icon */}
+                <div style={{ width: 40, height: 40, background: "#FEE2E2", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 18 }}>
+                  📄
+                </div>
+                {/* File info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: "#171717", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {invoiceFile.name}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
+                    <span style={{ fontSize: 12, color: "#5C5C5C" }}>
+                      {(invoiceFile.size / 1024).toFixed(0)} KB
+                    </span>
+                    <span style={{ fontSize: 12, color: "#5C5C5C" }}>∙</span>
+                    {uploading ? (
+                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#171717" }}>
+                        <span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid #4263EB", borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                        بارکردن...
+                      </span>
+                    ) : (
+                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#059669", fontWeight: 600 }}>
+                        <CheckCircle size={13} /> تەواوبوو
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {/* Remove button */}
+                {!uploading && (
+                  <button onClick={() => setInvoiceFile(null)}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#ADB5BD", flexShrink: 0, display: "flex" }}>
+                    <X size={18} />
+                  </button>
+                )}
+              </div>
+
+              {/* Progress bar (only while uploading) */}
+              {uploading && (
+                <div style={{ height: 6, background: "#EBEBEB", borderRadius: 999, overflow: "hidden" }}>
+                  <div style={{ height: "100%", background: "#4263EB", borderRadius: 999, width: "60%", animation: "progress-pulse 1.5s ease-in-out infinite" }} />
+                </div>
+              )}
+            </div>
+          )}
+
+          <style>{`
+            @keyframes spin { to { transform: rotate(360deg); } }
+            @keyframes progress-pulse {
+              0%   { width: 10%; opacity: 1; }
+              50%  { width: 70%; opacity: 0.8; }
+              100% { width: 90%; opacity: 1; }
+            }
+          `}</style>
+
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button onClick={() => setInvoiceModalOrder(null)} style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
-            <button onClick={confirmDelivered} disabled={uploading} style={{ padding: "9px 18px", background: "#0891B2", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, opacity: uploading ? 0.7 : 1 }}>
-              {uploading ? "بارکردن..." : "گەیشت ✓"}
+            <button onClick={() => { setInvoiceModalOrder(null); setInvoiceFile(null); }}
+              style={{ flex: 1, padding: "9px 18px", background: "#fff", border: "1px solid #E8E8E8", borderRadius: 10, cursor: "pointer", fontWeight: 500, color: "#5C5C5C", boxShadow: "0 1px 2px rgba(10,13,20,.03)" }}>
+              پاشگەزبوونەوە
+            </button>
+            <button onClick={confirmDelivered} disabled={uploading}
+              style={{ flex: 1, padding: "9px 18px", background: "#FA7319", color: "#fff", border: "none", borderRadius: 10, cursor: uploading ? "not-allowed" : "pointer", fontWeight: 600, opacity: uploading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <CheckCircle size={16} />
+              {uploading ? "بارکردن..." : "گەیشت"}
             </button>
           </div>
         </div>
