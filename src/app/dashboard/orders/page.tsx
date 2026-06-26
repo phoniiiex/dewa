@@ -26,7 +26,7 @@ const statusClasses: Record<OrderStatus, string> = { PENDING: "pending", PROCESS
 const routingLabels: Record<RoutingMode, string> = { DIRECT: "ڕاستەوخۆ", WAREHOUSE: "لە ڕێگای کۆگا", REP_DELIVERY: "گەیاندنی نوێنەر" };
 
 export default function OrdersPage() {
-  const { orders, clients, reps, warehouses, products, addOrder, updateOrder, deleteOrder, addDelivery, addTransaction, settings, loading } = useData();
+  const { orders, clients, reps, warehouses, products, addOrder, updateOrder, deleteOrder, addDelivery, addTransaction, showToast, loading } = useData();
   const { currentUser } = useLayout();
 
   const isRep = currentUser?.role === "REP";
@@ -90,10 +90,16 @@ export default function OrdersPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const client = clients.find(c => c.id === form.clientId);
-
+    if (!client) {
+      showToast("تکایە کڕیارێک هەڵبژێرە", "error");
+      return;
+    }
     // Rep: use myRep; Admin/Manager: use selected rep
     let repRecord = isRep ? myRep : reps.find(r => r.id === form.repId);
-    if (!client || !repRecord) return;
+    if (!repRecord) {
+      showToast("تکایە نوێنەرێک هەڵبژێرە", "error");
+      return;
+    }
 
     const wh = warehouses.find(w => w.id === form.warehouseId);
     const warehouseBonusPct = wh ? wh.bonusPct : 0;
@@ -258,7 +264,14 @@ export default function OrdersPage() {
               </FormField>
             )}
 
-            <FormField label="شێوازی ڕاستکردن"><select style={selectStyle} value={form.routingMode} onChange={(e) => setForm({ ...form, routingMode: e.target.value as RoutingMode })}>{Object.entries(routingLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></FormField>
+            <FormField label="شێوازی ڕاستکردن">
+              <select style={selectStyle} value={form.routingMode} onChange={(e) => {
+                const mode = e.target.value as RoutingMode;
+                setForm({ ...form, routingMode: mode, warehouseId: mode !== "WAREHOUSE" ? "" : form.warehouseId });
+              }}>
+                {Object.entries(routingLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </FormField>
             {form.routingMode === "WAREHOUSE" && (
               <FormField label="کۆگا">
                 <select style={selectStyle} value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}>
