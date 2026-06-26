@@ -2,7 +2,7 @@
 import { useState, FormEvent, useRef } from "react";
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
-  CheckCircle, Clock, Package, Truck, Upload, XCircle,
+  CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
@@ -16,7 +16,7 @@ import PrintModal from "@/components/ui/PrintModal";
 import ClientCombobox from "@/components/ui/ClientCombobox";
 import type { ExportColumn } from "@/lib/export";
 import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
-import { notifyDriverOfOrder, isTelegramConfigured } from "@/lib/telegram";
+import { notifyDriverOfOrder } from "@/lib/telegram";
 
 const exportCols: ExportColumn[] = [
   { key: "orderNumber", label: "ژمارە" }, { key: "clientName", label: "کڕیار" },
@@ -33,7 +33,7 @@ const STATUS: Record<OrderStatus, StatusMeta> = {
   READY:        { label: "ئامادەیە",    color: "#059669", bg: "#D1FAE5", icon: <CheckCircle size={13} /> },
   SENT:         { label: "نێردراوە",    color: "#7C3AED", bg: "#EDE9FE", icon: <Truck size={13} /> },
   DELIVERED:    { label: "گەیشتووە",   color: "#0891B2", bg: "#CFFAFE", icon: <CheckCircle size={13} /> },
-  PAID:         { label: "پارەدراوە",  color: "#059669", bg: "#D1FAE5", icon: <CheckCircle size={13} /> },
+  PAID:         { label: "پارەدراوە",  color: "#059669", bg: "#D1FAE5", icon: <DollarSign size={13} /> },
 };
 
 const STATUS_TABS = ["هەموو", ...Object.values(STATUS).map(s => s.label)];
@@ -48,11 +48,11 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 }
 
 function actionBtn(color: string, bg: string): React.CSSProperties {
-  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: bg, color, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13 };
+  return { display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", background: bg, color, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 12, whiteSpace: "nowrap" as const };
 }
 
 export default function OrdersPage() {
-  const { orders, clients, reps, warehouses, products, drivers, addOrder, updateOrder, deleteOrder, showToast, loading } = useData();
+  const { orders, clients, reps, warehouses, products, drivers, settings, addOrder, updateOrder, deleteOrder, showToast, loading } = useData();
   const { currentUser } = useLayout();
 
   const isRep     = currentUser?.role === "REP";
@@ -69,11 +69,12 @@ export default function OrdersPage() {
   const [deleteId, setDeleteId]               = useState<string | null>(null);
   const [printOrder, setPrintOrder]           = useState<Order | null>(null);
 
-  // Driver assignment (READY → SENT)
-  const [driverModalOrder, setDriverModalOrder] = useState<Order | null>(null);
+  // Combined "Mark Ready + Assign Driver + Send" modal
+  const [sendModalOrder, setSendModalOrder]   = useState<Order | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState("");
+  const [sending, setSending]                 = useState(false);
 
-  // Reject (WAITING → NOT_ACCEPTED)
+  // Reject modal
   const [rejectOrder, setRejectOrder] = useState<Order | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
@@ -85,24 +86,32 @@ export default function OrdersPage() {
 
   // ── New order form ────────────────────────────────────────────────────
   const [form, setForm] = useState({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
-  const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string }[]>([{ productId: "", quantity: "" }]);
+  // Each item: productId, quantity, manualBonusPct (only for direct orders)
+  const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string; manualBonusPct: string }[]>([{ productId: "", quantity: "", manualBonusPct: "" }]);
 
   const resetForm = () => {
     setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
-    setOrderItems([{ productId: "", quantity: "" }]);
+    setOrderItems([{ productId: "", quantity: "", manualBonusPct: "" }]);
   };
 
+  const isDirect = !form.warehouseId;
   const selectedWarehouse = warehouses.find(w => w.id === form.warehouseId);
-  const getItemBonusPct = (productId: string) => {
+
+  // Bonus calculation — warehouse order: use warehouse rules; direct order: use manual %
+  const getItemBonusPct = (productId: string, manualPct: string): { pct: number; isCustom: boolean } => {
+    if (isDirect) {
+      const pct = parseFloat(manualPct) || 0;
+      return { pct, isCustom: false };
+    }
     if (!selectedWarehouse) return { pct: 0, isCustom: false };
     const rule = (selectedWarehouse.bonusRules || []).find(r => r.productId === productId);
     return rule ? { pct: rule.percent, isCustom: true } : { pct: selectedWarehouse.bonusPct, isCustom: false };
   };
 
-  const liveBonusItems = orderItems.filter(i => i.productId && i.quantity).map(i => {
+  const liveBonusItems = orderItems.filter(i => i.productId && i.quantity).map((i, idx) => {
     const prod = products.find(p => p.id === i.productId);
     const qty = Number(i.quantity);
-    const { pct, isCustom } = getItemBonusPct(i.productId);
+    const { pct, isCustom } = getItemBonusPct(i.productId, orderItems[idx].manualBonusPct);
     return { name: prod?.name || "", qty, pct, isCustom, bonusQty: Math.round(qty * pct / 100) };
   });
 
@@ -114,10 +123,10 @@ export default function OrdersPage() {
     if (!repRecord) { showToast("تکایە نوێنەرێک هەڵبژێرە", "error"); return; }
 
     const wh = warehouses.find(w => w.id === form.warehouseId);
-    const items: OrderItem[] = orderItems.filter(i => i.productId && i.quantity).map(i => {
+    const items: OrderItem[] = orderItems.filter(i => i.productId && i.quantity).map((i) => {
       const prod = products.find(p => p.id === i.productId);
       const qty  = Number(i.quantity);
-      const { pct } = getItemBonusPct(i.productId);
+      const { pct } = getItemBonusPct(i.productId, i.manualBonusPct);
       return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: Math.round(qty * pct / 100), unitPrice: prod?.price || 0, bonusPct: pct };
     });
     if (items.length === 0) { showToast("تکایە بەرهەمێک زیادبکە", "error"); return; }
@@ -139,31 +148,44 @@ export default function OrdersPage() {
 
   // ── Workflow actions ──────────────────────────────────────────────────
   const acceptOrder = (o: Order) => { updateOrder(o.id, { status: "IN_PROGRESS" }); showToast("داواکاری قبووڵکرا"); };
-  const markReady   = (o: Order) => { updateOrder(o.id, { status: "READY" }); showToast("داواکاری ئامادەیە"); };
+
+  // Combined: mark ready + assign driver + send → all in one modal
+  const openSendModal = (o: Order) => { setSendModalOrder(o); setSelectedDriverId(""); };
 
   const confirmSend = async () => {
-    if (!driverModalOrder) return;
+    if (!sendModalOrder) return;
     const driver = drivers.find(d => d.id === selectedDriverId);
     if (!driver) { showToast("تکایە شوفێرێک هەڵبژێرە", "error"); return; }
-    await updateOrder(driverModalOrder.id, { status: "SENT", driverId: driver.id, driverName: driver.name, driverPhone: driver.phone });
-    showToast("داواکاری نێردرا — شوفێر: " + driver.name);
-    // ── Auto-notify driver via Telegram ──
-    if (driver.telegramChatId && isTelegramConfigured()) {
-      const client = clients.find(c => c.id === driverModalOrder.clientId);
-      const result = await notifyDriverOfOrder({
-        driverChatId: driver.telegramChatId,
+    setSending(true);
+    try {
+      // Mark READY then SENT atomically
+      await updateOrder(sendModalOrder.id, {
+        status: "SENT",
+        driverId: driver.id,
         driverName: driver.name,
-        orderNumber: driverModalOrder.orderNumber,
-        clientName: driverModalOrder.clientName,
-        clientCity: client?.city,
-        items: driverModalOrder.items,
-        notes: driverModalOrder.notes,
+        driverPhone: driver.phone,
       });
-      if (result.ok) showToast("📱 ئاگاداری تێلێگرام نێردرا ✅");
-      else showToast("⚠️ نەتوانرا ئاگاداری تێلێگرام بنێردرێت", "error");
+      showToast("داواکاری نێردرا — شوفێر: " + driver.name);
+
+      // Auto-notify via Telegram if configured
+      if (driver.telegramChatId && settings.telegramBotToken) {
+        const client = clients.find(c => c.id === sendModalOrder.clientId);
+        const result = await notifyDriverOfOrder(settings.telegramBotToken, {
+          driverChatId: driver.telegramChatId,
+          driverName: driver.name,
+          orderNumber: sendModalOrder.orderNumber,
+          clientName: sendModalOrder.clientName,
+          clientCity: client?.city,
+          items: sendModalOrder.items,
+          notes: sendModalOrder.notes,
+        });
+        if (result.ok) showToast("📱 ئاگاداری تێلێگرام نێردرا ✅");
+      }
+    } finally {
+      setSending(false);
+      setSendModalOrder(null);
+      setSelectedDriverId("");
     }
-    setDriverModalOrder(null);
-    setSelectedDriverId("");
   };
 
   const confirmDelivered = async () => {
@@ -230,10 +252,10 @@ export default function OrdersPage() {
       {loading ? <SkeletonKPI /> : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 24 }}>
           {[
-            { label: "کۆی داواکارییەکان", value: kpi.total,          color: "#4263EB", bg: "#EDF2FF" },
-            { label: "چاوەڕوان",          value: kpi.waiting,         color: "#D97706", bg: "#FEF3C7" },
-            { label: "نێردراوە",          value: kpi.sent,            color: "#7C3AED", bg: "#EDE9FE" },
-            { label: "پارەدراوە",        value: kpi.paid,            color: "#059669", bg: "#D1FAE5" },
+            { label: "کۆی داواکارییەکان", value: kpi.total,           color: "#4263EB", bg: "#EDF2FF" },
+            { label: "چاوەڕوان",          value: kpi.waiting,          color: "#D97706", bg: "#FEF3C7" },
+            { label: "نێردراوە",          value: kpi.sent,             color: "#7C3AED", bg: "#EDE9FE" },
+            { label: "پارەدراوە",        value: kpi.paid,             color: "#059669", bg: "#D1FAE5" },
             { label: "کۆی داهات",        value: formatIQD(kpi.amount), color: "#0891B2", bg: "#CFFAFE" },
           ].map(k => (
             <div key={k.label} style={card}>
@@ -277,17 +299,31 @@ export default function OrdersPage() {
                 <tr key={o.id} style={{ borderBottom: "1px solid #F8F9FA", transition: "background .1s" }}
                   onMouseEnter={e => (e.currentTarget.style.background = "#FAFAFA")}
                   onMouseLeave={e => (e.currentTarget.style.background = "")}>
-                  <td style={{ padding: "14px 16px", fontWeight: 700, color: "#4263EB" }}>{o.orderNumber}</td>
-                  <td style={{ padding: "14px 16px" }}>{o.clientName}</td>
-                  <td style={{ padding: "14px 16px", color: "#6C757D", fontSize: 13 }}>{o.repName}</td>
-                  <td style={{ padding: "14px 16px" }}><StatusBadge status={o.status} /></td>
-                  <td style={{ padding: "14px 16px", fontWeight: 600 }}>{formatIQD(o.totalAmount)}</td>
-                  <td style={{ padding: "14px 16px", color: "#6C757D", fontSize: 13 }}>{new Date(o.createdAt).toLocaleDateString("ku")}</td>
-                  <td style={{ padding: "14px 16px" }}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => setDetailOrder(o)} style={{ padding: "5px 10px", background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600 }}><Eye size={13} /> بینین</button>
-                      <button onClick={() => setPrintOrder(o)} style={{ padding: "5px 10px", background: "#F8F9FA", color: "#495057", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}><Printer size={13} /></button>
-                      {isManager && <button onClick={() => setDeleteId(o.id)} style={{ padding: "5px 10px", background: "#FFF5F5", color: "#DC2626", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}><Trash2 size={13} /></button>}
+                  <td style={{ padding: "12px 16px", fontWeight: 700, color: "#4263EB" }}>{o.orderNumber}</td>
+                  <td style={{ padding: "12px 16px" }}>{o.clientName}</td>
+                  <td style={{ padding: "12px 16px", color: "#6C757D", fontSize: 13 }}>{o.repName}</td>
+                  <td style={{ padding: "12px 16px" }}><StatusBadge status={o.status} /></td>
+                  <td style={{ padding: "12px 16px", fontWeight: 600 }}>{formatIQD(o.totalAmount)}</td>
+                  <td style={{ padding: "12px 16px", color: "#6C757D", fontSize: 13 }}>{new Date(o.createdAt).toLocaleDateString("ku")}</td>
+
+                  {/* ── Inline action buttons ── */}
+                  <td style={{ padding: "12px 16px" }}>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {/* Status-specific actions (manager only) */}
+                      {isManager && o.status === "WAITING" && <>
+                        <button onClick={() => acceptOrder(o)} style={actionBtn("#059669", "#D1FAE5")}><CheckCircle size={12} /> قبووڵکردن</button>
+                        <button onClick={() => setRejectOrder(o)} style={actionBtn("#DC2626", "#FEE2E2")}><XCircle size={12} /> ڕەتکردن</button>
+                      </>}
+                      {isManager && o.status === "IN_PROGRESS" && (
+                        <button onClick={() => openSendModal(o)} style={actionBtn("#7C3AED", "#EDE9FE")}><Truck size={12} /> ئامادەیە+ناردن</button>
+                      )}
+                      {isManager && o.status === "SENT" && (
+                        <button onClick={() => setInvoiceModalOrder(o)} style={actionBtn("#0891B2", "#CFFAFE")}><Upload size={12} /> گەیشتووە</button>
+                      )}
+                      {/* Always available */}
+                      <button onClick={() => setDetailOrder(o)} style={{ padding: "5px 8px", background: "#F1F3F5", color: "#495057", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center" }}><Eye size={13} /></button>
+                      <button onClick={() => setPrintOrder(o)} style={{ padding: "5px 8px", background: "#F1F3F5", color: "#495057", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center" }}><Printer size={13} /></button>
+                      {isManager && <button onClick={() => setDeleteId(o.id)} style={{ padding: "5px 8px", background: "#FFF5F5", color: "#DC2626", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center" }}><Trash2 size={13} /></button>}
                     </div>
                   </td>
                 </tr>
@@ -300,7 +336,7 @@ export default function OrdersPage() {
       {/* ════════════════════════════════════════════════════════════════
           NEW ORDER MODAL
       ════════════════════════════════════════════════════════════════ */}
-        <Modal open={newOrderOpen} onClose={() => { setNewOrderOpen(false); resetForm(); }} title="داواکاری نوێ" width={700}>
+      <Modal open={newOrderOpen} onClose={() => { setNewOrderOpen(false); resetForm(); }} title="داواکاری نوێ" width={720}>
         <form onSubmit={handleSubmit}>
           <FormGrid cols={2}>
             <FormField label="کڕیار" required>
@@ -322,9 +358,9 @@ export default function OrdersPage() {
             )}
           </FormGrid>
           <FormGrid cols={2}>
-            <FormField label="کۆگا (ئەگەر هەبوو)">
+            <FormField label="کۆگا">
               <select style={selectStyle} value={form.warehouseId} onChange={e => setForm({ ...form, warehouseId: e.target.value })}>
-                <option value="">— ڕاستەوخۆ —</option>
+                <option value="">— ڕاستەوخۆ (بێ کۆگا) —</option>
                 {warehouses.filter(w => w.isActive).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
             </FormField>
@@ -333,18 +369,38 @@ export default function OrdersPage() {
             </FormField>
           </FormGrid>
 
+          {/* Warehouse bonus info banner */}
+          {selectedWarehouse && (
+            <div style={{ marginBottom: 12, padding: "10px 14px", background: "#EDE9FE", borderRadius: 10, fontSize: 13, color: "#7C3AED" }}>
+              🏪 <strong>{selectedWarehouse.name}</strong> — بۆنەسی بنەڕەتی: <strong>{selectedWarehouse.bonusPct}%</strong>
+              {selectedWarehouse.bonusRules.length > 0 && <span> · {selectedWarehouse.bonusRules.length} ڕێگەی تایبەت</span>}
+            </div>
+          )}
+          {isDirect && (
+            <div style={{ marginBottom: 12, padding: "10px 14px", background: "#FEF3C7", borderRadius: 10, fontSize: 13, color: "#D97706" }}>
+              📦 داواکاری ڕاستەوخۆ — دەتوانی بۆ هەر بەرهەمێک بۆنەسی دیاری بکەیت (ئەگەر بەتاڵ بهێڵیتەوە = بۆنەس نییە)
+            </div>
+          )}
+
           {/* Product rows */}
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 4 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span style={{ fontWeight: 600, fontSize: 14 }}>بەرهەمەکان</span>
-              <button type="button" onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "" }])}
+              <button type="button" onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", manualBonusPct: "" }])}
                 style={{ background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ زیادکردن</button>
             </div>
+            {/* Column headers */}
+            <div style={{ display: "grid", gridTemplateColumns: isDirect ? "1fr 120px 110px auto" : "1fr 120px auto", gap: 8, marginBottom: 4 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#6C757D" }}>بەرهەم</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#6C757D" }}>ژمارە</div>
+              {isDirect && <div style={{ fontSize: 12, fontWeight: 600, color: "#D97706" }}>بۆنەس %</div>}
+              <div />
+            </div>
             {orderItems.map((item, idx) => {
-              const { pct, isCustom } = getItemBonusPct(item.productId);
+              const { pct, isCustom } = getItemBonusPct(item.productId, item.manualBonusPct);
               const bonusQty = item.quantity && item.productId ? Math.round(Number(item.quantity) * pct / 100) : 0;
               return (
-                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 140px auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                <div key={idx} style={{ display: "grid", gridTemplateColumns: isDirect ? "1fr 120px 110px auto" : "1fr 120px auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
                   <select style={selectStyle} value={item.productId} onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: e.target.value } : x))}>
                     <option value="">بەرهەم هەڵبژێرە...</option>
                     {products.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -352,12 +408,24 @@ export default function OrdersPage() {
                   <div style={{ position: "relative" }}>
                     <input type="number" min={1} style={inputStyle} placeholder="ژمارە" value={item.quantity}
                       onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
-                    {bonusQty > 0 && (
-                      <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: isCustom ? "#D1FAE5" : "#EDE9FE", color: isCustom ? "#059669" : "#7C3AED", fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 6px", whiteSpace: "nowrap", pointerEvents: "none" }}>
+                    {!isDirect && bonusQty > 0 && (
+                      <span style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: isCustom ? "#D1FAE5" : "#EDE9FE", color: isCustom ? "#059669" : "#7C3AED", fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 6px", pointerEvents: "none" }}>
                         +{bonusQty}{isCustom ? "★" : ""}
                       </span>
                     )}
                   </div>
+                  {isDirect && (
+                    <div style={{ position: "relative" }}>
+                      <input type="number" min={0} max={100} style={{ ...inputStyle, paddingRight: 28 }} placeholder="0" value={item.manualBonusPct}
+                        onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, manualBonusPct: e.target.value } : x))} />
+                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#ADB5BD", pointerEvents: "none" }}>%</span>
+                      {bonusQty > 0 && (
+                        <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", background: "#FEF3C7", color: "#D97706", fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 4px", pointerEvents: "none" }}>
+                          +{bonusQty}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {orderItems.length > 1 && (
                     <button type="button" onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}
                       style={{ background: "#FEE2E2", color: "#DC2626", border: "none", borderRadius: 8, width: 34, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -376,7 +444,7 @@ export default function OrdersPage() {
               {liveBonusItems.filter(i => i.pct > 0).map((i, idx) => (
                 <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#495057", padding: "3px 0" }}>
                   <span>{i.name}</span>
-                  <span style={{ color: "#059669", fontWeight: 600 }}>{i.qty} + {i.bonusQty} = {i.qty + i.bonusQty} {i.isCustom ? "★" : ""}</span>
+                  <span style={{ color: isDirect ? "#D97706" : "#059669", fontWeight: 600 }}>{i.qty} + {i.bonusQty} = {i.qty + i.bonusQty} ({i.pct}%{i.isCustom ? " ★" : ""})</span>
                 </div>
               ))}
             </div>
@@ -387,20 +455,17 @@ export default function OrdersPage() {
       </Modal>
 
       {/* ════════════════════════════════════════════════════════════════
-          ORDER DETAIL DRAWER
+          ORDER DETAIL DRAWER (view only)
       ════════════════════════════════════════════════════════════════ */}
       {detailOrder && (() => {
         const o = orders.find(x => x.id === detailOrder.id) || detailOrder;
         return (
           <Modal open={!!detailOrder} onClose={() => setDetailOrder(null)} title={`داواکاری — ${o.orderNumber}`} width={700}>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {/* Status + driver */}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                 <StatusBadge status={o.status} />
                 {o.driverName && <span style={{ fontSize: 13, color: "#6C757D" }}>— شوفێر: <strong>{o.driverName}</strong> · {o.driverPhone}</span>}
               </div>
-
-              {/* Info grid */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {[
                   { label: "کڕیار", value: o.clientName },
@@ -418,8 +483,6 @@ export default function OrdersPage() {
                   </div>
                 ))}
               </div>
-
-              {/* Items table */}
               <div style={{ border: "1px solid #F1F3F5", borderRadius: 10, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead><tr style={{ background: "#FAFAFA" }}>
@@ -438,30 +501,8 @@ export default function OrdersPage() {
                   </tbody>
                 </table>
               </div>
-
-              {/* File links */}
               {o.signedInvoiceUrl && <a href={o.signedInvoiceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#4263EB", fontSize: 13, fontWeight: 600 }}>📄 پسوولەی واژووکراو</a>}
               {o.signedReceiptUrl && <a href={o.signedReceiptUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#059669", fontSize: 13, fontWeight: 600 }}>🧾 پسوولەی پارەدان</a>}
-
-              {/* ── Workflow action buttons (manager only) ── */}
-              {isManager && (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 10, borderTop: "1px solid #F1F3F5" }}>
-                  {o.status === "WAITING" && <>
-                    <button onClick={() => { acceptOrder(o); setDetailOrder(null); }} style={actionBtn("#059669", "#D1FAE5")}><CheckCircle size={14} /> قبووڵکردن</button>
-                    <button onClick={() => { setRejectOrder(o); setDetailOrder(null); }} style={actionBtn("#DC2626", "#FEE2E2")}><XCircle size={14} /> ڕەتکردنەوە</button>
-                  </>}
-                  {o.status === "IN_PROGRESS" && (
-                    <button onClick={() => { markReady(o); setDetailOrder(null); }} style={actionBtn("#059669", "#D1FAE5")}><Package size={14} /> ئامادەیە</button>
-                  )}
-                  {o.status === "READY" && (
-                    <button onClick={() => { setDriverModalOrder(o); setDetailOrder(null); }} style={actionBtn("#7C3AED", "#EDE9FE")}><Truck size={14} /> ناردن</button>
-                  )}
-                  {o.status === "SENT" && (
-                    <button onClick={() => { setInvoiceModalOrder(o); setDetailOrder(null); }} style={actionBtn("#0891B2", "#CFFAFE")}><Upload size={14} /> گەیشت — بارکردنی پسوولە</button>
-                  )}
-                </div>
-              )}
-
               {o.notes && <p style={{ fontSize: 13, color: "#6C757D", background: "#FAFAFA", padding: "10px 14px", borderRadius: 10, margin: 0 }}>{o.notes}</p>}
             </div>
           </Modal>
@@ -469,11 +510,19 @@ export default function OrdersPage() {
       })()}
 
       {/* ════════════════════════════════════════════════════════════════
-          DRIVER SELECTION MODAL
+          COMBINED READY + SEND MODAL (IN_PROGRESS → SENT)
+          Clicking "ئامادەیە+ناردن" opens this immediately
       ════════════════════════════════════════════════════════════════ */}
-      <Modal open={!!driverModalOrder} onClose={() => setDriverModalOrder(null)} title="هەڵبژاردنی شوفێر">
+      <Modal open={!!sendModalOrder} onClose={() => setSendModalOrder(null)} title="ئامادەیە — هەڵبژاردنی شوفێر و ناردن" width={480}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <FormField label="شوفێر">
+          {sendModalOrder && (
+            <div style={{ padding: "10px 14px", background: "#F8F9FA", borderRadius: 10, fontSize: 13 }}>
+              <span style={{ color: "#6C757D" }}>داواکاری </span>
+              <strong style={{ color: "#4263EB" }}>{sendModalOrder.orderNumber}</strong>
+              <span style={{ color: "#6C757D" }}> — {sendModalOrder.clientName}</span>
+            </div>
+          )}
+          <FormField label="شوفێر" required>
             <select style={selectStyle} value={selectedDriverId} onChange={e => setSelectedDriverId(e.target.value)}>
               <option value="">هەڵبژاردن...</option>
               {drivers.filter(d => d.isActive).map(d => (
@@ -487,19 +536,24 @@ export default function OrdersPage() {
               <div style={{ padding: 14, background: "#EDE9FE", borderRadius: 10 }}>
                 <div style={{ fontWeight: 700, color: "#7C3AED", fontSize: 15 }}>{d.name}</div>
                 <div style={{ fontSize: 13, color: "#6C757D", marginTop: 2 }}>{d.phone} · {d.city}</div>
-                {d.telegramChatId && <div style={{ fontSize: 12, color: "#7C3AED", marginTop: 4 }}>📱 Telegram: {d.telegramChatId}</div>}
+                {d.telegramChatId
+                  ? <div style={{ fontSize: 12, color: "#7C3AED", marginTop: 4 }}>📱 تێلێگرام: ئاگاداری دەنێردرێت</div>
+                  : <div style={{ fontSize: 12, color: "#ADB5BD", marginTop: 4 }}>⚠️ Chat ID نییە — ئاگاداری نانێردرێت</div>
+                }
               </div>
             ) : null;
           })()}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button onClick={() => setDriverModalOrder(null)} style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
-            <button onClick={confirmSend} style={{ padding: "9px 18px", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>ناردن ✓</button>
+            <button onClick={() => setSendModalOrder(null)} style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
+            <button onClick={confirmSend} disabled={sending || !selectedDriverId} style={{ padding: "9px 18px", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, opacity: sending || !selectedDriverId ? 0.6 : 1 }}>
+              {sending ? "ناردن..." : "🚚 ناردن ✓"}
+            </button>
           </div>
         </div>
       </Modal>
 
       {/* ════════════════════════════════════════════════════════════════
-          INVOICE UPLOAD MODAL
+          INVOICE UPLOAD (SENT → DELIVERED)
       ════════════════════════════════════════════════════════════════ */}
       <Modal open={!!invoiceModalOrder} onClose={() => setInvoiceModalOrder(null)} title="بارکردنی پسوولەی واژووکراو">
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

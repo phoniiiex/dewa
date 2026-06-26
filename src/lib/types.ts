@@ -176,6 +176,8 @@ export interface CompanySettings {
   language: string;
   logo?: string;
   profilePic?: string;
+  telegramBotToken: string;
+  telegramBotUsername: string;
 }
 
 export interface InvoiceBlockConfig {

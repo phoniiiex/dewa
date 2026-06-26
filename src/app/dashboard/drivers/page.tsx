@@ -1,241 +1,193 @@
 "use client";
 import { useState } from "react";
-import {
-  Plus, Search, Edit2, Trash2, Truck, Phone, MapPin,
-  CheckCircle, XCircle, MessageCircle, User,
-} from "lucide-react";
+import { Truck, Plus, Trash2, Edit2, X, Check, Search, Wifi, RefreshCw, UserPlus } from "lucide-react";
 import { useData } from "@/lib/store";
-import { useLayout } from "@/app/dashboard/layout";
-import type { Driver } from "@/lib/types";
-import Modal from "@/components/ui/Modal";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
+import Modal from "@/components/ui/Modal";
+import { getTelegramUpdates } from "@/lib/telegram";
 
-const CITIES = ["سلێمانی", "هەولێر", "دهۆک", "کەرکووک", "حەڵەبجە", "گەرمیان", "رانیە", "کۆیە"];
+const CITIES = ["هەولێر", "سلێمانی", "کەرکووک", "دهۆک", "زاخۆ", "ڕانیە", "کۆیە", "چەمچەماڵ", "شاری دیگر"];
 
-const card: React.CSSProperties = {
-  background: "#fff", borderRadius: 16, padding: 24,
-  boxShadow: "0 1px 4px rgba(0,0,0,.06)", border: "1px solid #F1F3F5",
-};
-
-const EMPTY_FORM = { name: "", phone: "", city: "", telegramChatId: "", isActive: true };
+type TelegramUser = { chatId: string; firstName: string; lastName: string; username: string };
 
 export default function DriversPage() {
-  const { drivers, addDriver, updateDriver, deleteDriver, loading, showToast } = useData();
-  const { currentUser } = useLayout();
-  const isManager = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
+  const { drivers, settings, addDriver, updateDriver, deleteDriver, showToast } = useData();
 
   const [search, setSearch] = useState("");
-  const [filterCity, setFilterCity] = useState("هەموو");
-  const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [telegramUsers, setTelegramUsers] = useState<TelegramUser[]>([]);
+  const [scanError, setScanError] = useState("");
+  const [selectedUser, setSelectedUser] = useState<TelegramUser | null>(null);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editDriver, setEditDriver] = useState<Driver | null>(null);
-  const [form, setForm] = useState({ ...EMPTY_FORM });
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const emptyForm = { name: "", phone: "", city: "", telegramChatId: "", isActive: true };
+  const [form, setForm] = useState(emptyForm);
 
-  // ── Filter ──
-  const cities = ["هەموو", ...new Set(drivers.map(d => d.city).filter(Boolean))];
-  const filtered = drivers.filter(d => {
-    const matchSearch = !search || d.name.includes(search) || d.phone.includes(search) || d.telegramChatId.includes(search);
-    const matchCity = filterCity === "هەموو" || d.city === filterCity;
-    const matchActive = filterActive === "all" || (filterActive === "active" ? d.isActive : !d.isActive);
-    return matchSearch && matchCity && matchActive;
-  });
+  const filtered = drivers.filter(d =>
+    d.name.includes(search) || d.city.includes(search) || d.phone.includes(search)
+  );
 
-  // ── KPIs ──
-  const kpi = {
-    total: drivers.length,
-    active: drivers.filter(d => d.isActive).length,
-    withTelegram: drivers.filter(d => d.telegramChatId).length,
-    cities: new Set(drivers.map(d => d.city).filter(Boolean)).size,
+  const openAdd = (prefill?: Partial<typeof emptyForm>) => {
+    setEditId(null);
+    setForm({ ...emptyForm, ...prefill });
+    setFormOpen(true);
   };
 
-  // ── Handlers ──
-  function openNew() {
-    setEditDriver(null);
-    setForm({ ...EMPTY_FORM });
-    setModalOpen(true);
-  }
-  function openEdit(d: Driver) {
-    setEditDriver(d);
+  const openEdit = (d: typeof drivers[0]) => {
+    setEditId(d.id);
     setForm({ name: d.name, phone: d.phone, city: d.city, telegramChatId: d.telegramChatId, isActive: d.isActive });
-    setModalOpen(true);
-  }
-  function closeModal() { setModalOpen(false); setEditDriver(null); setForm({ ...EMPTY_FORM }); }
+    setFormOpen(true);
+  };
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.name.trim()) { showToast("ناوی شوفێر داخڵ بکە", "error"); return; }
-    setSaving(true);
-    try {
-      if (editDriver) {
-        updateDriver(editDriver.id, form);
-        showToast("شوفێر نوێکرایەوە ✅", "success");
-      } else {
-        await addDriver(form);
-        showToast("شوفێری نوێ زیادکرا ✅", "success");
-      }
-      closeModal();
-    } catch { showToast("کێشەیەک ڕوویدا", "error"); }
-    finally { setSaving(false); }
-  }
+  const handleSave = async () => {
+    if (!form.name.trim()) { showToast("ناوی شوفێر داخل بکە", "error"); return; }
+    if (editId) {
+      await updateDriver(editId, form);
+      showToast("زانیاری نوێکرایەوە");
+    } else {
+      await addDriver(form);
+      showToast("شوفێر زیادکرا ✅");
+    }
+    setFormOpen(false);
+    setForm(emptyForm);
+    setEditId(null);
+  };
 
-  function handleDelete() {
-    if (!deleteId) return;
-    deleteDriver(deleteId);
-    showToast("شوفێر سڕایەوە", "success");
-    setDeleteId(null);
-  }
+  // ── Telegram scan ──────────────────────────────────────────────────
+  const handleScan = async () => {
+    if (!settings.telegramBotToken) {
+      setScanError("تکایە سەرەتا تۆکنی بۆت لە ڕووپەلی تێلێگرام داخل بکە");
+      return;
+    }
+    setScanning(true);
+    setScanError("");
+    setTelegramUsers([]);
+    const users = await getTelegramUpdates(settings.telegramBotToken);
+    setScanning(false);
+    if (users.length === 0) {
+      setScanError("هیچ کەسێک نامەی نەنێردووە بۆ بۆتەکە. تکایە شوفێرەکان داوا بکە پەیامێک بنێرن بۆ بۆتەکە.");
+    } else {
+      setTelegramUsers(users);
+    }
+  };
 
-  function toggleActive(d: Driver) {
-    updateDriver(d.id, { isActive: !d.isActive });
-    showToast(d.isActive ? "شوفێر ناچالاک کرا" : "شوفێر چالاک کرا", "success");
-  }
+  const handlePickUser = (u: TelegramUser) => {
+    setSelectedUser(u);
+    setScanOpen(false);
+    const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ");
+    openAdd({ telegramChatId: u.chatId, name: fullName });
+  };
+
+  const card: React.CSSProperties = { background: "#fff", borderRadius: 14, border: "1px solid #F1F3F5", boxShadow: "0 1px 4px rgba(0,0,0,.05)" };
 
   return (
     <>
-      {/* ── Header ── */}
+      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700 }}>شوفێرەکان</h1>
-          <p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی شوفێرەکان و زانیاری تێلێگرام</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 40, height: 40, background: "#EDE9FE", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#7C3AED" }}><Truck size={20} /></div>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700 }}>شوفێرەکان</h1>
+            <p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی شوفێران و پەیوەندی تێلێگرامیان</p>
+          </div>
         </div>
-        {isManager && (
-          <button onClick={openNew} style={{ display: "flex", alignItems: "center", gap: 6, background: "#4263EB", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => { setScanOpen(true); handleScan(); }}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "#EDE9FE", color: "#7C3AED", border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>
+            <Wifi size={16} /> کەشفکردن لە بۆت
+          </button>
+          <button onClick={() => openAdd()}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "#4263EB", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>
             <Plus size={16} /> شوفێری نوێ
           </button>
-        )}
+        </div>
       </div>
 
-      {/* ── KPIs ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
+      {/* Search */}
+      <div style={{ ...card, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+        <Search size={16} style={{ color: "#ADB5BD" }} />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="گەڕان بە ناو، شار یان مۆبایل..."
+          style={{ border: "none", outline: "none", fontSize: 14, flex: 1, background: "transparent" }} />
+      </div>
+
+      {/* KPI bar */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 24 }}>
         {[
-          { label: "کۆی شوفێرەکان", value: kpi.total,       color: "#4263EB", bg: "#EDF2FF" },
-          { label: "چالاک",          value: kpi.active,       color: "#059669", bg: "#D1FAE5" },
-          { label: "تێلێگرام",       value: kpi.withTelegram, color: "#7C3AED", bg: "#EDE9FE" },
-          { label: "شار",            value: kpi.cities,       color: "#D97706", bg: "#FEF3C7" },
+          { label: "کۆی شوفێران", value: drivers.length, color: "#4263EB", bg: "#EDF2FF" },
+          { label: "چالاک", value: drivers.filter(d => d.isActive).length, color: "#059669", bg: "#D1FAE5" },
+          { label: "تێلێگرام بەکارهێنان", value: drivers.filter(d => d.telegramChatId).length, color: "#7C3AED", bg: "#EDE9FE" },
         ].map(k => (
-          <div key={k.label} style={card}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: k.color }}>{k.value}</div>
+          <div key={k.label} style={{ ...card, padding: "16px 20px" }}>
+            <div style={{ fontSize: 26, fontWeight: 700, color: k.color }}>{k.value}</div>
             <div style={{ fontSize: 12, color: "#6C757D", marginTop: 4 }}>{k.label}</div>
           </div>
         ))}
       </div>
 
-      {/* ── Filters ── */}
-      <div style={{ ...card, marginBottom: 20, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-          <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="گەڕان بە ناو یان ژمارە..." style={{ ...inputStyle, paddingLeft: 38 }} />
-        </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {cities.map(c => (
-            <button key={c} onClick={() => setFilterCity(c)} style={{ padding: "6px 12px", borderRadius: 99, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: filterCity === c ? "#4263EB" : "#DEE2E6", background: filterCity === c ? "#EDF2FF" : "#fff", color: filterCity === c ? "#4263EB" : "#495057" }}>
-              {c}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {([["all", "هەموو"], ["active", "چالاک"], ["inactive", "ناچالاک"]] as const).map(([val, lbl]) => (
-            <button key={val} onClick={() => setFilterActive(val)} style={{ padding: "6px 12px", borderRadius: 99, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: filterActive === val ? "#059669" : "#DEE2E6", background: filterActive === val ? "#D1FAE5" : "#fff", color: filterActive === val ? "#059669" : "#495057" }}>
-              {lbl}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Driver Cards Grid ── */}
-      {loading ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px,1fr))", gap: 16 }}>
-          {[1,2,3,4,5,6].map(i => (
-            <div key={i} style={{ ...card, height: 160, background: "#F8F9FA", animation: "pulse 1.5s infinite" }} />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div style={{ ...card, textAlign: "center", padding: 60, color: "#ADB5BD" }}>
-          <Truck size={48} style={{ display: "block", margin: "0 auto 16px", color: "#DEE2E6" }} />
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>هیچ شوفێرێک نەدۆزرایەوە</div>
-          <div style={{ fontSize: 13 }}>زانیاری شوفێرەکان لێرە دەردەکەوێت</div>
+      {/* Drivers grid */}
+      {filtered.length === 0 ? (
+        <div style={{ ...card, padding: 48, textAlign: "center", color: "#ADB5BD" }}>
+          هیچ شوفێرێک نەدۆزرایەوە
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px,1fr))", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
           {filtered.map(d => (
-            <div key={d.id} style={{ ...card, padding: 20, position: "relative", opacity: d.isActive ? 1 : 0.65, borderColor: d.isActive ? "#F1F3F5" : "#DEE2E6" }}>
-              {/* Status badge */}
-              <div style={{ position: "absolute", top: 16, left: 16 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, borderRadius: 99, padding: "3px 8px", background: d.isActive ? "#D1FAE5" : "#F1F3F5", color: d.isActive ? "#059669" : "#6C757D" }}>
-                  {d.isActive ? <CheckCircle size={11} /> : <XCircle size={11} />}
-                  {d.isActive ? "چالاک" : "ناچالاک"}
-                </span>
-              </div>
-
-              {/* Avatar + Name */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 28, marginBottom: 16 }}>
-                <div style={{ width: 48, height: 48, borderRadius: 12, background: d.isActive ? "#EDE9FE" : "#F1F3F5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <User size={22} color={d.isActive ? "#7C3AED" : "#ADB5BD"} />
+            <div key={d.id} style={{ ...card, padding: "20px", opacity: d.isActive ? 1 : 0.55 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: "50%", background: d.isActive ? "#EDE9FE" : "#F1F3F5", display: "flex", alignItems: "center", justifyContent: "center", color: d.isActive ? "#7C3AED" : "#ADB5BD", fontSize: 18, fontWeight: 700 }}>
+                    {d.name.charAt(0)}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{d.name}</div>
+                    <div style={{ fontSize: 12, color: "#6C757D" }}>{d.city}</div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 16 }}>{d.name}</div>
-                  <div style={{ fontSize: 12, color: "#6C757D" }}>شوفێر</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => openEdit(d)} style={{ width: 30, height: 30, border: "none", background: "#EDF2FF", color: "#4263EB", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Edit2 size={13} /></button>
+                  <button onClick={() => deleteDriver(d.id)} style={{ width: 30, height: 30, border: "none", background: "#FEE2E2", color: "#DC2626", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={13} /></button>
                 </div>
               </div>
-
-              {/* Info rows */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-                {d.phone && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#495057" }}>
-                    <Phone size={14} color="#4263EB" /> {d.phone}
-                  </div>
-                )}
-                {d.city && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#495057" }}>
-                    <MapPin size={14} color="#D97706" /> {d.city}
-                  </div>
-                )}
-                {d.telegramChatId ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#7C3AED", fontWeight: 600 }}>
-                    <MessageCircle size={14} color="#7C3AED" /> Telegram: {d.telegramChatId}
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#ADB5BD" }}>
-                    <MessageCircle size={13} /> بێ تێلێگرام
-                  </div>
-                )}
-              </div>
-
-              {/* Actions */}
-              {isManager && (
-                <div style={{ display: "flex", gap: 8, borderTop: "1px solid #F8F9FA", paddingTop: 12 }}>
-                  <button onClick={() => openEdit(d)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "7px", background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-                    <Edit2 size={13} /> دەستکاری
-                  </button>
-                  <button onClick={() => toggleActive(d)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "7px", background: d.isActive ? "#FEF3C7" : "#D1FAE5", color: d.isActive ? "#D97706" : "#059669", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-                    {d.isActive ? <XCircle size={13} /> : <CheckCircle size={13} />}
-                    {d.isActive ? "ناچالاک" : "چالاک"}
-                  </button>
-                  <button onClick={() => setDeleteId(d.id)} style={{ padding: "7px 10px", background: "#FFF5F5", color: "#DC2626", border: "none", borderRadius: 8, cursor: "pointer" }}>
-                    <Trash2 size={13} />
-                  </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ color: "#6C757D", minWidth: 60 }}>📞 مۆبایل</span>
+                  <span style={{ fontWeight: 600 }}>{d.phone}</span>
                 </div>
-              )}
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ color: "#6C757D", minWidth: 60 }}>📱 بۆت</span>
+                  {d.telegramChatId
+                    ? <span style={{ color: "#059669", fontWeight: 600 }}>✅ پەیوەندیکراوە</span>
+                    : <span style={{ color: "#ADB5BD" }}>— بە پەیوەند نییە</span>
+                  }
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ color: "#6C757D", minWidth: 60 }}>بارودۆخ</span>
+                  <span style={{ padding: "2px 8px", borderRadius: 99, fontSize: 11, fontWeight: 700, background: d.isActive ? "#D1FAE5" : "#F1F3F5", color: d.isActive ? "#059669" : "#6C757D" }}>
+                    {d.isActive ? "چالاک" : "ناچالاک"}
+                  </span>
+                </div>
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* ════════════════════════════════════════
-          ADD / EDIT MODAL
-      ════════════════════════════════════════ */}
-      <Modal open={modalOpen} onClose={closeModal} title={editDriver ? "دەستکاریکردنی شوفێر" : "زیادکردنی شوفێری نوێ"} width={520}>
-        <form onSubmit={handleSubmit}>
+      {/* ══ Add/Edit Modal ══ */}
+      <Modal open={formOpen} onClose={() => { setFormOpen(false); setEditId(null); setForm(emptyForm); }} title={editId ? "دەستکاریکردنی شوفێر" : "شوفێری نوێ"} width={480}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {form.telegramChatId && (
+            <div style={{ padding: "10px 14px", background: "#D1FAE5", borderRadius: 10, fontSize: 13, color: "#059669", display: "flex", gap: 8, alignItems: "center" }}>
+              <Check size={15} /> <span>Chat ID کەشفکرا: <strong>{form.telegramChatId}</strong></span>
+            </div>
+          )}
           <FormGrid cols={2}>
             <FormField label="ناوی شوفێر" required>
-              <input style={inputStyle} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="ناوی تەواو..." required />
+              <input style={inputStyle} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="ناوی تەواو..." />
             </FormField>
             <FormField label="ژمارەی مۆبایل">
-              <input style={inputStyle} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="07X XXX XXXX" />
+              <input style={inputStyle} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="07xx xxx xxxx" />
             </FormField>
           </FormGrid>
           <FormGrid cols={2}>
@@ -245,34 +197,68 @@ export default function DriversPage() {
                 {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </FormField>
-            <FormField label="تێلێگرام Chat ID">
-              <input style={inputStyle} value={form.telegramChatId} onChange={e => setForm({ ...form, telegramChatId: e.target.value })} placeholder="-100xxxxxxxxxx" />
+            <FormField label="بارودۆخ">
+              <select style={selectStyle} value={form.isActive ? "1" : "0"} onChange={e => setForm({ ...form, isActive: e.target.value === "1" })}>
+                <option value="1">چالاک</option>
+                <option value="0">ناچالاک</option>
+              </select>
             </FormField>
           </FormGrid>
-          <FormField label="بارودۆخ">
-            <div style={{ display: "flex", gap: 10 }}>
-              {([true, false] as const).map(v => (
-                <label key={String(v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 14, padding: "8px 14px", borderRadius: 8, border: `1.5px solid ${form.isActive === v ? "#4263EB" : "#DEE2E6"}`, background: form.isActive === v ? "#EDF2FF" : "#fff", color: form.isActive === v ? "#4263EB" : "#6C757D", fontWeight: 600 }}>
-                  <input type="radio" style={{ display: "none" }} checked={form.isActive === v} onChange={() => setForm({ ...form, isActive: v })} />
-                  {v ? "چالاک" : "ناچالاک"}
-                </label>
-              ))}
-            </div>
-          </FormField>
-          <div style={{ marginTop: 12, padding: 12, background: "#F0F4FF", borderRadius: 10, fontSize: 13, color: "#4263EB" }}>
-            💡 <strong>Chat ID</strong> ی تێلێگرام پێویستە بۆ ناردنی پەیامی دەنگی (MP3) بۆ شوفێر. ئەمە دەتوانیت لە بۆتی تێلێگرام بدۆزیتەوە.
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 8, borderTop: "1px solid #F1F3F5" }}>
+            <button onClick={() => { setFormOpen(false); setEditId(null); setForm(emptyForm); }}
+              style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
+            <button onClick={handleSave}
+              style={{ padding: "9px 18px", background: "#4263EB", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>
+              {editId ? "پاشەکەوتکردن" : "زیادکردن ✓"}
+            </button>
           </div>
-          <FormActions onCancel={closeModal} submitLabel={saving ? "تۆمارکردن..." : editDriver ? "نوێکردنەوە" : "زیادکردن"} />
-        </form>
+        </div>
       </Modal>
 
-      {/* ── Delete confirm ── */}
-      <ConfirmDialog
-        open={!!deleteId}
-        message="دڵنیای لە سڕینەوەی ئەم شوفێرە؟"
-        onConfirm={handleDelete}
-        onClose={() => setDeleteId(null)}
-      />
+      {/* ══ Telegram Scan Modal ══ */}
+      <Modal open={scanOpen} onClose={() => setScanOpen(false)} title="کەشفکردنی شوفێران لە بۆتی تێلێگرام" width={560}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ padding: "12px 16px", background: "#EDE9FE", borderRadius: 10, fontSize: 13, color: "#7C3AED" }}>
+            💡 شوفێرەکان پێویستە سەرەتا پەیامێک بنێرن بۆ بۆتی تێلێگرام (<strong>@{settings.telegramBotUsername || "بۆتەکە"}</strong>) تا دەتوانیت کەشفیان بکەیت.
+          </div>
+
+          <button onClick={handleScan} disabled={scanning}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px", background: "#4263EB", color: "#fff", border: "none", borderRadius: 10, cursor: scanning ? "not-allowed" : "pointer", fontWeight: 600, opacity: scanning ? 0.7 : 1 }}>
+            <RefreshCw size={16} style={{ animation: scanning ? "spin 1s linear infinite" : "none" }} />
+            {scanning ? "گەڕان..." : "دووبارە کەشفکردن"}
+          </button>
+
+          {scanError && (
+            <div style={{ padding: "12px 16px", background: "#FEE2E2", borderRadius: 10, fontSize: 13, color: "#DC2626" }}>{scanError}</div>
+          )}
+
+          {telegramUsers.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#495057" }}>{telegramUsers.length} کەس دۆزرایەوە:</div>
+              {telegramUsers.map(u => {
+                const alreadyAdded = drivers.some(d => d.telegramChatId === u.chatId);
+                return (
+                  <div key={u.chatId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "#F8F9FA", borderRadius: 10, border: `1px solid ${alreadyAdded ? "#D1FAE5" : "#E9ECEF"}` }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}</div>
+                      <div style={{ fontSize: 12, color: "#6C757D" }}>
+                        {u.username ? `@${u.username} · ` : ""}Chat ID: {u.chatId}
+                      </div>
+                    </div>
+                    {alreadyAdded
+                      ? <span style={{ fontSize: 12, color: "#059669", fontWeight: 600 }}>✅ زیادکراوە</span>
+                      : <button onClick={() => handlePickUser(u)}
+                          style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", background: "#4263EB", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                          <UserPlus size={13} /> زیادکردن
+                        </button>
+                    }
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Modal>
     </>
   );
 }

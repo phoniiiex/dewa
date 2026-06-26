@@ -208,7 +208,7 @@ function fromTransaction(t: Partial<Transaction>): Record<string, unknown> {
 }
 
 function toSettings(r: Record<string, unknown>): CompanySettings {
-  return { name: (r.name || "") as string, nameEn: (r.name_en || "") as string, phone: (r.phone || "") as string, email: (r.email || "") as string, city: (r.city || "") as string, address: (r.address || "") as string, currency: (r.currency || "IQD") as string, language: (r.language || "ckb") as string, logo: (r.logo || "") as string, profilePic: (r.profile_pic || "") as string };
+  return { name: (r.name || "") as string, nameEn: (r.name_en || "") as string, phone: (r.phone || "") as string, email: (r.email || "") as string, city: (r.city || "") as string, address: (r.address || "") as string, currency: (r.currency || "IQD") as string, language: (r.language || "ckb") as string, logo: (r.logo || "") as string, profilePic: (r.profile_pic || "") as string, telegramBotToken: (r.telegram_bot_token || "") as string, telegramBotUsername: (r.telegram_bot_username || "") as string };
 }
 function fromSettings(s: Partial<CompanySettings>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
@@ -222,6 +222,8 @@ function fromSettings(s: Partial<CompanySettings>): Record<string, unknown> {
   if (s.language !== undefined) m.language = s.language;
   if (s.logo !== undefined) m.logo = s.logo;
   if (s.profilePic !== undefined) m.profile_pic = s.profilePic;
+  if (s.telegramBotToken !== undefined) m.telegram_bot_token = s.telegramBotToken;
+  if (s.telegramBotUsername !== undefined) m.telegram_bot_username = s.telegramBotUsername;
   return m;
 }
 
@@ -295,6 +297,7 @@ const defaultSettings: CompanySettings = {
   name: "دەوا فارما", nameEn: "Dewa Pharma", phone: "0770 000 1234",
   email: "info@dewapharma.com", city: "سلێمانی",
   address: "شەقامی سالم، تاوەری ئازادی، نهۆم ٣", currency: "IQD", language: "ckb",
+  telegramBotToken: "", telegramBotUsername: "",
 };
 
 // ===== CONTEXT =====

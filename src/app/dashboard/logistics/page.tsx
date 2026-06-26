@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Truck, Search, Eye, MapPin, Package, CheckCircle, Clock, User, Upload } from "lucide-react";
+import { Truck, Search, Eye, Package, CheckCircle, Upload } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Order, OrderStatus } from "@/lib/types";
@@ -136,11 +136,13 @@ export default function LogisticsPage() {
                       <div style={{ fontSize: 12, color: "#ADB5BD" }}>{new Date(o.createdAt).toLocaleDateString("ku")}</div>
                     </td>
                     <td style={{ padding: "14px 16px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ width: 28, height: 28, background: "#EDE9FE", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#7C3AED", flexShrink: 0 }}><User size={13} /></div>
-                        <span style={{ fontWeight: 600 }}>{o.driverName || "—"}</span>
-                      </div>
-                    </td>
+                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                         <div style={{ width: 28, height: 28, background: "#EDE9FE", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#7C3AED", flexShrink: 0, fontWeight: 700, fontSize: 12 }}>
+                           {(o.driverName || "?").charAt(0)}
+                         </div>
+                         <span style={{ fontWeight: 600 }}>{o.driverName || "—"}</span>
+                       </div>
+                     </td>
                     <td style={{ padding: "14px 16px", fontSize: 13, color: "#6C757D" }}>{o.driverPhone || "—"}</td>
                     <td style={{ padding: "14px 16px" }}>
                       {meta && (
@@ -164,30 +166,6 @@ export default function LogisticsPage() {
         </div>
       </div>
 
-      {/* Drivers panel */}
-      <div style={{ marginTop: 24 }}>
-        <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>شوفێرەکانی چالاک</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 12 }}>
-          {drivers.filter(d => d.isActive).map(d => {
-            const activeCount = inFlight.filter(o => o.status === "SENT" && o.driverId === d.id).length;
-            return (
-              <div key={d.id} style={{ ...card, display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: activeCount > 0 ? "#EDE9FE" : "#F1F3F5", display: "flex", alignItems: "center", justifyContent: "center", color: activeCount > 0 ? "#7C3AED" : "#ADB5BD", flexShrink: 0 }}>
-                  <User size={18} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{d.name}</div>
-                  <div style={{ fontSize: 12, color: "#6C757D" }}>{d.phone}</div>
-                  <div style={{ fontSize: 12, color: "#ADB5BD", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}><MapPin size={10} /> {d.city}</div>
-                  {activeCount > 0 && (
-                    <span style={{ display: "inline-block", marginTop: 6, padding: "2px 8px", background: "#EDE9FE", color: "#7C3AED", borderRadius: 99, fontSize: 11, fontWeight: 700 }}>{activeCount} داواکاری</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Detail modal */}
       {detailOrder && (
