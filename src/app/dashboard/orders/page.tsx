@@ -86,6 +86,11 @@ export default function OrdersPage() {
   const [uploading, setUploading]                 = useState(false);
   const invoiceRef = useRef<HTMLInputElement>(null);
 
+  // Payment (DELIVERED → PAID)
+  const [payModalOrder, setPayModalOrder] = useState<Order | null>(null);
+  const [payMethod, setPayMethod]         = useState<"CASH" | "TRANSFER">("CASH");
+  const [paying, setPaying]               = useState(false);
+
 
   // ── New order form ────────────────────────────────────────────────────
   const [form, setForm] = useState({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
@@ -245,6 +250,26 @@ export default function OrdersPage() {
     setRejectOrder(null); setRejectReason("");
   };
 
+  const confirmPayment = async () => {
+    if (!payModalOrder) return;
+    setPaying(true);
+    await updateOrder(payModalOrder.id, { status: "PAID", paidAt: new Date().toISOString() });
+    // Record a transaction in the finance ledger
+    try {
+      const { supabase } = await import("@/lib/supabase");
+      await supabase.from("transactions").insert({
+        type: "INCOME",
+        description: `پارەدانی داواکاری ${payModalOrder.orderNumber} — ${payModalOrder.clientName}`,
+        amount: payModalOrder.totalAmount,
+        method: payMethod,
+        related_order_id: payModalOrder.id,
+      });
+    } catch { /* transactions table may not exist yet — ignore */ }
+    showToast("داواکاری پارەدراو ✔️");
+    setPaying(false);
+    setPayModalOrder(null);
+  };
+
   // ── Filtered list ─────────────────────────────────────────────────────
   const filtered = orders.filter(o => {
     if (isRep && myRep && o.repId !== myRep.id && o.repName !== myRep.name) return false;
@@ -353,6 +378,9 @@ export default function OrdersPage() {
                       )}
                       {isManager && o.status === "SENT" && (
                         <button onClick={() => setInvoiceModalOrder(o)} style={actionBtn("#0891B2", "#CFFAFE")}><Upload size={12} /> گەیشتووە</button>
+                      )}
+                      {isManager && o.status === "DELIVERED" && (
+                        <button onClick={() => { setPayModalOrder(o); setPayMethod("CASH"); }} style={actionBtn("#059669", "#D1FAE5")}><DollarSign size={12} /> پارەدان</button>
                       )}
                       {/* Always available */}
                       <button onClick={() => setDetailOrder(o)} style={{ padding: "5px 8px", background: "#F1F3F5", color: "#495057", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center" }}><Eye size={13} /></button>
@@ -716,6 +744,67 @@ export default function OrdersPage() {
             <button onClick={() => { setRejectOrder(null); setRejectReason(""); }} style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
             <button onClick={confirmReject} style={{ padding: "9px 18px", background: "#DC2626", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>ڕەتکردنەوە ✓</button>
           </div>
+        </div>
+      </Modal>
+
+      {/* ════════════════════════════════════════════════════════════════
+          PAYMENT MODAL (DELIVERED → PAID)
+      ════════════════════════════════════════════════════════════════ */}
+      <Modal open={!!payModalOrder} onClose={() => setPayModalOrder(null)} title="پارەدانی داواکاری" width={420}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {payModalOrder && (
+            <>
+              {/* Order summary */}
+              <div style={{ background: "#F8F9FA", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+                  <span style={{ color: "#6C757D" }}>داواکاری</span>
+                  <strong style={{ color: "#4263EB" }}>{payModalOrder.orderNumber}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+                  <span style={{ color: "#6C757D" }}>کڕیار</span>
+                  <span style={{ fontWeight: 600 }}>{payModalOrder.clientName}</span>
+                </div>
+                <div style={{ borderTop: "1px solid #E9ECEF", marginTop: 4, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 16 }}>
+                  <span style={{ color: "#6C757D", fontWeight: 600 }}>کۆی گشتی</span>
+                  <strong style={{ color: "#059669", fontSize: 18 }}>
+                    {new Intl.NumberFormat("ar-IQ").format(payModalOrder.totalAmount)} IQD
+                  </strong>
+                </div>
+              </div>
+
+              {/* Payment method */}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#495057", marginBottom: 10 }}>ڕێگای پارەدان</div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  {(["CASH", "TRANSFER"] as const).map(method => (
+                    <button key={method} type="button"
+                      onClick={() => setPayMethod(method)}
+                      style={{
+                        flex: 1, padding: "12px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 14, transition: "all .15s",
+                        border: `2px solid ${payMethod === method ? (method === "CASH" ? "#059669" : "#4263EB") : "#E9ECEF"}`,
+                        background: payMethod === method ? (method === "CASH" ? "#D1FAE5" : "#EDF2FF") : "#fff",
+                        color: payMethod === method ? (method === "CASH" ? "#059669" : "#4263EB") : "#6C757D",
+                      }}>
+                      {method === "CASH" ? "💵 کاش" : "🏦 حەواڵە"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setPayModalOrder(null)}
+                  style={{ flex: 1, padding: "10px 18px", background: "#fff", border: "1px solid #E8E8E8", borderRadius: 10, cursor: "pointer", fontWeight: 500, color: "#5C5C5C" }}>
+                  پاشگەزبوونەوە
+                </button>
+                <button onClick={confirmPayment} disabled={paying}
+                  style={{ flex: 1, padding: "10px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 10, cursor: paying ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, opacity: paying ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <DollarSign size={16} />
+                  {paying ? "پرۆسەکردن..." : "پارەدراوە ✔"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
 
