@@ -14,6 +14,8 @@ export default function TelegramPage() {
   const [testing, setTesting]         = useState(false);
   const [testResult, setTestResult]   = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<"setup" | "notify" | "send">("setup");
+  const [webhookStatus, setWebhookStatus] = useState<string | null>(null);
+  const [settingWebhook, setSettingWebhook] = useState(false);
 
   // Notify users tab
   const [scanning, setScanning]           = useState(false);
@@ -31,6 +33,51 @@ export default function TelegramPage() {
     e.preventDefault();
     await updateSettings({ telegramBotToken: tokenInput.trim() });
     showToast("تۆکنی بۆت پاشەکەوتکرا ✅");
+  };
+
+  const handleSetWebhook = async () => {
+    const token = settings.telegramBotToken || tokenInput.trim();
+    if (!token) { setWebhookStatus("❌ تکایە سەرەتا تۆکن بۆت بنووسە و پاشەکەوتبكە"); return; }
+    setSettingWebhook(true);
+    setWebhookStatus(null);
+    try {
+      const webhookUrl = `${window.location.origin}/api/telegram-webhook`;
+      const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: webhookUrl }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setWebhookStatus(`✅ Webhook رێکخرا — ${webhookUrl}`);
+        showToast("Webhook بەکارت ھات ✅");
+      } else {
+        setWebhookStatus(`❌ ھەڵە: ${data.description}`);
+      }
+    } catch {
+      setWebhookStatus("❌ ھەڵەی تۆڕ — ناتوانرێت پەیوەندی بکرێت");
+    }
+    setSettingWebhook(false);
+  };
+
+  const handleCheckWebhook = async () => {
+    const token = settings.telegramBotToken || tokenInput.trim();
+    if (!token) return;
+    setSettingWebhook(true);
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+      const data = await res.json();
+      if (data.ok && data.result?.url) {
+        setWebhookStatus(`✅ ئێستا رێکخراوە: ${data.result.url}`);
+      } else if (data.ok && !data.result?.url) {
+        setWebhookStatus("⚠️ Webhook رێکنەخستراوە");
+      } else {
+        setWebhookStatus(`❌ ھەڵە: ${data.description}`);
+      }
+    } catch {
+      setWebhookStatus("❌ ھەڵەی تۆڕ");
+    }
+    setSettingWebhook(false);
   };
 
   const handleTestBot = async () => {
@@ -149,18 +196,34 @@ export default function TelegramPage() {
             </form>
           </div>
 
-          {/* Webhook info */}
+          {/* Webhook — one-click setup */}
           <div style={card}>
-            <h3 style={{ fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>🔗 Webhook</h3>
-            <div style={{ fontSize: 13, color: "#6C757D", lineHeight: 1.8 }}>
-              <p>بۆ وەرگرتنی پەیامەکانی شوفێر پێویستە Webhook ڕێکبخەیت. URL ی Webhook:</p>
-              <code style={{ display: "block", padding: "8px 12px", background: "#F8F9FA", borderRadius: 8, fontSize: 12, color: "#495057", marginTop: 8, wordBreak: "break-all" }}>
-                {typeof window !== "undefined" ? window.location.origin : "https://your-domain.com"}/api/telegram-webhook
-              </code>
-              <p style={{ marginTop: 10 }}>ئەم URL ەی لەڕووپەلی <strong>@BotFather</strong> بنووسە یان ئەم کۆمەندە لە Browser Console بکە:</p>
-              <code style={{ display: "block", padding: "8px 12px", background: "#F1F3F5", borderRadius: 8, fontSize: 11, marginTop: 6, wordBreak: "break-all", color: "#495057" }}>
-                {`fetch('https://api.telegram.org/bot${settings.telegramBotToken || "TOKEN"}/setWebhook?url=${typeof window !== "undefined" ? window.location.origin : "https://your-domain.com"}/api/telegram-webhook')`}
-              </code>
+            <h3 style={{ fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>🔗 Webhook</h3>
+            <p style={{ fontSize: 13, color: "#6C757D", marginBottom: 14 }}>پێویستە Webhook ڕێکبخەیت تا پەیامەکانی شوفێران بگەن بۆ سیستەم. یەک کرتە دەیەوەتەوە.</p>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button onClick={handleSetWebhook} disabled={settingWebhook || !settings.telegramBotToken}
+                style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", background: settings.telegramBotToken ? "#4263EB" : "#DEE2E6", color: settings.telegramBotToken ? "#fff" : "#6C757D", border: "none", borderRadius: 10, cursor: settings.telegramBotToken && !settingWebhook ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 14 }}>
+                {settingWebhook ? "..." : "🔗 Webhook ڕێکبخە"}
+              </button>
+              <button onClick={handleCheckWebhook} disabled={settingWebhook || !settings.telegramBotToken}
+                style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 16px", background: "#F8F9FA", color: "#495057", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+                {settingWebhook ? "..." : "🔍 بینینی بارودۆخ"}
+              </button>
+            </div>
+
+            {!settings.telegramBotToken && (
+              <div style={{ marginTop: 10, fontSize: 12, color: "#DC2626" }}>⚠️ سەرەتا تۆکن پاشەکەوت بکە دواتر Webhook ڕێکبخە</div>
+            )}
+
+            {webhookStatus && (
+              <div style={{ marginTop: 12, padding: "10px 14px", background: webhookStatus.startsWith("✅") ? "#D1FAE5" : webhookStatus.startsWith("⚠️") ? "#FEF3C7" : "#FEE2E2", color: webhookStatus.startsWith("✅") ? "#059669" : webhookStatus.startsWith("⚠️") ? "#D97706" : "#DC2626", borderRadius: 10, fontSize: 13, fontWeight: 600, wordBreak: "break-all" }}>
+                {webhookStatus}
+              </div>
+            )}
+
+            <div style={{ marginTop: 14, padding: "10px 14px", background: "#F8FAFF", borderRadius: 8, fontSize: 12, color: "#6C757D" }}>
+              📌 URL ی Webhook: <code style={{ fontSize: 11 }}>{typeof window !== "undefined" ? window.location.origin : ""}/api/telegram-webhook</code>
             </div>
           </div>
 
