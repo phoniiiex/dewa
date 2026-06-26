@@ -156,30 +156,41 @@ export default function OrdersPage() {
   // ── Workflow actions ──────────────────────────────────────────────────
   const acceptOrder = (o: Order) => { updateOrder(o.id, { status: "IN_PROGRESS" }); showToast("داواکاری قبووڵکرا"); };
 
-  // Voice recorder helpers
+  // Voice recorder helpers — click to start, click to stop
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg" });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg";
+      const mr = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
-      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.ondataavailable = e => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mr.mimeType });
+        const blob = new Blob(chunksRef.current, { type: mimeType });
         setVoiceBlob(blob);
         setVoiceUrl(URL.createObjectURL(blob));
         stream.getTracks().forEach(t => t.stop());
       };
-      mr.start();
+      mr.start(250); // collect data every 250ms for reliability
       mediaRecorderRef.current = mr;
       setIsRecording(true);
-    } catch {
+    } catch (err) {
+      console.error("mic error", err);
       showToast("میکرۆفۆن دەسترەسینیبە نییە — ئێجازەکە بدە", "error");
     }
   };
 
   const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
     setIsRecording(false);
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) stopRecording();
+    else startRecording();
   };
 
   const clearVoice = () => {
@@ -604,27 +615,26 @@ export default function OrdersPage() {
             ) : null;
           })()}
           {/* Voice note recorder */}
-          <div style={{ border: "1px solid #E9ECEF", borderRadius: 12, padding: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: "#495057" }}>🎙️ ئەوازی تێبینی (ئارەزووی)</div>
+          <div style={{ border: `1px solid ${isRecording ? "#DC2626" : "#E9ECEF"}`, borderRadius: 12, padding: 14, transition: "border-color .2s" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: "#495057", display: "flex", alignItems: "center", gap: 6 }}>
+              🎙️ ئەوازی تێبینی
+              <span style={{ fontSize: 11, fontWeight: 400, color: "#ADB5BD" }}>(ئارەزووی)</span>
+              {isRecording && <span style={{ marginRight: "auto", fontSize: 12, color: "#DC2626", fontWeight: 700, animation: "pulse 1s infinite" }}>● تۆمارکردن...</span>}
+            </div>
             {!voiceUrl ? (
-              <button type="button"
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
-                onTouchStart={startRecording}
-                onTouchEnd={stopRecording}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", background: isRecording ? "#FEE2E2" : "#EDE9FE", color: isRecording ? "#DC2626" : "#7C3AED", border: `2px solid ${isRecording ? "#DC2626" : "#C4B5FD"}`, borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 14, transition: "all .15s", width: "100%" }}>
-                {isRecording ? "⏹ هاویست بکە..." : "⏺ نگه‌دار بکە بۆ تۆمارکردن"}
+              <button type="button" onClick={toggleRecording}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 18px", background: isRecording ? "#DC2626" : "#7C3AED", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 14, width: "100%", transition: "background .2s" }}>
+                {isRecording ? "⏹ هاوسوکردن" : "⏺ دەستپێکردنی تۆمارکردن"}
               </button>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <audio src={voiceUrl} controls style={{ width: "100%", height: 36 }} />
+                <audio src={voiceUrl} controls style={{ width: "100%" }} />
                 <button type="button" onClick={clearVoice}
-                  style={{ padding: "6px 12px", background: "#FEE2E2", color: "#DC2626", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, width: "fit-content" }}>
-                  🗑 سڕینەوە
+                  style={{ padding: "6px 14px", background: "#FEE2E2", color: "#DC2626", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, width: "fit-content" }}>
+                  🗑 سڕینەوە و دووبارە تۆمارکردن
                 </button>
               </div>
             )}
-            <div style={{ fontSize: 11, color: "#ADB5BD", marginTop: 6 }}>نگه‌داری دوگمە = تۆمارکردن / بەرداشتن = هاوسوکردن</div>
           </div>
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
