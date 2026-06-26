@@ -2,7 +2,8 @@
 import { useState, FormEvent, useRef } from "react";
 import {
   Settings2, Building2, Save, RefreshCw, Camera, Upload, Users, ArrowLeft,
-  Sun, Moon, Monitor, AlignRight, AlignLeft, AlignCenter, Check,
+  Sun, Moon, AlignRight, AlignLeft, AlignCenter, Check,
+  Trash2, Download, AlertTriangle, Shield,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
@@ -73,12 +74,67 @@ export default function SettingsPage() {
     showToast("زانیاری کۆمپانیا پاشەکەوتکرا", "success");
   };
 
-  const handleResetData = () => {
-    if (confirm("ئایا دڵنیایت لە سڕینەوەی هەموو داتاکان؟ ئەم کردارە ناگەڕێتەوە.")) {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith("dewa_"));
-      keys.forEach(k => localStorage.removeItem(k));
-      showToast("هەموو داتاکان سڕانەوە. لاپەڕەکە نوێ دەبێتەوە...");
-      setTimeout(() => window.location.reload(), 1500);
+  const [deleteStep, setDeleteStep] = useState<"idle" | "confirm" | "working" | "done">("idle");
+  const [deleteLog, setDeleteLog] = useState<string[]>([]);
+
+  const handleResetData = async () => {
+    setDeleteStep("working");
+    setDeleteLog([]);
+    const log = (msg: string) => setDeleteLog(prev => [...prev, msg]);
+    try {
+      const { supabase } = await import("@/lib/supabase");
+
+      // ── 1. Fetch all data for backup ──────────────────────────────
+      log("داتا هێنانی باکئەپ...");
+      const tables = [
+        "products", "clients", "reps", "warehouses", "suppliers",
+        "orders", "drivers", "transactions", "invoice_templates",
+        "price_types", "sample_requests",
+      ];
+      const backup: Record<string, unknown[]> = {};
+      for (const table of tables) {
+        const { data } = await supabase.from(table).select("*");
+        backup[table] = data || [];
+        log(`✓ ${table} (${backup[table].length} ڕیکۆرد)`);
+      }
+      backup._backup_date = [new Date().toISOString()];
+
+      // ── 2. Trigger JSON download ───────────────────────────────────
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href = url;
+      a.download = `dewa_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      log("⬇ باکئەپ دابەزاند");
+
+      // ── 3. Delete all rows from each table ────────────────────────
+      // Order matters: orders before clients (FK), transactions before orders, etc.
+      const deleteOrder = [
+        "transactions", "sample_requests", "orders",
+        "clients", "products", "reps", "warehouses",
+        "suppliers", "drivers", "invoice_templates", "price_types",
+      ];
+      for (const table of deleteOrder) {
+        const { error } = await supabase.from(table).delete().neq("id", "__never__");
+        if (error) {
+          log(`✗ ${table}: ${error.message}`);
+        } else {
+          log(`🗑 ${table} سڕایەوە`);
+        }
+      }
+
+      log("✅ هەموو داتاکان سڕانەوە!");
+      setDeleteStep("done");
+      showToast("داتاکان سڕانەوە و باکئەپ داونلۆدکرا", "success");
+      setTimeout(() => window.location.reload(), 2500);
+    } catch (err) {
+      log(`❌ هەڵە: ${String(err)}`);
+      showToast("هەڵەیەک ڕوویدا", "error");
+      setDeleteStep("confirm");
     }
   };
 
@@ -254,11 +310,63 @@ export default function SettingsPage() {
 
           {/* ─── Danger Zone ─── */}
           <div style={{ ...cardStyle, border: "1px solid #FFC9C9" }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: "#FA5252" }}>ناوچەی مەترسیدار</h3>
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 16 }}>ئەم کردارانە هەموو داتاکان دەسڕنەوە و ناگەڕێنەوە.</p>
-            <button onClick={handleResetData} style={{ padding: "10px 24px", borderRadius: 8, background: "#FA5252", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-              <RefreshCw size={14} /> سڕینەوەی هەموو داتاکان
-            </button>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: "#FA5252", display: "flex", alignItems: "center", gap: 8 }}>
+              <AlertTriangle size={18} /> ناوچەی مەترسیدار
+            </h3>
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 20 }}>سڕینەوەی هەموو داتاکان لە سوپابەیس. پێش سڕینەوە باکئەپی خۆکار داونلۆد دەکرێت.</p>
+
+            {deleteStep === "idle" && (
+              <button
+                onClick={() => setDeleteStep("confirm")}
+                style={{ padding: "10px 24px", borderRadius: 8, background: "#FA5252", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+                <Trash2 size={14} /> سڕینەوەی هەموو داتاکان
+              </button>
+            )}
+
+            {deleteStep === "confirm" && (
+              <div style={{ background: "#FFF5F5", border: "1px solid #FFC9C9", borderRadius: 12, padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                  <Shield size={20} color="#FA5252" />
+                  <span style={{ fontWeight: 700, color: "#FA5252", fontSize: 14 }}>دڵنیابووەیت؟ ئەم کردارە ناگەڕێتەوە</span>
+                </div>
+                <p style={{ fontSize: 12, color: "#6C757D", marginBottom: 16, lineHeight: 1.6 }}>
+                  هەموو داتاکانت (داواکاری، کڕیار، بەرهەم، ...) دەسڕێنەوە.<br/>
+                  <strong>باکئەپی JSON خۆکار داونلۆد دەکرێت پێش سڕینەوە.</strong>
+                </p>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={handleResetData}
+                    style={{ padding: "10px 20px", borderRadius: 8, background: "#FA5252", color: "white", fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Download size={14} /> باکئەپ بکە و بیسڕەوە
+                  </button>
+                  <button
+                    onClick={() => setDeleteStep("idle")}
+                    style={{ padding: "10px 20px", borderRadius: 8, background: "var(--color-bg-hover)", color: "var(--color-text-primary)", fontSize: 13, fontWeight: 600, border: "1px solid var(--color-border)", cursor: "pointer", fontFamily: "inherit" }}>
+                    پاشگەزبوونەوە
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {deleteStep === "working" && (
+              <div style={{ background: "#F8F9FA", border: "1px solid var(--color-border)", borderRadius: 12, padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                  <RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} />
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>کارەکە بەردەوامە...</span>
+                </div>
+                <div style={{ maxHeight: 180, overflowY: "auto", fontFamily: "monospace", fontSize: 12, color: "var(--color-text-secondary)", display: "flex", flexDirection: "column", gap: 3 }}>
+                  {deleteLog.map((line, i) => (
+                    <div key={i}>{line}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {deleteStep === "done" && (
+              <div style={{ background: "#D1FAE5", border: "1px solid #6EE7B7", borderRadius: 12, padding: 16, fontSize: 13, fontWeight: 600, color: "#059669" }}>
+                ✅ هەموو داتاکان سڕانەوە. لاپەڕەکە نوێ دەبێتەوە...
+              </div>
+            )}
           </div>
         </div>
       </div>
