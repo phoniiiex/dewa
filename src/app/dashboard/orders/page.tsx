@@ -82,9 +82,10 @@ export default function OrdersPage() {
 
   // Invoice upload (SENT → DELIVERED)
   const [invoiceModalOrder, setInvoiceModalOrder] = useState<Order | null>(null);
-  const [invoiceFile, setInvoiceFile]             = useState<File | null>(null);
+  const [invoiceFiles, setInvoiceFiles]           = useState<File[]>([]);
   const [uploading, setUploading]                 = useState(false);
   const invoiceRef = useRef<HTMLInputElement>(null);
+
 
   // ── New order form ────────────────────────────────────────────────────
   const [form, setForm] = useState({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
@@ -212,20 +213,30 @@ export default function OrdersPage() {
     if (!invoiceModalOrder) return;
     setUploading(true);
     let invoiceUrl = "";
-    if (invoiceFile) {
+    if (invoiceFiles.length > 0) {
       const { supabase } = await import("@/lib/supabase");
-      const { data, error } = await supabase.storage
-        .from("order-docs")
-        .upload(`invoices/${invoiceModalOrder.id}_${Date.now()}`, invoiceFile, { upsert: true });
-      if (error) { showToast("هەڵە لە بارکردن: " + error.message, "error"); setUploading(false); return; }
-      const { data: urlData } = supabase.storage.from("order-docs").getPublicUrl(data.path);
-      invoiceUrl = urlData.publicUrl;
+      const uploads = await Promise.all(
+        invoiceFiles.map((file, idx) =>
+          supabase.storage
+            .from("order-docs")
+            .upload(`invoices/${invoiceModalOrder.id}_${Date.now()}_${idx}_${file.name}`, file, { upsert: true })
+        )
+      );
+      const firstErr = uploads.find(u => u.error);
+      if (firstErr?.error) { showToast("هەڵە لە بارکردن: " + firstErr.error.message, "error"); setUploading(false); return; }
+      // store first file's URL in signedInvoiceUrl
+      if (uploads[0].data) {
+        const { data: urlData } = supabase.storage.from("order-docs").getPublicUrl(uploads[0].data.path);
+        invoiceUrl = urlData.publicUrl;
+      }
     }
     await updateOrder(invoiceModalOrder.id, { status: "DELIVERED", deliveredAt: new Date().toISOString(), signedInvoiceUrl: invoiceUrl });
     showToast("بارودۆخ گۆڕدرا: گەیشتووە");
     setUploading(false);
     setInvoiceModalOrder(null);
+    setInvoiceFiles([]);
   };
+
 
   const confirmReject = async () => {
     if (!rejectOrder) return;
@@ -587,31 +598,28 @@ export default function OrdersPage() {
       {/* ════════════════════════════════════════════════════════════════
           INVOICE UPLOAD (SENT → DELIVERED)
       ════════════════════════════════════════════════════════════════ */}
-      <Modal open={!!invoiceModalOrder} onClose={() => { setInvoiceModalOrder(null); setInvoiceFile(null); }} title="بارکردنی پسوولەی واژووکراو">
+      <Modal open={!!invoiceModalOrder} onClose={() => { setInvoiceModalOrder(null); setInvoiceFiles([]); }} title="بارکردنی پسوولەی واژووکراو">
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
           {/* Drop zone */}
           <div
             onClick={() => invoiceRef.current?.click()}
             onDragOver={e => {
-              e.preventDefault();
-              e.stopPropagation();
+              e.preventDefault(); e.stopPropagation();
               e.currentTarget.style.borderColor = "#4263EB";
               e.currentTarget.style.background  = "#EDF2FF";
             }}
             onDragLeave={e => {
-              e.preventDefault();
-              e.stopPropagation();
+              e.preventDefault(); e.stopPropagation();
               e.currentTarget.style.borderColor = "#D1D1D1";
               e.currentTarget.style.background  = "#FAFAFA";
             }}
             onDrop={e => {
-              e.preventDefault();
-              e.stopPropagation();
+              e.preventDefault(); e.stopPropagation();
               e.currentTarget.style.borderColor = "#D1D1D1";
               e.currentTarget.style.background  = "#FAFAFA";
-              const file = e.dataTransfer.files?.[0];
-              if (file) setInvoiceFile(file);
+              const dropped = Array.from(e.dataTransfer.files);
+              if (dropped.length) setInvoiceFiles(prev => [...prev, ...dropped]);
             }}
             onMouseEnter={e => (e.currentTarget.style.borderColor = "#4263EB")}
             onMouseLeave={e => (e.currentTarget.style.borderColor = "#D1D1D1")}
@@ -619,76 +627,70 @@ export default function OrdersPage() {
           >
             <Upload size={24} style={{ color: "#ADB5BD" }} />
             <div>
-              <div style={{ fontSize: 14, fontWeight: 500, color: "#171717" }}>فایلێک هەڵبژێرە یان ئێرە بیکێشە</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: "#171717" }}>فایلێک هەڵبژێرە یان ئێرە بیکێشە (چەند فایل دەتوانیت)</div>
               <div style={{ fontSize: 12, color: "#5C5C5C", marginTop: 4 }}>وێنە، PDF، تا ٥٠ MB</div>
             </div>
             <div style={{ padding: "6px 14px", background: "#fff", border: "1px solid #E8E8E8", borderRadius: 8, fontSize: 13, color: "#5C5C5C", fontWeight: 500, boxShadow: "0 1px 2px rgba(10,13,20,.03)" }}>
               هەڵبژاردنی فایل
             </div>
-            <input ref={invoiceRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }}
-              onChange={e => setInvoiceFile(e.target.files?.[0] || null)} />
+            <input ref={invoiceRef} type="file" accept="image/*,application/pdf" multiple style={{ display: "none" }}
+              onChange={e => {
+                const picked = Array.from(e.target.files ?? []);
+                if (picked.length) setInvoiceFiles(prev => [...prev, ...picked]);
+                e.target.value = ""; // reset so same file can be re-added
+              }} />
           </div>
 
-          {/* File card — shows after a file is chosen */}
-          {invoiceFile && (
-            <div style={{ border: `1px solid ${uploading ? "#E8E8E8" : "#D1FAE5"}`, borderRadius: 12, padding: "14px 16px 14px 14px", background: uploading ? "#fff" : "#F0FDF4", display: "flex", flexDirection: "column", gap: 12, transition: "all .3s" }}>
-              {/* Top row */}
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                {/* File icon */}
-                <div style={{ width: 40, height: 40, background: "#FEE2E2", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 18 }}>
-                  📄
-                </div>
-                {/* File info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: "#171717", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {invoiceFile.name}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-                    <span style={{ fontSize: 12, color: "#5C5C5C" }}>
-                      {(invoiceFile.size / 1024).toFixed(0)} KB
-                    </span>
-                    <span style={{ fontSize: 12, color: "#5C5C5C" }}>∙</span>
-                    {uploading ? (
-                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#171717" }}>
-                        <span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid #4263EB", borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                        بارکردن...
-                      </span>
-                    ) : (
-                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#059669", fontWeight: 600 }}>
-                        <CheckCircle size={13} /> تەواوبوو
-                      </span>
+          {/* File cards — one per file */}
+          {invoiceFiles.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {invoiceFiles.map((file, idx) => (
+                <div key={idx} style={{ border: `1px solid ${uploading ? "#E8E8E8" : "#D1FAE5"}`, borderRadius: 12, padding: "12px 14px", background: uploading ? "#fff" : "#F0FDF4", display: "flex", flexDirection: "column", gap: 10, transition: "all .3s" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 36, height: 36, background: "#FEE2E2", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>📄</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "#171717", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
+                        <span style={{ fontSize: 11, color: "#5C5C5C" }}>{(file.size / 1024).toFixed(0)} KB</span>
+                        <span style={{ fontSize: 11, color: "#5C5C5C" }}>∙</span>
+                        {uploading ? (
+                          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#171717" }}>
+                            <span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid #4263EB", borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                            بارکردن...
+                          </span>
+                        ) : (
+                          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#059669", fontWeight: 600 }}>
+                            <CheckCircle size={11} /> تەواوبوو
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {!uploading && (
+                      <button onClick={() => setInvoiceFiles(prev => prev.filter((_, i) => i !== idx))}
+                        style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#ADB5BD", flexShrink: 0, display: "flex" }}>
+                        <X size={16} />
+                      </button>
                     )}
                   </div>
+                  {uploading && (
+                    <div style={{ height: 5, background: "#EBEBEB", borderRadius: 999, overflow: "hidden" }}>
+                      <div style={{ height: "100%", background: "#4263EB", borderRadius: 999, animation: "progress-pulse 1.5s ease-in-out infinite" }} />
+                    </div>
+                  )}
                 </div>
-                {/* Remove button */}
-                {!uploading && (
-                  <button onClick={() => setInvoiceFile(null)}
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#ADB5BD", flexShrink: 0, display: "flex" }}>
-                    <X size={18} />
-                  </button>
-                )}
-              </div>
-
-              {/* Progress bar (only while uploading) */}
-              {uploading && (
-                <div style={{ height: 6, background: "#EBEBEB", borderRadius: 999, overflow: "hidden" }}>
-                  <div style={{ height: "100%", background: "#4263EB", borderRadius: 999, width: "60%", animation: "progress-pulse 1.5s ease-in-out infinite" }} />
-                </div>
-              )}
+              ))}
             </div>
           )}
 
           <style>{`
             @keyframes spin { to { transform: rotate(360deg); } }
             @keyframes progress-pulse {
-              0%   { width: 10%; opacity: 1; }
-              50%  { width: 70%; opacity: 0.8; }
-              100% { width: 90%; opacity: 1; }
+              0%   { width: 10%; } 50% { width: 70%; } 100% { width: 90%; }
             }
           `}</style>
 
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button onClick={() => { setInvoiceModalOrder(null); setInvoiceFile(null); }}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => { setInvoiceModalOrder(null); setInvoiceFiles([]); }}
               style={{ flex: 1, padding: "9px 18px", background: "#fff", border: "1px solid #E8E8E8", borderRadius: 10, cursor: "pointer", fontWeight: 500, color: "#5C5C5C", boxShadow: "0 1px 2px rgba(10,13,20,.03)" }}>
               پاشگەزبوونەوە
             </button>
@@ -700,6 +702,7 @@ export default function OrdersPage() {
           </div>
         </div>
       </Modal>
+
 
       {/* ════════════════════════════════════════════════════════════════
           REJECT MODAL
