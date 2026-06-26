@@ -571,10 +571,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [showToast]);
 
   const addDriver = useCallback(async (d: Omit<Driver, "id" | "createdAt">) => {
-    const nd: Driver = { ...d, id: genId(), createdAt: new Date().toISOString() };
+    // drivers.id is uuid — let Supabase generate it, then use the returned id
+    const payload = fromDriver({ ...d, createdAt: new Date().toISOString() });
+    delete payload["id"]; // do NOT send custom id — uuid must come from DB
+    const { data, error } = await supabase.from("drivers").insert(payload).select().single();
+    if (error) {
+      showToast("هەڵە: " + error.message, "error");
+      const fallback: Driver = { ...d, id: "tmp-" + Date.now(), createdAt: new Date().toISOString() };
+      return fallback;
+    }
+    const nd = toDriver(data as Record<string, unknown>);
     setDrivers((prev) => [nd, ...prev]);
-    const { error } = await supabase.from("drivers").insert(fromDriver(nd));
-    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("شوفێر زیادکرا");
+    showToast("شوفێر زیادکرا ✅");
     return nd;
   }, [showToast]);
 
