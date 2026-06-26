@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect, FormEvent, useRef } from "react";
-import { Search, Plus, Users, Phone, MapPin, Edit3, Trash2, Eye, X, Building2, Stethoscope, ShoppingBag, Clock, CheckCircle, XCircle, RefreshCw, AlertCircle, History, CreditCard, Upload, Printer, Warehouse, TrendingUp, Package, DollarSign, ChevronRight, ArrowLeft } from "lucide-react";
+import { Search, Plus, Users, Phone, MapPin, Edit3, Trash2, Eye, X, Building2, Stethoscope, ShoppingBag, Clock, CheckCircle, XCircle, RefreshCw, AlertCircle, History, CreditCard, Upload, Printer, Warehouse, TrendingUp, Package, DollarSign, ArrowLeft } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
+import { buildDebtReceiptHTML } from "@/lib/debtReceipt";
 import type { Client, ClientType, PaymentTerms, Order } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -96,6 +97,8 @@ export default function ClientsPage() {
   const [paymentUploading, setPaymentUploading] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [paymentStep, setPaymentStep] = useState<"select" | "receipt">("select");
+  const [discount, setDiscount] = useState("0");
+  const [receiverName, setReceiverName] = useState("");
   const receiptInputRef = useRef<HTMLInputElement>(null);
 
   // Requests tab state
@@ -589,38 +592,109 @@ export default function ClientsPage() {
                   </div>
                 </>
               )}
-              {paymentStep === "receipt" && (
-                <>
-                  <div style={{ padding: 14, background: "#F0FDF4", borderRadius: 10, border: "1px solid #BBF7D0" }}>
-                    <div style={{ fontWeight: 600, color: "#059669", marginBottom: 4 }}>کۆی پارەدان: {formatIQD(totalToPay)}</div>
-                    <div style={{ fontSize: 13, color: "#6C757D" }}>{targetOrders.length} داواکاری</div>
-                  </div>
-                  <div style={{ border: "2px dashed #DEE2E6", borderRadius: 12, padding: 24, textAlign: "center", cursor: "pointer" }} onClick={() => receiptInputRef.current?.click()}>
-                    <Upload size={28} style={{ color: "#ADB5BD", display: "block", margin: "0 auto 8px" }} />
-                    <div style={{ fontSize: 13, color: "#6C757D" }}>{receiptFile ? receiptFile.name : "کرتەکەیت لێبکە بۆ هەڵبژاردنی فایل (ئەگەر هەبوو)"}</div>
-                    <input ref={receiptInputRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => setReceiptFile(e.target.files?.[0] || null)} />
-                  </div>
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                    <button onClick={() => setPaymentStep("select")} style={{ padding: "10px 20px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>← گەڕانەوە</button>
-                    <button disabled={paymentUploading} onClick={async () => {
-                      setPaymentUploading(true);
-                      let receiptUrl = "";
-                      if (receiptFile) {
-                        const { supabase } = await import("@/lib/supabase");
-                        const { data, error } = await supabase.storage.from("order-docs").upload(`receipts/${Date.now()}`, receiptFile, { upsert: true });
-                        if (error) { showToast("هەڵە لە بارکردن: " + error.message, "error"); setPaymentUploading(false); return; }
-                        const { data: urlData } = supabase.storage.from("order-docs").getPublicUrl(data.path);
-                        receiptUrl = urlData.publicUrl;
-                      }
-                      await markOrdersAsPaid(targetOrders.map(o => o.id), receiptUrl);
-                      setPaymentClient(null);
-                      setPaymentUploading(false);
-                    }} style={{ padding: "10px 20px", background: "#059669", color: "#fff", border: "none", borderRadius: 10, cursor: paymentUploading ? "not-allowed" : "pointer", fontFamily: "inherit", fontWeight: 700, opacity: paymentUploading ? 0.7 : 1 }}>
-                      {paymentUploading ? "تۆمارکردن..." : "پارەدان دڵنیاکردنەوە ✓"}
-                    </button>
-                  </div>
-                </>
-              )}
+              {paymentStep === "receipt" && (() => {
+                const discountAmt = Math.max(0, Number(discount) || 0);
+                const afterDiscount = totalToPay - discountAmt;
+                return (
+                  <>
+                    {/* Summary bar */}
+                    <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: "#6C757D" }}>{targetOrders.length} داواکاری — کۆی گشتی</div>
+                        <div style={{ fontWeight: 800, fontSize: 20, color: "#059669" }}>{formatIQD(totalToPay)}</div>
+                      </div>
+                      {discountAmt > 0 && (
+                        <div style={{ textAlign: "left" }}>
+                          <div style={{ fontSize: 12, color: "#6C757D" }}>دوای داشکاندن</div>
+                          <div style={{ fontWeight: 800, fontSize: 20, color: "#2563EB" }}>{formatIQD(afterDiscount)}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Discount + Receiver */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#495057", marginBottom: 6 }}>داشکاندن (د.ع)</div>
+                        <input type="number" min={0} value={discount} onChange={e => setDiscount(e.target.value)}
+                          style={{ ...inputStyle, width: "100%" }} placeholder="0" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#495057", marginBottom: 6 }}>وەرگیراوە لە لایەن *</div>
+                        <input type="text" value={receiverName} onChange={e => setReceiverName(e.target.value)}
+                          style={{ ...inputStyle, width: "100%" }} placeholder="ناوی وەرگر..." />
+                      </div>
+                    </div>
+
+                    {/* Order numbers preview */}
+                    <div style={{ background: "#EEF2FF", border: "1px solid #C7D7FD", borderRadius: 10, padding: "10px 14px" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4263EB", marginBottom: 4 }}>داواکارییەکانی پارەدراو</div>
+                      <div style={{ fontSize: 12, color: "#1A1A2E", lineHeight: 1.8 }}>
+                        {targetOrders.map(o => o.orderNumber).join("  |  ")}
+                      </div>
+                    </div>
+
+                    {/* Upload signed receipt */}
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#495057", marginBottom: 6 }}>بارکردنی پسوولەی واژووکراو (ئەگەر هەبوو)</div>
+                      <div style={{ border: "1.5px dashed #DEE2E6", borderRadius: 10, padding: "14px 16px", textAlign: "center", cursor: "pointer", background: receiptFile ? "#F0FDF4" : "#FAFAFA" }}
+                        onClick={() => receiptInputRef.current?.click()}>
+                        <Upload size={20} style={{ color: "#ADB5BD", display: "block", margin: "0 auto 6px" }} />
+                        <div style={{ fontSize: 12, color: receiptFile ? "#059669" : "#6C757D", fontWeight: receiptFile ? 600 : 400 }}>
+                          {receiptFile ? `✓ ${receiptFile.name}` : "کرتە بکە یان فایل بخشێنە"}
+                        </div>
+                        <input ref={receiptInputRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => setReceiptFile(e.target.files?.[0] || null)} />
+                      </div>
+                    </div>
+
+                    {/* Action row */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => setPaymentStep("select")}
+                        style={{ padding: "10px 16px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 13 }}>
+                        ← گەڕانەوە
+                      </button>
+
+                      {/* Print receipt */}
+                      <button onClick={() => {
+                        const html = buildDebtReceiptHTML(
+                          paymentClient!.name,
+                          targetOrders,
+                          totalToPay,
+                          discountAmt,
+                          receiverName,
+                          settings ?? null
+                        );
+                        const w = window.open("", "_blank");
+                        if (!w) return;
+                        w.document.write(html);
+                        w.document.close();
+                      }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 16px", background: "#EEF2FF", border: "1px solid #C7D7FD", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 13, color: "#4263EB" }}>
+                        <Printer size={15} /> پرینتی وەسڵ
+                      </button>
+
+                      {/* Confirm payment */}
+                      <button disabled={paymentUploading} onClick={async () => {
+                        setPaymentUploading(true);
+                        let receiptUrl = "";
+                        if (receiptFile) {
+                          const { supabase } = await import("@/lib/supabase");
+                          const { data, error } = await supabase.storage.from("order-docs").upload(`receipts/${Date.now()}_${receiptFile.name}`, receiptFile, { upsert: true });
+                          if (error) { showToast("هەڵە لە بارکردن: " + error.message, "error"); setPaymentUploading(false); return; }
+                          const { data: urlData } = supabase.storage.from("order-docs").getPublicUrl(data.path);
+                          receiptUrl = urlData.publicUrl;
+                        }
+                        await markOrdersAsPaid(targetOrders.map(o => o.id), receiptUrl);
+                        setPaymentClient(null);
+                        setDiscount("0");
+                        setReceiverName("");
+                        setPaymentUploading(false);
+                      }} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 16px", background: "#059669", color: "#fff", border: "none", borderRadius: 10, cursor: paymentUploading ? "not-allowed" : "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 13, opacity: paymentUploading ? 0.7 : 1 }}>
+                        <CheckCircle size={15} />
+                        {paymentUploading ? "تۆمارکردن..." : "پارەدان دڵنیاکردنەوە"}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </Modal>
         );
