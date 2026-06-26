@@ -1,10 +1,10 @@
 "use client";
-import { useState, useEffect, FormEvent } from "react";
-import { Search, Plus, Users, Phone, MapPin, Edit3, Trash2, Eye, X, Building2, Stethoscope, ShoppingBag, Clock, CheckCircle, XCircle, RefreshCw, AlertCircle, History } from "lucide-react";
+import { useState, useEffect, FormEvent, useRef } from "react";
+import { Search, Plus, Users, Phone, MapPin, Edit3, Trash2, Eye, X, Building2, Stethoscope, ShoppingBag, Clock, CheckCircle, XCircle, RefreshCw, AlertCircle, History, CreditCard, Upload, Printer } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
-import type { Client, ClientType, PaymentTerms } from "@/lib/types";
+import type { Client, ClientType, PaymentTerms, Order } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
@@ -35,7 +35,7 @@ interface ClientRequest {
 }
 
 export default function ClientsPage() {
-  const { clients, reps, orders, addClient, updateClient, deleteClient } = useData();
+  const { clients, reps, orders, addClient, updateClient, deleteClient, markOrdersAsPaid, showToast } = useData();
   const { currentUser } = useLayout();
   const isManager = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
 
@@ -50,6 +50,15 @@ export default function ClientsPage() {
   const [detailClient, setDetailClient] = useState<Client | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", owner: "", phone: "", city: cities[0], type: "PHARMACY" as ClientType, repId: "", paymentTerms: "IMMEDIATE" as PaymentTerms, balance: "0", isActive: true });
+
+  // Payment modal state
+  const [paymentClient, setPaymentClient] = useState<Client | null>(null);
+  const [paymentMode, setPaymentMode] = useState<"all" | "select">("all");
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [paymentUploading, setPaymentUploading] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [paymentStep, setPaymentStep] = useState<"select" | "receipt">("select");
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   // Requests tab state
   const [requests, setRequests] = useState<ClientRequest[]>([]);
@@ -79,6 +88,8 @@ export default function ClientsPage() {
 
   const getRepName = (repId: string) => reps.find((r) => r.id === repId)?.name || "—";
   const getClientOrders = (clientId: string) => orders.filter((o) => o.clientId === clientId);
+  const getClientDebt    = (clientId: string) => orders.filter(o => o.clientId === clientId && (o.status === "DELIVERED" || o.status === "SENT")).reduce((s, o) => s + o.totalAmount, 0);
+  const getDeliveredOrders = (clientId: string) => orders.filter(o => o.clientId === clientId && o.status === "DELIVERED");
 
   // Load requests when tab is switched
   const loadRequests = async () => {
@@ -355,47 +366,176 @@ export default function ClientsPage() {
       {/* Detail Drawer */}
       {detailClient && (
         <div onClick={() => setDetailClient(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 400, animation: "fadeIn 0.15s ease" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 440, background: "white", boxShadow: "-10px 0 30px rgba(0,0,0,0.1)", animation: "slideInRight 0.2s ease", overflowY: "auto" }}>
-            <div style={{ padding: "20px 24px", borderBottom: "1px solid #E9ECEF", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700 }}>وردەکاری کڕیار</h3>
-              <button onClick={() => setDetailClient(null)} style={{ background: "#F1F3F5", borderRadius: 8, padding: 6, border: "none", cursor: "pointer" }}><X size={16} /></button>
+           <div style={{ padding: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{detailClient.name}</h2>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: typeColors[detailClient.type]?.bg || "#F1F3F5", color: typeColors[detailClient.type]?.color || "#6C757D", marginTop: 4 }}>
+              {typeIcons[detailClient.type as ClientType]} {typeLabels[detailClient.type as ClientType] || detailClient.type}
+            </span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 24 }}>
+              {[
+                { l: "خاوەن", v: detailClient.owner },
+                { l: "تەلەفۆن", v: detailClient.phone },
+                { l: "شار", v: detailClient.city },
+                { l: "نوێنەر", v: getRepName(detailClient.repId) },
+                { l: "مەرجی پارەدان", v: paymentLabels[detailClient.paymentTerms] },
+                { l: "قەرز", v: detailClient.balance > 0 ? formatIQD(detailClient.balance) : "نییە" },
+              ].map((item, i) => (
+                <div key={i}><div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 4 }}>{item.l}</div><div style={{ fontSize: 14, fontWeight: 600 }}>{item.v}</div></div>
+              ))}
             </div>
-            <div style={{ padding: 24 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{detailClient.name}</h2>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: typeColors[detailClient.type]?.bg || "#F1F3F5", color: typeColors[detailClient.type]?.color || "#6C757D", marginTop: 4 }}>
-                {typeIcons[detailClient.type as ClientType]} {typeLabels[detailClient.type as ClientType] || detailClient.type}
-              </span>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 24 }}>
-                {[
-                  { l: "خاوەن", v: detailClient.owner },
-                  { l: "تەلەفۆن", v: detailClient.phone },
-                  { l: "شار", v: detailClient.city },
-                  { l: "نوێنەر", v: getRepName(detailClient.repId) },
-                  { l: "مەرجی پارەدان", v: paymentLabels[detailClient.paymentTerms] },
-                  { l: "قەرز", v: detailClient.balance > 0 ? formatIQD(detailClient.balance) : "نییە" },
-                ].map((item, i) => (
-                  <div key={i}><div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 4 }}>{item.l}</div><div style={{ fontSize: 14, fontWeight: 600 }}>{item.v}</div></div>
-                ))}
+
+            {/* Make Payment button */}
+            {getDeliveredOrders(detailClient.id).length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <button
+                  onClick={() => { setPaymentClient(detailClient); setPaymentMode("all"); setSelectedOrderIds([]); setReceiptFile(null); setPaymentStep("select"); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "12px 16px", background: "linear-gradient(135deg, #059669, #10B981)", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 14, fontFamily: "inherit", justifyContent: "center", boxShadow: "0 4px 12px rgba(5,150,105,.3)" }}>
+                  <CreditCard size={18} /> پارەدان
+                </button>
               </div>
-              <div style={{ marginTop: 24, borderTop: "1px solid #E9ECEF", paddingTop: 16 }}>
-                <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>داواکارییەکان ({getClientOrders(detailClient.id).length})</h4>
-                {getClientOrders(detailClient.id).length === 0 ? (
-                  <p style={{ fontSize: 13, color: "#ADB5BD" }}>هیچ داواکارییەک نییە</p>
-                ) : (
-                  getClientOrders(detailClient.id).map((o) => (
-                    <div key={o.id} style={{ padding: "10px 12px", background: "#F8F9FA", borderRadius: 8, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div><span style={{ fontWeight: 600, fontSize: 13 }}>{o.orderNumber}</span><span style={{ fontSize: 11, color: "#ADB5BD", marginRight: 8 }}>{o.createdAt}</span></div>
-                      <span style={{ fontWeight: 600, fontSize: 13 }}>{formatIQD(o.totalAmount)}</span>
+            )}
+
+            <div style={{ marginTop: 24, borderTop: "1px solid #E9ECEF", paddingTop: 16 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>داواکارییەکان ({getClientOrders(detailClient.id).length})</h4>
+              {getClientOrders(detailClient.id).length === 0 ? (
+                <p style={{ fontSize: 13, color: "#ADB5BD" }}>هیچ داواکارییەک نییە</p>
+              ) : (
+                getClientOrders(detailClient.id).slice(0, 10).map((o) => (
+                  <div key={o.id} style={{ padding: "10px 12px", background: "#F8F9FA", borderRadius: 8, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{o.orderNumber}</span>
+                      <span style={{ fontSize: 11, color: "#ADB5BD", marginRight: 8 }}>{new Date(o.createdAt).toLocaleDateString("ku")}</span>
                     </div>
-                  ))
-                )}
-              </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{formatIQD(o.totalAmount)}</span>
+                      <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: o.status === "PAID" ? "#D1FAE5" : o.status === "DELIVERED" ? "#CFFAFE" : "#F1F3F5", color: o.status === "PAID" ? "#059669" : o.status === "DELIVERED" ? "#0891B2" : "#6C757D" }}>{o.status === "PAID" ? "پارەدراوە" : o.status === "DELIVERED" ? "گەیشتووە" : o.status === "SENT" ? "نێردراوە" : o.status === "WAITING" ? "چاوەڕوان" : o.status}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
       )}
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={() => { if (deleteId) deleteClient(deleteId); setDeleteId(null); }} message="ئایا دڵنیایت لە سڕینەوەی ئەم کڕیارە؟" />
+
+      {/* ════════ PAYMENT MODAL ════════ */}
+      {paymentClient && (() => {
+        const deliveredOrders = getDeliveredOrders(paymentClient.id);
+        const targetOrders: Order[] = paymentMode === "all" ? deliveredOrders : deliveredOrders.filter(o => selectedOrderIds.includes(o.id));
+        const totalToPay = targetOrders.reduce((s, o) => s + o.totalAmount, 0);
+        return (
+          <Modal open={true} onClose={() => setPaymentClient(null)} title={`پارەدانی — ${paymentClient.name}`}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {paymentStep === "select" && (
+                <>
+                  {/* Mode toggle */}
+                  <div style={{ display: "flex", gap: 0, background: "#F1F3F5", borderRadius: 10, padding: 4 }}>
+                    {(["all", "select"] as const).map(m => (
+                      <button key={m} onClick={() => { setPaymentMode(m); setSelectedOrderIds([]); }}
+                        style={{ flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: paymentMode === m ? "white" : "transparent", color: paymentMode === m ? "#059669" : "#6C757D", boxShadow: paymentMode === m ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .15s" }}>
+                        {m === "all" ? "پارەدانی هەموو" : "هەڵبژاردنی داواکاری"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Order list */}
+                  <div style={{ border: "1px solid #F1F3F5", borderRadius: 10, overflow: "hidden" }}>
+                    {deliveredOrders.length === 0 ? (
+                      <div style={{ padding: 24, textAlign: "center", color: "#ADB5BD" }}>هیچ داواکارییەکی گەیشتووە نییە</div>
+                    ) : deliveredOrders.map(o => {
+                      const checked = paymentMode === "all" || selectedOrderIds.includes(o.id);
+                      return (
+                        <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid #F8F9FA", background: checked ? "#F0FDF4" : "white", cursor: paymentMode === "select" ? "pointer" : "default" }}
+                          onClick={() => {
+                            if (paymentMode !== "select") return;
+                            setSelectedOrderIds(prev => prev.includes(o.id) ? prev.filter(id => id !== o.id) : [...prev, o.id]);
+                          }}>
+                          {paymentMode === "select" && (
+                            <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked ? "#059669" : "#DEE2E6"}`, background: checked ? "#059669" : "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              {checked && <CheckCircle size={12} color="white" />}
+                            </div>
+                          )}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: 14 }}>{o.orderNumber}</div>
+                            <div style={{ fontSize: 12, color: "#6C757D" }}>{new Date(o.createdAt).toLocaleDateString("ku")}</div>
+                          </div>
+                          <div style={{ fontWeight: 700, color: "#059669", fontSize: 15 }}>{formatIQD(o.totalAmount)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Total */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "#F0FDF4", borderRadius: 10, border: "1px solid #BBF7D0" }}>
+                    <span style={{ fontWeight: 600 }}>کۆی پارەدان</span>
+                    <span style={{ fontWeight: 800, fontSize: 20, color: "#059669" }}>{formatIQD(totalToPay)}</span>
+                  </div>
+
+                  {/* Print receipt preview */}
+                  {totalToPay > 0 && (
+                    <button onClick={() => window.print()} style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 16px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 13 }}>
+                      <Printer size={15} /> چاپکردنی پسوولە
+                    </button>
+                  )}
+
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button onClick={() => setPaymentClient(null)} style={{ padding: "10px 20px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>پاشگەزبوونەوە</button>
+                    <button
+                      disabled={targetOrders.length === 0}
+                      onClick={() => setPaymentStep("receipt")}
+                      style={{ padding: "10px 20px", background: "#059669", color: "#fff", border: "none", borderRadius: 10, cursor: targetOrders.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", fontWeight: 700, opacity: targetOrders.length === 0 ? 0.5 : 1 }}>
+                      پێشکەوتن ←
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {paymentStep === "receipt" && (
+                <>
+                  <div style={{ padding: 14, background: "#F0FDF4", borderRadius: 10, border: "1px solid #BBF7D0" }}>
+                    <div style={{ fontWeight: 600, color: "#059669", marginBottom: 4 }}>کۆی پارەدان: {formatIQD(totalToPay)}</div>
+                    <div style={{ fontSize: 13, color: "#6C757D" }}>{targetOrders.length} داواکاری</div>
+                  </div>
+
+                  <p style={{ fontSize: 14, color: "#6C757D", margin: 0 }}>پسوولەی واژووکراوی پارەدان بارکە تا تۆمار بکرێت.</p>
+
+                  <div style={{ border: "2px dashed #DEE2E6", borderRadius: 12, padding: 24, textAlign: "center", cursor: "pointer" }}
+                    onClick={() => receiptInputRef.current?.click()}>
+                    <Upload size={28} style={{ color: "#ADB5BD", display: "block", margin: "0 auto 8px" }} />
+                    <div style={{ fontSize: 13, color: "#6C757D" }}>{receiptFile ? receiptFile.name : "کرتەکەیت لێبکە بۆ هەڵبژاردنی فایل (ئەگەر هەبوو)"}</div>
+                    <input ref={receiptInputRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => setReceiptFile(e.target.files?.[0] || null)} />
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button onClick={() => setPaymentStep("select")} style={{ padding: "10px 20px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>← گەڕانەوە</button>
+                    <button
+                      disabled={paymentUploading}
+                      onClick={async () => {
+                        setPaymentUploading(true);
+                        let receiptUrl = "";
+                        if (receiptFile) {
+                          const { supabase } = await import("@/lib/supabase");
+                          const { data, error } = await supabase.storage.from("order-docs").upload(`receipts/${Date.now()}`, receiptFile, { upsert: true });
+                          if (error) { showToast("هەڵە لە بارکردن: " + error.message, "error"); setPaymentUploading(false); return; }
+                          const { data: urlData } = supabase.storage.from("order-docs").getPublicUrl(data.path);
+                          receiptUrl = urlData.publicUrl;
+                        }
+                        await markOrdersAsPaid(targetOrders.map(o => o.id), receiptUrl);
+                        setPaymentClient(null);
+                        setPaymentUploading(false);
+                      }}
+                      style={{ padding: "10px 20px", background: "#059669", color: "#fff", border: "none", borderRadius: 10, cursor: paymentUploading ? "not-allowed" : "pointer", fontFamily: "inherit", fontWeight: 700, opacity: paymentUploading ? 0.7 : 1 }}>
+                      {paymentUploading ? "تۆمارکردن..." : "پارەدان دڵنیاکردنەوە ✓"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* Clear history confirm */}
       {showClearConfirm && (

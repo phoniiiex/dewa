@@ -60,7 +60,9 @@ export default function Sidebar() {
         { label: "کۆگاکان",         href: "/dashboard/warehouses", icon: <Building2 size={18} />, managerOnly: true },
         { label: "دابینکەرەکان",   href: "/dashboard/suppliers",  icon: <Factory size={18} />,   managerOnly: true },
         { label: "گواستنەوە",       href: "/dashboard/logistics",  icon: <Truck size={18} /> },
+        { label: "شوفێرەکان",      href: "/dashboard/drivers",    icon: <BadgeCheck size={18} />, managerOnly: true },
         { label: "بۆتی شۆفێر",     href: "/dashboard/telegram",   icon: <Bot size={18} />,       managerOnly: true },
+
       ],
     },
     {

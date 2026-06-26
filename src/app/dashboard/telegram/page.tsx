@@ -40,7 +40,7 @@ function saveConfig(config: TelegramConfig) {
 }
 
 export default function TelegramPage() {
-  const { deliveries, showToast } = useData();
+  const { orders, showToast } = useData();
   const [config, setConfig] = useState<TelegramConfig>(defaultConfig);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
@@ -184,14 +184,15 @@ export default function TelegramPage() {
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null);
   const [selectedDriverIdx, setSelectedDriverIdx] = useState<number | null>(null);
 
-  const pendingDeliveries = deliveries.filter(d => d.status === "PENDING" || d.status === "IN_TRANSIT");
+  const pendingDeliveries = orders.filter(o => o.status === "SENT" || o.status === "READY");
 
   const handleSendDeliveryNotif = () => {
     if (selectedDeliveryId === null || selectedDriverIdx === null) return;
-    const del = deliveries.find(d => d.id === selectedDeliveryId);
+    const order = orders.find(o => o.id === selectedDeliveryId);
     const driver = config.drivers[selectedDriverIdx];
-    if (!del || !driver) return;
-    const msg = `🚚 <b>گەیاندنی نوێ</b>\n\n📦 داواکاری: ${del.orderNumber}\n📍 شوێن: ${del.destination}\n📋 بەرهەمەکان: ${del.items}\n\nتکایە پشتڕاستبکەرەوە ✅`;
+    if (!order || !driver) return;
+    const itemsSummary = order.items.map(i => `${i.productName} x${i.quantity}`).join("، ");
+    const msg = `🚚 <b>داواکاری نێردرا</b>\n\n📦 داواکاری: ${order.orderNumber}\n🏪 کڕیار: ${order.clientName}\n📋 بەرهەمەکان: ${itemsSummary}\n\nتکایە پشتڕاستبکەرەوە ✅`;
     handleSendToDriver(driver.chatId, msg);
   };
 
@@ -401,8 +402,8 @@ export default function TelegramPage() {
                   <FormField label="گەیاندن">
                     <select style={inputStyle} value={selectedDeliveryId || ""} onChange={(e) => setSelectedDeliveryId(e.target.value || null)}>
                       <option value="">— هەڵبژێرە —</option>
-                      {pendingDeliveries.map(d => (
-                        <option key={d.id} value={d.id}>{d.orderNumber} — {d.destination}</option>
+                      {pendingDeliveries.map(o => (
+                        <option key={o.id} value={o.id}>{o.orderNumber} — {o.clientName}</option>
                       ))}
                     </select>
                   </FormField>
@@ -420,10 +421,10 @@ export default function TelegramPage() {
                   <div style={{ marginTop: 16, padding: 16, background: "#F8F9FA", borderRadius: 10, border: "1px solid #E9ECEF" }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#6C757D", marginBottom: 8 }}>پیشاندانی نامە</div>
                     <div style={{ fontSize: 13, lineHeight: 1.8, whiteSpace: "pre-line" }}>
-                      🚚 <strong>گەیاندنی نوێ</strong>{"\n\n"}
-                      📦 داواکاری: {deliveries.find(d => d.id === selectedDeliveryId)?.orderNumber}{"\n"}
-                      📍 شوێن: {deliveries.find(d => d.id === selectedDeliveryId)?.destination}{"\n"}
-                      📋 بەرهەمەکان: {deliveries.find(d => d.id === selectedDeliveryId)?.items}{"\n\n"}
+                      🚚 <strong>داواکاری نێردرا</strong>{"\n\n"}
+                      📦 داواکاری: {orders.find(o => o.id === selectedDeliveryId)?.orderNumber}{"\n"}
+                      🏪 کڕیار: {orders.find(o => o.id === selectedDeliveryId)?.clientName}{"\n"}
+                      📋 بەرهەمەکان: {orders.find(o => o.id === selectedDeliveryId)?.items.map(i => `${i.productName} x${i.quantity}`).join("، ")}{"\n\n"}
                       تکایە پشتڕاستبکەرەوە ✅
                     </div>
                   </div>

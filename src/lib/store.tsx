@@ -7,8 +7,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import type {
-  Product, Client, Rep, Warehouse, Supplier, Order,
-  Delivery, Transaction, CompanySettings, User, InvoiceTemplate,
+  Product, Client, Rep, Warehouse, Supplier, Driver, Order,
+  Transaction, CompanySettings, User, InvoiceTemplate,
   PriceType, ProductPrice, SampleRequest,
 } from "./types";
 
@@ -119,7 +119,29 @@ function fromSupplier(s: Partial<Supplier>): Record<string, unknown> {
 }
 
 function toOrder(r: Record<string, unknown>): Order {
-  return { id: r.id as string, orderNumber: (r.order_number || "") as string, clientId: (r.client_id || "") as string, clientName: (r.client_name || "") as string, repId: (r.rep_id || "") as string, repName: (r.rep_name || "") as string, warehouseId: (r.warehouse_id || null) as string | null, warehouseName: (r.warehouse_name || null) as string | null, items: (r.items || []) as Order["items"], status: (r.status || "PENDING") as Order["status"], routingMode: (r.routing_mode || "DIRECT") as Order["routingMode"], bonusNotation: (r.bonus_notation || "") as string, totalBonusPct: Number(r.total_bonus_pct || 0), warehouseBonusPct: Number(r.warehouse_bonus_pct || 0), repBonusPct: Number(r.rep_bonus_pct || 0), totalAmount: Number(r.total_amount || 0), notes: (r.notes || "") as string, createdAt: (r.created_at || "") as string };
+  return {
+    id: r.id as string,
+    orderNumber: (r.order_number || "") as string,
+    clientId: (r.client_id || "") as string,
+    clientName: (r.client_name || "") as string,
+    repId: (r.rep_id || "") as string,
+    repName: (r.rep_name || "") as string,
+    warehouseId: (r.warehouse_id || null) as string | null,
+    warehouseName: (r.warehouse_name || null) as string | null,
+    items: (r.items || []) as Order["items"],
+    status: (r.status || "WAITING") as Order["status"],
+    totalAmount: Number(r.total_amount || 0),
+    notes: (r.notes || "") as string,
+    driverId: (r.driver_id || "") as string,
+    driverName: (r.driver_name || "") as string,
+    driverPhone: (r.driver_phone || "") as string,
+    signedInvoiceUrl: (r.signed_invoice_url || "") as string,
+    signedReceiptUrl: (r.signed_receipt_url || "") as string,
+    deliveredAt: (r.delivered_at || "") as string,
+    paidAt: (r.paid_at || "") as string,
+    rejectionReason: (r.rejection_reason || "") as string,
+    createdAt: (r.created_at || "") as string,
+  };
 }
 function fromOrder(o: Partial<Order>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
@@ -133,33 +155,39 @@ function fromOrder(o: Partial<Order>): Record<string, unknown> {
   if (o.warehouseName !== undefined) m.warehouse_name = o.warehouseName;
   if (o.items !== undefined) m.items = o.items;
   if (o.status !== undefined) m.status = o.status;
-  if (o.routingMode !== undefined) m.routing_mode = o.routingMode;
-  if (o.bonusNotation !== undefined) m.bonus_notation = o.bonusNotation;
-  if (o.totalBonusPct !== undefined) m.total_bonus_pct = o.totalBonusPct;
-  if (o.warehouseBonusPct !== undefined) m.warehouse_bonus_pct = o.warehouseBonusPct;
-  if (o.repBonusPct !== undefined) m.rep_bonus_pct = o.repBonusPct;
   if (o.totalAmount !== undefined) m.total_amount = o.totalAmount;
   if (o.notes !== undefined) m.notes = o.notes;
+  if (o.driverId !== undefined) m.driver_id = o.driverId;
+  if (o.driverName !== undefined) m.driver_name = o.driverName;
+  if (o.driverPhone !== undefined) m.driver_phone = o.driverPhone;
+  if (o.signedInvoiceUrl !== undefined) m.signed_invoice_url = o.signedInvoiceUrl;
+  if (o.signedReceiptUrl !== undefined) m.signed_receipt_url = o.signedReceiptUrl;
+  if (o.deliveredAt !== undefined) m.delivered_at = o.deliveredAt;
+  if (o.paidAt !== undefined) m.paid_at = o.paidAt;
+  if (o.rejectionReason !== undefined) m.rejection_reason = o.rejectionReason;
   if (o.createdAt !== undefined) m.created_at = o.createdAt;
   return m;
 }
 
-function toDelivery(r: Record<string, unknown>): Delivery {
-  return { id: r.id as string, orderId: (r.order_id || "") as string, orderNumber: (r.order_number || "") as string, type: (r.type || "DIRECT") as Delivery["type"], driver: (r.driver || "") as string, driverPhone: (r.driver_phone || "") as string, destination: (r.destination || "") as string, status: (r.status || "PENDING") as Delivery["status"], items: (r.items || "") as string, dispatchedAt: (r.dispatched_at || "") as string, deliveredAt: (r.delivered_at || "") as string, createdAt: (r.created_at || "") as string };
+function toDriver(r: Record<string, unknown>): Driver {
+  return {
+    id: r.id as string,
+    name: (r.name || "") as string,
+    phone: (r.phone || "") as string,
+    city: (r.city || "") as string,
+    telegramChatId: (r.telegram_chat_id || "") as string,
+    isActive: r.is_active !== false,
+    createdAt: (r.created_at || "") as string,
+  };
 }
-function fromDelivery(d: Partial<Delivery>): Record<string, unknown> {
+function fromDriver(d: Partial<Driver>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
   if (d.id !== undefined) m.id = d.id;
-  if (d.orderId !== undefined) m.order_id = d.orderId;
-  if (d.orderNumber !== undefined) m.order_number = d.orderNumber;
-  if (d.type !== undefined) m.type = d.type;
-  if (d.driver !== undefined) m.driver = d.driver;
-  if (d.driverPhone !== undefined) m.driver_phone = d.driverPhone;
-  if (d.destination !== undefined) m.destination = d.destination;
-  if (d.status !== undefined) m.status = d.status;
-  if (d.items !== undefined) m.items = d.items;
-  if (d.dispatchedAt !== undefined) m.dispatched_at = d.dispatchedAt;
-  if (d.deliveredAt !== undefined) m.delivered_at = d.deliveredAt;
+  if (d.name !== undefined) m.name = d.name;
+  if (d.phone !== undefined) m.phone = d.phone;
+  if (d.city !== undefined) m.city = d.city;
+  if (d.telegramChatId !== undefined) m.telegram_chat_id = d.telegramChatId;
+  if (d.isActive !== undefined) m.is_active = d.isActive;
   if (d.createdAt !== undefined) m.created_at = d.createdAt;
   return m;
 }
@@ -272,7 +300,7 @@ const defaultSettings: CompanySettings = {
 // ===== CONTEXT =====
 interface DataStore {
   products: Product[]; clients: Client[]; reps: Rep[]; warehouses: Warehouse[];
-  suppliers: Supplier[]; orders: Order[]; deliveries: Delivery[];
+  suppliers: Supplier[]; orders: Order[]; drivers: Driver[];
   transactions: Transaction[]; settings: CompanySettings; users: User[];
   invoiceTemplates: InvoiceTemplate[]; priceTypes: PriceType[];
   sampleRequests: SampleRequest[]; loading: boolean;
@@ -297,8 +325,10 @@ interface DataStore {
   addOrder: (o: Omit<Order, "id" | "orderNumber" | "createdAt">) => Promise<Order>;
   updateOrder: (id: string, o: Partial<Order>) => void;
   deleteOrder: (id: string) => void;
-  addDelivery: (d: Omit<Delivery, "id" | "createdAt">) => Promise<Delivery>;
-  updateDelivery: (id: string, d: Partial<Delivery>) => void;
+  markOrdersAsPaid: (orderIds: string[], receiptUrl: string) => Promise<void>;
+  addDriver: (d: Omit<Driver, "id" | "createdAt">) => Promise<Driver>;
+  updateDriver: (id: string, d: Partial<Driver>) => void;
+  deleteDriver: (id: string) => void;
   addTransaction: (t: Omit<Transaction, "id" | "createdAt">) => Promise<Transaction>;
   addUser: (u: Omit<User, "id" | "createdAt">) => Promise<User>;
   updateUser: (id: string, u: Partial<User>) => void;
@@ -329,7 +359,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [settings, setSettings] = useState<CompanySettings>(defaultSettings);
   const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
@@ -347,14 +377,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Fetch all data from Supabase
   const refreshData = useCallback(async () => {
     try {
-      const [pRes, cRes, rRes, wRes, sRes, oRes, dRes, tRes, stRes, prRes, itRes, ptRes, srRes] = await Promise.all([
+      const [pRes, cRes, rRes, wRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes] = await Promise.all([
         supabase.from("products").select("*"),
         supabase.from("clients").select("*"),
         supabase.from("reps").select("*"),
         supabase.from("warehouses").select("*"),
         supabase.from("suppliers").select("*"),
-        supabase.from("orders").select("*"),
-        supabase.from("deliveries").select("*"),
+        supabase.from("orders").select("*").order("created_at", { ascending: false }),
+        supabase.from("drivers").select("*"),
         supabase.from("transactions").select("*"),
         supabase.from("company_settings").select("*").single(),
         supabase.from("profiles").select("*"),
@@ -369,7 +399,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (wRes.data) setWarehouses(wRes.data.map(toWarehouse));
       if (sRes.data) setSuppliers(sRes.data.map(toSupplier));
       if (oRes.data) setOrders(oRes.data.map(toOrder));
-      if (dRes.data) setDeliveries(dRes.data.map(toDelivery));
+      if (drRes.data) setDrivers(drRes.data.map(toDriver));
       if (tRes.data) setTransactions(tRes.data.map(toTransaction));
       if (stRes.data) setSettings(toSettings(stRes.data));
       if (prRes.data) setUsers(prRes.data.map(toUser));
@@ -501,7 +531,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [showToast]);
 
   const addOrder = useCallback(async (o: Omit<Order, "id" | "orderNumber" | "createdAt">) => {
-    const no: Order = { ...o, id: genId(), orderNumber: getNextOrderNumber(orders), createdAt: new Date().toISOString().split("T")[0] };
+    const no: Order = { ...o, id: genId(), orderNumber: getNextOrderNumber(orders), createdAt: new Date().toISOString() };
     setOrders((prev) => [no, ...prev]);
     const { error } = await supabase.from("orders").insert(fromOrder(no));
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داواکاری زیادکرا");
@@ -511,7 +541,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const updateOrder = useCallback(async (id: string, o: Partial<Order>) => {
     setOrders((prev) => prev.map((x) => (x.id === id ? { ...x, ...o } : x)));
     const { error } = await supabase.from("orders").update(fromOrder(o)).eq("id", id);
-    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داواکاری نوێکرایەوە");
+    if (error) showToast("هەڵە: " + error.message, "error");
   }, [showToast]);
 
   const deleteOrder = useCallback(async (id: string) => {
@@ -520,18 +550,41 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داواکاری سڕایەوە");
   }, [showToast]);
 
-  const addDelivery = useCallback(async (d: Omit<Delivery, "id" | "createdAt">) => {
-    const nd: Delivery = { ...d, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
-    setDeliveries((prev) => [nd, ...prev]);
-    const { error } = await supabase.from("deliveries").insert(fromDelivery(nd));
-    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("گەیاندن زیادکرا");
+  const markOrdersAsPaid = useCallback(async (orderIds: string[], receiptUrl: string) => {
+    const paidAt = new Date().toISOString();
+    setOrders((prev) => prev.map((o) => orderIds.includes(o.id) ? { ...o, status: "PAID" as Order["status"], paidAt, signedReceiptUrl: receiptUrl } : o));
+    for (const id of orderIds) {
+      await supabase.from("orders").update({ status: "PAID", paid_at: paidAt, signed_receipt_url: receiptUrl }).eq("id", id);
+    }
+    // Record income transaction for each paid order
+    setOrders((prev) => {
+      const paidOrders = prev.filter((o) => orderIds.includes(o.id));
+      const total = paidOrders.reduce((s, o) => s + o.totalAmount, 0);
+      const desc = `پارەدانی ${paidOrders.map(o => o.clientName).filter((v,i,a) => a.indexOf(v)===i).join(", ")} — ${paidOrders.map(o => o.orderNumber).join(", ")}`;
+      supabase.from("transactions").insert(fromTransaction({ id: genId(), type: "INCOME", description: desc, amount: total, method: "CASH", relatedOrderId: orderIds[0], createdAt: paidAt }));
+      return prev;
+    });
+    showToast("پارەدان تۆمارکرا");
+  }, [showToast]);
+
+  const addDriver = useCallback(async (d: Omit<Driver, "id" | "createdAt">) => {
+    const nd: Driver = { ...d, id: genId(), createdAt: new Date().toISOString() };
+    setDrivers((prev) => [nd, ...prev]);
+    const { error } = await supabase.from("drivers").insert(fromDriver(nd));
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("شوفێر زیادکرا");
     return nd;
   }, [showToast]);
 
-  const updateDelivery = useCallback(async (id: string, d: Partial<Delivery>) => {
-    setDeliveries((prev) => prev.map((x) => (x.id === id ? { ...x, ...d } : x)));
-    const { error } = await supabase.from("deliveries").update(fromDelivery(d)).eq("id", id);
-    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("گەیاندن نوێکرایەوە");
+  const updateDriver = useCallback(async (id: string, d: Partial<Driver>) => {
+    setDrivers((prev) => prev.map((x) => (x.id === id ? { ...x, ...d } : x)));
+    const { error } = await supabase.from("drivers").update(fromDriver(d)).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("شوفێر نوێکرایەوە");
+  }, [showToast]);
+
+  const deleteDriver = useCallback(async (id: string) => {
+    setDrivers((prev) => prev.filter((x) => x.id !== id));
+    const { error } = await supabase.from("drivers").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("شوفێر سڕایەوە");
   }, [showToast]);
 
   const addTransaction = useCallback(async (t: Omit<Transaction, "id" | "createdAt">) => {
@@ -621,15 +674,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   return (
     <DataContext.Provider
       value={{
-        products, clients, reps, warehouses, suppliers, orders, deliveries, transactions, settings,
+        products, clients, reps, warehouses, suppliers, orders, drivers, transactions, settings,
         users, invoiceTemplates, priceTypes, sampleRequests, loading,
         addProduct, updateProduct, deleteProduct, addPriceType, deletePriceType,
         addClient, updateClient, deleteClient,
         addRep, updateRep, deleteRep,
         addWarehouse, updateWarehouse, deleteWarehouse,
         addSupplier, updateSupplier, deleteSupplier,
-        addOrder, updateOrder, deleteOrder,
-        addDelivery, updateDelivery,
+        addOrder, updateOrder, deleteOrder, markOrdersAsPaid,
+        addDriver, updateDriver, deleteDriver,
         addTransaction,
         addUser, updateUser, deleteUser,
         addTemplate, deleteTemplate,

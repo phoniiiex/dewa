@@ -35,7 +35,7 @@ export default function BonusPage() {
         warehouseName: o.warehouseName,
         productName: i.productName,
         quantity: i.quantity,
-        bonusPct: i.bonusPct ?? o.warehouseBonusPct,
+        bonusPct: i.bonusPct ?? 0,
         bonusQty: i.bonusQty,
         unitPrice: i.unitPrice,
       }))

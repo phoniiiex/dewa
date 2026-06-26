@@ -78,7 +78,7 @@ export default function WarehousesPage() {
         {[
           { title: "کۆی کۆگاکان", value: String(warehouses.length) },
           { title: "چالاک", value: String(warehouses.filter(w => w.isActive).length) },
-          { title: "داواکاری لە ڕێگای کۆگا", value: String(orders.filter(o => o.routingMode === "WAREHOUSE").length) },
+          { title: "داواکاری لە ڕێگای کۆگا", value: String(orders.filter(o => o.warehouseId).length) },
         ].map((k, i) => (
           <div className="kpi-card" key={i}><div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div><div className="kpi-card-value" style={{ fontSize: "1.4rem" }}>{k.value}</div></div>
         ))}

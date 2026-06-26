@@ -4,7 +4,7 @@ import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 
 export default function AnalyticsPage() {
-  const { orders, products, clients, reps, transactions, deliveries, warehouses } = useData();
+  const { orders, products, clients, reps, transactions, warehouses } = useData();
 
   const totalRevenue = orders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0);
   const totalIncome = transactions.filter(t => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
@@ -27,7 +27,7 @@ export default function AnalyticsPage() {
     acc[o.status] = (acc[o.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
-  const statusLabels: Record<string, string> = { PENDING: "چاوەڕوان", PROCESSING: "لە پڕۆسەدا", SHIPPED: "نێردرا", DELIVERED: "گەیشت", PAID: "پارەدراو", CANCELLED: "هەڵوەشاوە" };
+  const statusLabels: Record<string, string> = { WAITING: "چاوەڕوان", IN_PROGRESS: "لە پڕۆسەدا", NOT_ACCEPTED: "ڕەتکراوە", READY: "ئامادەیە", SENT: "نێردراوە", DELIVERED: "گەیشتووە", PAID: "پارەدراوە" };
 
   // Top products by order count
   const productOrderCount = orders.flatMap(o => o.items).reduce((acc, i) => {

@@ -129,7 +129,7 @@ function WidgetHeader({ title, link, color = "#4263EB" }: { title: string; link?
 
 // ─── Main Page ────────────────────────────────────────────
 export default function DashboardPage() {
-  const { orders, products, clients, reps, transactions, deliveries } = useData();
+  const { orders, products, clients, reps, transactions } = useData();
 
   const [layout, setLayout] = useState<string[]>(DEFAULT_LAYOUT);
   const [isEditing, setIsEditing] = useState(false);
@@ -170,10 +170,10 @@ export default function DashboardPage() {
 
   // ─── Data derivations ───
   const totalRevenue = orders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0);
-  const pendingOrders = orders.filter(o => o.status === "PENDING").length;
+  const pendingOrders = orders.filter(o => o.status === "WAITING").length;
   const totalIncome = transactions.filter(t => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
   const totalExpense = transactions.filter(t => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0);
-  const activeDeliveries = deliveries.filter(d => d.status === "IN_TRANSIT").length;
+  const activeDeliveries = orders.filter(o => o.status === "SENT").length;
   const nearExpiryProducts = products.filter(p => {
     if (!p.expiryDate) return false;
     const diff = new Date(p.expiryDate).getTime() - Date.now();
@@ -192,12 +192,13 @@ export default function DashboardPage() {
   const recentOrders = [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
 
   const statusBreakdown = [
-    { label: "چاوەڕوان", key: "PENDING", color: "#FD7E14" },
-    { label: "لە پڕۆسەدا", key: "PROCESSING", color: "#339AF0" },
-    { label: "نێردرا", key: "SHIPPED", color: "#7C5CFC" },
-    { label: "گەیشت", key: "DELIVERED", color: "#40C057" },
-    { label: "پارەدراو", key: "PAID", color: "#2B8A3E" },
-    { label: "هەڵوەشاوە", key: "CANCELLED", color: "#FA5252" },
+    { label: "چاوەڕوان",    key: "WAITING",      color: "#D97706" },
+    { label: "لە پڕۆسەدا",  key: "IN_PROGRESS",  color: "#339AF0" },
+    { label: "ڕەتکراوە",   key: "NOT_ACCEPTED", color: "#FA5252" },
+    { label: "ئامادەیە",   key: "READY",        color: "#059669" },
+    { label: "نێردراوە",   key: "SENT",         color: "#7C3AED" },
+    { label: "گەیشتووە",  key: "DELIVERED",    color: "#0891B2" },
+    { label: "پارەدراوە", key: "PAID",         color: "#2B8A3E" },
   ].map(s => ({ ...s, count: orders.filter(o => o.status === s.key).length }));
 
   const repStats = reps.slice(0, 5).map(r => ({
@@ -212,8 +213,8 @@ export default function DashboardPage() {
     count: orders.filter(o => o.clientId === c.id).length,
   })).sort((a, b) => b.count - a.count);
 
-  const statusClasses: Record<string, string> = { PENDING: "pending", PROCESSING: "processing", SHIPPED: "shipped", DELIVERED: "delivered", PAID: "paid", CANCELLED: "cancelled" };
-  const statusLabels: Record<string, string> = { PENDING: "چاوەڕوان", PROCESSING: "لە پڕۆسەدا", SHIPPED: "نێردرا", DELIVERED: "گەیشت", PAID: "پارەدراو", CANCELLED: "هەڵوەشاوە" };
+  const statusClasses: Record<string, string> = { WAITING: "pending", IN_PROGRESS: "processing", NOT_ACCEPTED: "cancelled", READY: "shipped", SENT: "shipped", DELIVERED: "delivered", PAID: "paid" };
+  const statusLabels: Record<string, string> = { WAITING: "چاوەڕوان", IN_PROGRESS: "لە پڕۆسەدا", NOT_ACCEPTED: "ڕەتکراوە", READY: "ئامادەیە", SENT: "نێردراوە", DELIVERED: "گەیشتووە", PAID: "پارەدراوە" };
 
   // ─── Render each widget ───
   const iS: React.CSSProperties = { padding: "20px 20px 18px" };

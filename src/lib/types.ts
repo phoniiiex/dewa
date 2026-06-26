@@ -4,9 +4,7 @@
 
 export type UserRole = 'ADMIN' | 'MANAGER' | 'REP';
 export type ClientType = 'PHARMACY' | 'HOSPITAL' | 'CLINIC';
-export type OrderStatus = 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'PAID' | 'CANCELLED';
-export type RoutingMode = 'DIRECT' | 'WAREHOUSE' | 'REP_DELIVERY';
-export type DeliveryStatus = 'PENDING' | 'IN_TRANSIT' | 'DELIVERED' | 'FAILED';
+export type OrderStatus = 'WAITING' | 'IN_PROGRESS' | 'NOT_ACCEPTED' | 'READY' | 'SENT' | 'DELIVERED' | 'PAID';
 export type TransactionType = 'INCOME' | 'EXPENSE';
 export type PaymentMethod = 'CASH' | 'TRANSFER';
 export type PaymentTerms = 'IMMEDIATE' | 'NET_15' | 'NET_30';
@@ -110,6 +108,16 @@ export interface Supplier {
   createdAt: string;
 }
 
+export interface Driver {
+  id: string;
+  name: string;
+  phone: string;
+  city: string;
+  telegramChatId: string; // used to send MP3 voice via Telegram bot
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface OrderItem {
   productId: string;
   productName: string;
@@ -130,28 +138,20 @@ export interface Order {
   warehouseName: string | null;
   items: OrderItem[];
   status: OrderStatus;
-  routingMode: RoutingMode;
-  bonusNotation: string;
-  totalBonusPct: number;
-  warehouseBonusPct: number;
-  repBonusPct: number;
   totalAmount: number;
   notes: string;
-  createdAt: string;
-}
-
-export interface Delivery {
-  id: string;
-  orderId: string;
-  orderNumber: string;
-  type: RoutingMode;
-  driver: string;
+  // Driver (assigned when READY → SENT)
+  driverId: string;
+  driverName: string;
   driverPhone: string;
-  destination: string;
-  status: DeliveryStatus;
-  items: string;
-  dispatchedAt: string;
+  // Invoice & Receipt
+  signedInvoiceUrl: string;
+  signedReceiptUrl: string;
+  // Timestamps
   deliveredAt: string;
+  paidAt: string;
+  // Rejection
+  rejectionReason: string;
   createdAt: string;
 }
 

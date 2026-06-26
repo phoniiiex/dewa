@@ -1,10 +1,13 @@
 "use client";
-import { useState, FormEvent } from "react";
-import { Search, Plus, ShoppingCart, Eye, Trash2, X, Printer, CheckCircle, Clock, AlertCircle, Tag } from "lucide-react";
+import { useState, FormEvent, useRef } from "react";
+import {
+  Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
+  CheckCircle, Clock, Package, Truck, Upload, XCircle,
+} from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
-import type { Order, OrderStatus, RoutingMode, OrderItem } from "@/lib/types";
+import type { Order, OrderStatus, OrderItem } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
@@ -13,479 +16,529 @@ import PrintModal from "@/components/ui/PrintModal";
 import ClientCombobox from "@/components/ui/ClientCombobox";
 import type { ExportColumn } from "@/lib/export";
 import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
+import { notifyDriverOfOrder, isTelegramConfigured } from "@/lib/telegram";
 
-const orderExportCols: ExportColumn[] = [
+const exportCols: ExportColumn[] = [
   { key: "orderNumber", label: "ژمارە" }, { key: "clientName", label: "کڕیار" },
   { key: "repName", label: "نوێنەر" }, { key: "status", label: "بارودۆخ" },
   { key: "totalAmount", label: "کۆی گشتی", format: (v) => String(v) },
   { key: "createdAt", label: "بەروار" },
 ];
 
-const statusLabels: Record<OrderStatus, string> = { PENDING: "چاوەڕوان", PROCESSING: "لە پڕۆسەدا", SHIPPED: "نێردرا", DELIVERED: "گەیشت", PAID: "پارەدراو", CANCELLED: "هەڵوەشاوە" };
-const statusClasses: Record<OrderStatus, string> = { PENDING: "pending", PROCESSING: "processing", SHIPPED: "shipped", DELIVERED: "delivered", PAID: "paid", CANCELLED: "cancelled" };
-const routingLabels: Record<RoutingMode, string> = { DIRECT: "ڕاستەوخۆ", WAREHOUSE: "لە ڕێگای کۆگا", REP_DELIVERY: "گەیاندنی نوێنەر" };
+type StatusMeta = { label: string; color: string; bg: string; icon: React.ReactNode };
+const STATUS: Record<OrderStatus, StatusMeta> = {
+  WAITING:      { label: "چاوەڕوان",    color: "#D97706", bg: "#FEF3C7", icon: <Clock size={13} /> },
+  IN_PROGRESS:  { label: "لە پڕۆسەدا",  color: "#2563EB", bg: "#DBEAFE", icon: <Package size={13} /> },
+  NOT_ACCEPTED: { label: "ڕەتکراوە",    color: "#DC2626", bg: "#FEE2E2", icon: <XCircle size={13} /> },
+  READY:        { label: "ئامادەیە",    color: "#059669", bg: "#D1FAE5", icon: <CheckCircle size={13} /> },
+  SENT:         { label: "نێردراوە",    color: "#7C3AED", bg: "#EDE9FE", icon: <Truck size={13} /> },
+  DELIVERED:    { label: "گەیشتووە",   color: "#0891B2", bg: "#CFFAFE", icon: <CheckCircle size={13} /> },
+  PAID:         { label: "پارەدراوە",  color: "#059669", bg: "#D1FAE5", icon: <CheckCircle size={13} /> },
+};
+
+const STATUS_TABS = ["هەموو", ...Object.values(STATUS).map(s => s.label)];
+
+function StatusBadge({ status }: { status: OrderStatus }) {
+  const s = STATUS[status] ?? { label: status, color: "#6C757D", bg: "#F1F3F5", icon: <Clock size={13} /> };
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600, background: s.bg, color: s.color }}>
+      {s.icon} {s.label}
+    </span>
+  );
+}
+
+function actionBtn(color: string, bg: string): React.CSSProperties {
+  return { display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: bg, color, border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13 };
+}
 
 export default function OrdersPage() {
-  const { orders, clients, reps, warehouses, products, addOrder, updateOrder, deleteOrder, addDelivery, addTransaction, showToast, loading } = useData();
+  const { orders, clients, reps, warehouses, products, drivers, addOrder, updateOrder, deleteOrder, showToast, loading } = useData();
   const { currentUser } = useLayout();
 
-  const isRep = currentUser?.role === "REP";
-  // Find the Rep record that matches the logged-in REP user by name
-  const myRep = isRep ? reps.find(r => r.name === currentUser?.name || r.isActive) : undefined;
+  const isRep     = currentUser?.role === "REP";
+  const isManager = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
+  const myRep     = isRep ? reps.find(r => r.name === currentUser?.name) ?? reps.find(r => r.isActive) : undefined;
 
-  const [searchTerm, setSearchTerm] = useState("");
+  // ── Filters ─────────────────────────────────────────────────────────
+  const [searchTerm, setSearchTerm]   = useState("");
   const [statusFilter, setStatusFilter] = useState("هەموو");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [detailOrder, setDetailOrder] = useState<Order | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [printOrder, setPrintOrder] = useState<Order | null>(null);
 
-  // New order form — repId pre-filled for REP users
-  const [form, setForm] = useState({
-    clientId: "", clientName: "",
-    repId: myRep?.id || "",
-    warehouseId: "", routingMode: "DIRECT" as RoutingMode, notes: "",
-  });
-  const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string; }[]>([{ productId: "", quantity: "" }]);
+  // ── Modal visibility ─────────────────────────────────────────────────
+  const [newOrderOpen, setNewOrderOpen]       = useState(false);
+  const [detailOrder, setDetailOrder]         = useState<Order | null>(null);
+  const [deleteId, setDeleteId]               = useState<string | null>(null);
+  const [printOrder, setPrintOrder]           = useState<Order | null>(null);
 
-  // New client request flow
-  const [showNewClientForm, setShowNewClientForm] = useState(false);
-  const [newClientForm, setNewClientForm] = useState({ name: "", owner: "", phone: "", city: "", type: "PHARMACY" });
-  const [newClientStatus, setNewClientStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  // Driver assignment (READY → SENT)
+  const [driverModalOrder, setDriverModalOrder] = useState<Order | null>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState("");
+
+  // Reject (WAITING → NOT_ACCEPTED)
+  const [rejectOrder, setRejectOrder] = useState<Order | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  // Invoice upload (SENT → DELIVERED)
+  const [invoiceModalOrder, setInvoiceModalOrder] = useState<Order | null>(null);
+  const [invoiceFile, setInvoiceFile]             = useState<File | null>(null);
+  const [uploading, setUploading]                 = useState(false);
+  const invoiceRef = useRef<HTMLInputElement>(null);
+
+  // ── New order form ────────────────────────────────────────────────────
+  const [form, setForm] = useState({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
+  const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string }[]>([{ productId: "", quantity: "" }]);
 
   const resetForm = () => {
-    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", routingMode: "DIRECT", notes: "" });
+    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
     setOrderItems([{ productId: "", quantity: "" }]);
-    setShowNewClientForm(false);
-    setNewClientForm({ name: "", owner: "", phone: "", city: "", type: "PHARMACY" });
-    setNewClientStatus("idle");
   };
 
-  const handlePrint = (o: Order) => setPrintOrder(o);
-  const addItemRow = () => setOrderItems([...orderItems, { productId: "", quantity: "" }]);
-  const removeItemRow = (i: number) => setOrderItems(orderItems.filter((_, j) => j !== i));
-  const updateItemRow = (i: number, field: string, value: string) =>
-    setOrderItems(orderItems.map((item, j) => j === i ? { ...item, [field]: value } : item));
-
-  // Get the selected warehouse and its bonus rules
   const selectedWarehouse = warehouses.find(w => w.id === form.warehouseId);
-  const getItemBonusPct = (productId: string): { pct: number; isCustom: boolean } => {
+  const getItemBonusPct = (productId: string) => {
     if (!selectedWarehouse) return { pct: 0, isCustom: false };
-    const customRule = (selectedWarehouse.bonusRules || []).find(r => r.productId === productId);
-    if (customRule) return { pct: customRule.percent, isCustom: true };
-    return { pct: selectedWarehouse.bonusPct, isCustom: false };
+    const rule = (selectedWarehouse.bonusRules || []).find(r => r.productId === productId);
+    return rule ? { pct: rule.percent, isCustom: true } : { pct: selectedWarehouse.bonusPct, isCustom: false };
   };
 
-  // Live bonus analysis from current form items
-  const liveBonusItems = orderItems
-    .filter(i => i.productId && i.quantity)
-    .map(i => {
-      const prod = products.find(p => p.id === i.productId);
-      const qty = Number(i.quantity);
-      const { pct, isCustom } = getItemBonusPct(i.productId);
-      const bonusQty = Math.round(qty * pct / 100);
-      return { name: prod?.name || "", qty, pct, isCustom, bonusQty };
-    });
+  const liveBonusItems = orderItems.filter(i => i.productId && i.quantity).map(i => {
+    const prod = products.find(p => p.id === i.productId);
+    const qty = Number(i.quantity);
+    const { pct, isCustom } = getItemBonusPct(i.productId);
+    return { name: prod?.name || "", qty, pct, isCustom, bonusQty: Math.round(qty * pct / 100) };
+  });
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const client = clients.find(c => c.id === form.clientId);
-    if (!client) {
-      showToast("تکایە کڕیارێک هەڵبژێرە", "error");
-      return;
-    }
-    // Rep: use myRep; Admin/Manager: use selected rep
-    let repRecord = isRep ? myRep : reps.find(r => r.id === form.repId);
-    if (!repRecord) {
-      showToast("تکایە نوێنەرێک هەڵبژێرە", "error");
-      return;
-    }
+    if (!client) { showToast("تکایە کڕیارێک هەڵبژێرە", "error"); return; }
+    const repRecord = isRep ? myRep : reps.find(r => r.id === form.repId);
+    if (!repRecord) { showToast("تکایە نوێنەرێک هەڵبژێرە", "error"); return; }
 
     const wh = warehouses.find(w => w.id === form.warehouseId);
-    const warehouseBonusPct = wh ? wh.bonusPct : 0;
-
     const items: OrderItem[] = orderItems.filter(i => i.productId && i.quantity).map(i => {
       const prod = products.find(p => p.id === i.productId);
-      const qty = Number(i.quantity);
-      const { pct, isCustom } = getItemBonusPct(i.productId);
-      const bonusQty = Math.round(qty * pct / 100);
-      return {
-        productId: i.productId,
-        productName: prod?.name || "",
-        quantity: qty,
-        bonusQty,
-        unitPrice: prod?.price || 0,
-        bonusPct: pct,
-      };
+      const qty  = Number(i.quantity);
+      const { pct } = getItemBonusPct(i.productId);
+      return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: Math.round(qty * pct / 100), unitPrice: prod?.price || 0, bonusPct: pct };
     });
+    if (items.length === 0) { showToast("تکایە بەرهەمێک زیادبکە", "error"); return; }
 
     const totalAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-    const totalBonusPct = wh ? wh.bonusPct : 0;
-    const repBonusPct = 0; // bonus is per-product, not a split anymore
-    const bonusNotation = items.map(i => `${i.quantity}+${i.bonusQty}`).join(", ");
 
-    const newOrder = await addOrder({
+    await addOrder({
       clientId: client.id, clientName: client.name,
       repId: repRecord.id, repName: repRecord.name,
       warehouseId: wh?.id || null, warehouseName: wh?.name || null,
-      items, status: "PENDING", routingMode: form.routingMode,
-      bonusNotation, totalBonusPct, warehouseBonusPct, repBonusPct, totalAmount, notes: form.notes,
+      items, status: "WAITING", totalAmount, notes: form.notes,
+      driverId: "", driverName: "", driverPhone: "",
+      signedInvoiceUrl: "", signedReceiptUrl: "",
+      deliveredAt: "", paidAt: "", rejectionReason: "",
     });
-
-    addDelivery({
-      orderId: newOrder.id, orderNumber: newOrder.orderNumber,
-      type: form.routingMode, driver: "", driverPhone: "",
-      destination: `${client.name} — ${client.city}`,
-      status: "PENDING",
-      items: items.map(i => `${i.productName} × ${i.quantity + i.bonusQty}`).join(", "),
-      dispatchedAt: "—", deliveredAt: "—",
-    });
-
-    setModalOpen(false);
+    setNewOrderOpen(false);
+    resetForm();
   };
 
-  const changeStatus = (id: string, status: OrderStatus) => {
-    updateOrder(id, { status });
-    if (status === "PAID") {
-      const order = orders.find(o => o.id === id);
-      if (order) {
-        addTransaction({ type: "INCOME", description: `پارەدانی ${order.clientName} — ${order.orderNumber}`, amount: order.totalAmount, method: "CASH", relatedOrderId: id });
-      }
+  // ── Workflow actions ──────────────────────────────────────────────────
+  const acceptOrder = (o: Order) => { updateOrder(o.id, { status: "IN_PROGRESS" }); showToast("داواکاری قبووڵکرا"); };
+  const markReady   = (o: Order) => { updateOrder(o.id, { status: "READY" }); showToast("داواکاری ئامادەیە"); };
+
+  const confirmSend = async () => {
+    if (!driverModalOrder) return;
+    const driver = drivers.find(d => d.id === selectedDriverId);
+    if (!driver) { showToast("تکایە شوفێرێک هەڵبژێرە", "error"); return; }
+    await updateOrder(driverModalOrder.id, { status: "SENT", driverId: driver.id, driverName: driver.name, driverPhone: driver.phone });
+    showToast("داواکاری نێردرا — شوفێر: " + driver.name);
+    // ── Auto-notify driver via Telegram ──
+    if (driver.telegramChatId && isTelegramConfigured()) {
+      const client = clients.find(c => c.id === driverModalOrder.clientId);
+      const result = await notifyDriverOfOrder({
+        driverChatId: driver.telegramChatId,
+        driverName: driver.name,
+        orderNumber: driverModalOrder.orderNumber,
+        clientName: driverModalOrder.clientName,
+        clientCity: client?.city,
+        items: driverModalOrder.items,
+        notes: driverModalOrder.notes,
+      });
+      if (result.ok) showToast("📱 ئاگاداری تێلێگرام نێردرا ✅");
+      else showToast("⚠️ نەتوانرا ئاگاداری تێلێگرام بنێردرێت", "error");
     }
+    setDriverModalOrder(null);
+    setSelectedDriverId("");
   };
 
-  // REP: only see own orders
-  const filtered = orders.filter((o) => {
-    if (isRep && myRep && o.repName !== myRep.name && o.repId !== myRep.id) return false;
-    const matchSearch = o.orderNumber.includes(searchTerm) || o.clientName.includes(searchTerm);
-    const matchStatus = statusFilter === "هەموو" || statusLabels[o.status] === statusFilter;
+  const confirmDelivered = async () => {
+    if (!invoiceModalOrder) return;
+    setUploading(true);
+    let invoiceUrl = "";
+    if (invoiceFile) {
+      const { supabase } = await import("@/lib/supabase");
+      const { data, error } = await supabase.storage
+        .from("order-docs")
+        .upload(`invoices/${invoiceModalOrder.id}_${Date.now()}`, invoiceFile, { upsert: true });
+      if (error) { showToast("هەڵە لە بارکردن: " + error.message, "error"); setUploading(false); return; }
+      const { data: urlData } = supabase.storage.from("order-docs").getPublicUrl(data.path);
+      invoiceUrl = urlData.publicUrl;
+    }
+    await updateOrder(invoiceModalOrder.id, { status: "DELIVERED", deliveredAt: new Date().toISOString(), signedInvoiceUrl: invoiceUrl });
+    showToast("بارودۆخ گۆڕدرا: گەیشتووە");
+    setUploading(false);
+    setInvoiceModalOrder(null);
+  };
+
+  const confirmReject = async () => {
+    if (!rejectOrder) return;
+    await updateOrder(rejectOrder.id, { status: "NOT_ACCEPTED", rejectionReason: rejectReason });
+    showToast("داواکاری ڕەتکرایەوە");
+    setRejectOrder(null); setRejectReason("");
+  };
+
+  // ── Filtered list ─────────────────────────────────────────────────────
+  const filtered = orders.filter(o => {
+    if (isRep && myRep && o.repId !== myRep.id && o.repName !== myRep.name) return false;
+    const matchSearch = o.orderNumber.includes(searchTerm) || o.clientName.includes(searchTerm) || o.repName.includes(searchTerm);
+    const matchStatus = statusFilter === "هەموو" || STATUS[o.status]?.label === statusFilter;
     return matchSearch && matchStatus;
   });
 
+  const kpi = {
+    total:   filtered.length,
+    waiting: filtered.filter(o => o.status === "WAITING").length,
+    sent:    filtered.filter(o => o.status === "SENT").length,
+    paid:    filtered.filter(o => o.status === "PAID").length,
+    amount:  filtered.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0),
+  };
+
+  const card: React.CSSProperties = { background: "#fff", borderRadius: 14, padding: "16px 20px", border: "1px solid #F1F3F5", boxShadow: "0 1px 4px rgba(0,0,0,.05)" };
+
   return (
     <>
+      {/* ── Header ── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 40, height: 40, background: "#FEF3EB", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#F47B35" }}><ShoppingCart size={20} /></div>
-          <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>داواکارییەکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی داواکاری و سیستەمی بۆنەس</p></div>
+          <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>داواکارییەکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی داواکارییەکان و جەریانی کاری</p></div>
         </div>
-        <button onClick={() => { resetForm(); setModalOpen(true); }} className="topbar-add-btn"><Plus size={16} /><span>داواکاری نوێ</span></button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={exportCols} filename="orders" title="داواکارییەکان" />
+          <button onClick={() => setNewOrderOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#4263EB", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>
+            <Plus size={16} /> داواکاری نوێ
+          </button>
+        </div>
       </div>
 
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
-        {loading ? (
-          <>{[0,1,2,3].map(i => <SkeletonKPI key={i} />)}</>
-        ) : [
-          { title: "کۆی داواکاری", value: String(filtered.length) },
-          { title: "چاوەڕوان", value: String(filtered.filter(o => o.status === "PENDING").length), color: "#FD7E14" },
-          { title: "لە پڕۆسەدا", value: String(filtered.filter(o => o.status === "PROCESSING" || o.status === "SHIPPED").length), color: "#339AF0" },
-          { title: "کۆی داهات", value: formatIQD(filtered.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0)) },
-        ].map((k, i) => (
-          <div className="kpi-card" key={i}><div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: k.color }}>{k.value}</div></div>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-        <div style={{ position: "relative" }}>
-          <Search size={16} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
-          <input type="text" placeholder="گەڕان بە ژمارە یان ناوی کڕیار..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ width: 280, padding: "8px 36px 8px 12px", border: "1px solid #DEE2E6", borderRadius: 8, fontSize: 13, background: "#F8F9FA", fontFamily: "inherit" }} />
+      {/* ── KPIs ── */}
+      {loading ? <SkeletonKPI /> : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 24 }}>
+          {[
+            { label: "کۆی داواکارییەکان", value: kpi.total,          color: "#4263EB", bg: "#EDF2FF" },
+            { label: "چاوەڕوان",          value: kpi.waiting,         color: "#D97706", bg: "#FEF3C7" },
+            { label: "نێردراوە",          value: kpi.sent,            color: "#7C3AED", bg: "#EDE9FE" },
+            { label: "پارەدراوە",        value: kpi.paid,            color: "#059669", bg: "#D1FAE5" },
+            { label: "کۆی داهات",        value: formatIQD(kpi.amount), color: "#0891B2", bg: "#CFFAFE" },
+          ].map(k => (
+            <div key={k.label} style={card}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</div>
+              <div style={{ fontSize: 12, color: "#6C757D", marginTop: 4 }}>{k.label}</div>
+            </div>
+          ))}
         </div>
-        <div style={{ display: "flex", gap: 4, background: "#F1F3F5", borderRadius: 8, padding: 2 }}>
-          {["هەموو", ...Object.values(statusLabels)].map((s) => (
-            <button key={s} onClick={() => setStatusFilter(s)} style={{ padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 500, background: statusFilter === s ? "white" : "transparent", color: statusFilter === s ? "#1A1A2E" : "#6C757D", boxShadow: statusFilter === s ? "0 1px 2px rgba(0,0,0,0.05)" : "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>{s}</button>
+      )}
+
+      {/* ── Filters ── */}
+      <div style={{ ...card, marginBottom: 20, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+          <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
+          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="گەڕان بە ژمارە یان کڕیار..." style={{ ...inputStyle, paddingLeft: 38, width: "100%", boxSizing: "border-box" }} />
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {STATUS_TABS.map(t => (
+            <button key={t} onClick={() => setStatusFilter(t)} style={{ padding: "6px 14px", borderRadius: 99, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: statusFilter === t ? "#4263EB" : "#DEE2E6", background: statusFilter === t ? "#EDF2FF" : "#fff", color: statusFilter === t ? "#4263EB" : "#495057", transition: "all .15s" }}>
+              {t}
+            </button>
           ))}
         </div>
       </div>
 
-      <div className="data-table-wrapper">
-        <table className="data-table">
-          <thead><tr><th>ژمارە</th><th>کڕیار</th>{!isRep && <th>نوێنەر</th>}<th>شێواز</th><th>بۆنەس</th><th>کۆی گشتی</th><th>بارودۆخ</th><th></th></tr></thead>
-          <tbody>
-            {loading ? (
-              <SkeletonTableRows rows={5} cols={isRep ? 7 : 8} />
-            ) : filtered.map((o) => (
-              <tr key={o.id}>
-                <td style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{o.orderNumber}</td>
-                <td style={{ fontWeight: 600, fontSize: 13 }}>{o.clientName}</td>
-                {!isRep && <td style={{ fontSize: 13, color: "#6C757D" }}>{o.repName}</td>}
-                <td><span style={{ padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: o.routingMode === "WAREHOUSE" ? "#EDF2FF" : o.routingMode === "DIRECT" ? "#EBFBEE" : "#FEF3EB", color: o.routingMode === "WAREHOUSE" ? "#4263EB" : o.routingMode === "DIRECT" ? "#40C057" : "#F47B35" }}>{routingLabels[o.routingMode]}</span></td>
-                <td style={{ fontWeight: 600, fontSize: 13, color: "#7C5CFC" }}>{o.bonusNotation}</td>
-                <td style={{ fontWeight: 600, fontSize: 14 }}>{formatIQD(o.totalAmount)}</td>
-                <td>
-                  <select value={o.status} onChange={(e) => changeStatus(o.id, e.target.value as OrderStatus)} style={{ padding: "4px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, border: "1px solid #DEE2E6", fontFamily: "inherit", cursor: "pointer", background: "white" }}>
-                    {Object.entries(statusLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </td>
-                <td>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <button onClick={() => setDetailOrder(o)} style={{ padding: 4, color: "#4263EB", background: "none", border: "none", cursor: "pointer" }} title="وردەکاری"><Eye size={14} /></button>
-                    <button onClick={() => handlePrint(o)} style={{ padding: 4, color: "#40C057", background: "none", border: "none", cursor: "pointer" }} title="چاپکردن"><Printer size={14} /></button>
-                    {!isRep && <button onClick={() => setDeleteId(o.id)} style={{ padding: 4, color: "#FA5252", background: "none", border: "none", cursor: "pointer" }} title="سڕینەوە"><Trash2 size={14} /></button>}
-                  </div>
-                </td>
+      {/* ── Table ── */}
+      <div style={{ ...card, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #F1F3F5", background: "#FAFAFA" }}>
+                {["ژمارە", "کڕیار", "نوێنەر", "بارودۆخ", "کۆی گشتی", "بەروار", "کردار"].map(h => (
+                  <th key={h} style={{ padding: "12px 16px", textAlign: "right", fontWeight: 600, color: "#495057", fontSize: 13, whiteSpace: "nowrap" }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="pagination"><span className="pagination-info">{filtered.length} داواکاری</span></div>
+            </thead>
+            <tbody>
+              {loading ? <SkeletonTableRows cols={7} /> : filtered.length === 0 ? (
+                <tr><td colSpan={7} style={{ padding: 48, textAlign: "center", color: "#ADB5BD" }}>هیچ داواکارییەک نەدۆزرایەوە</td></tr>
+              ) : filtered.map(o => (
+                <tr key={o.id} style={{ borderBottom: "1px solid #F8F9FA", transition: "background .1s" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#FAFAFA")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "")}>
+                  <td style={{ padding: "14px 16px", fontWeight: 700, color: "#4263EB" }}>{o.orderNumber}</td>
+                  <td style={{ padding: "14px 16px" }}>{o.clientName}</td>
+                  <td style={{ padding: "14px 16px", color: "#6C757D", fontSize: 13 }}>{o.repName}</td>
+                  <td style={{ padding: "14px 16px" }}><StatusBadge status={o.status} /></td>
+                  <td style={{ padding: "14px 16px", fontWeight: 600 }}>{formatIQD(o.totalAmount)}</td>
+                  <td style={{ padding: "14px 16px", color: "#6C757D", fontSize: 13 }}>{new Date(o.createdAt).toLocaleDateString("ku")}</td>
+                  <td style={{ padding: "14px 16px" }}>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => setDetailOrder(o)} style={{ padding: "5px 10px", background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600 }}><Eye size={13} /> بینین</button>
+                      <button onClick={() => setPrintOrder(o)} style={{ padding: "5px 10px", background: "#F8F9FA", color: "#495057", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}><Printer size={13} /></button>
+                      {isManager && <button onClick={() => setDeleteId(o.id)} style={{ padding: "5px 10px", background: "#FFF5F5", color: "#DC2626", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}><Trash2 size={13} /></button>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* New Order Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="داواکاری نوێ" width={700}>
+      {/* ════════════════════════════════════════════════════════════════
+          NEW ORDER MODAL
+      ════════════════════════════════════════════════════════════════ */}
+        <Modal open={newOrderOpen} onClose={() => { setNewOrderOpen(false); resetForm(); }} title="داواکاری نوێ" width={700}>
         <form onSubmit={handleSubmit}>
-          <FormGrid>
+          <FormGrid cols={2}>
             <FormField label="کڕیار" required>
-              <ClientCombobox
-                clients={clients}
-                value={form.clientId}
-                clientName={form.clientName}
+              <ClientCombobox clients={clients} value={form.clientId} clientName={form.clientName}
                 onChange={(id, name) => setForm({ ...form, clientId: id, clientName: name })}
-                onRequestNew={(typedName) => {
-                  setNewClientForm({ ...newClientForm, name: typedName });
-                  setShowNewClientForm(true);
-                  setNewClientStatus("idle");
-                }}
-              />
+                onRequestNew={(name) => setForm({ ...form, clientName: name })} />
             </FormField>
-
-            {/* Rep field: hidden for REP users (auto-filled) */}
-            {isRep ? (
-              <FormField label="نوێنەر">
-                <div style={{ ...inputStyle, background: "#F8F4FF", color: "#7C5CFC", fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
-                  👤 {myRep?.name || currentUser?.name} (ئەمەی من)
-                </div>
+            {!isRep ? (
+              <FormField label="نوێنەر" required>
+                <select style={selectStyle} value={form.repId} onChange={e => setForm({ ...form, repId: e.target.value })} required>
+                  <option value="">هەڵبژاردن...</option>
+                  {reps.filter(r => r.isActive).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
               </FormField>
             ) : (
-              <FormField label="نوێنەر" required>
-                <select style={selectStyle} required value={form.repId} onChange={(e) => setForm({ ...form, repId: e.target.value })}>
-                  <option value="">هەڵبژاردن...</option>
-                  {reps.filter(r => r.isActive).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-              </FormField>
-            )}
-
-            <FormField label="شێوازی ڕاستکردن">
-              <select style={selectStyle} value={form.routingMode} onChange={(e) => {
-                const mode = e.target.value as RoutingMode;
-                setForm({ ...form, routingMode: mode, warehouseId: mode !== "WAREHOUSE" ? "" : form.warehouseId });
-              }}>
-                {Object.entries(routingLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </FormField>
-            {form.routingMode === "WAREHOUSE" && (
-              <FormField label="کۆگا">
-                <select style={selectStyle} value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })}>
-                  <option value="">هەڵبژاردن...</option>
-                  {warehouses.filter(w => w.isActive).map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name} ({w.bonusPct}٪{(w.bonusRules || []).length > 0 ? ` + ${w.bonusRules.length} یاسای تایبەت` : ""})
-                    </option>
-                  ))}
-                </select>
+              <FormField label="نوێنەر">
+                <div style={{ padding: "8px 12px", background: "#EDF2FF", borderRadius: 8, fontSize: 14, color: "#4263EB", fontWeight: 600 }}>{myRep?.name || currentUser?.name}</div>
               </FormField>
             )}
           </FormGrid>
+          <FormGrid cols={2}>
+            <FormField label="کۆگا (ئەگەر هەبوو)">
+              <select style={selectStyle} value={form.warehouseId} onChange={e => setForm({ ...form, warehouseId: e.target.value })}>
+                <option value="">— ڕاستەوخۆ —</option>
+                {warehouses.filter(w => w.isActive).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </FormField>
+            <FormField label="تێبینی">
+              <input style={inputStyle} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
+            </FormField>
+          </FormGrid>
 
-          {/* Inline New Client Request Form */}
-          {showNewClientForm && (
-            <div style={{ margin: "12px 0", padding: 16, background: "#F3F0FF", borderRadius: 12, border: "1px solid #D0BFFF" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#5C37D6", display: "flex", alignItems: "center", gap: 6 }}>
-                  <Clock size={14} /> داواکردنی کڕیاری نوێ
-                </div>
-                <button type="button" onClick={() => setShowNewClientForm(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ADB5BD" }}><X size={14} /></button>
-              </div>
-              {newClientStatus === "sent" ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#2B8A3E", fontSize: 13, fontWeight: 600 }}><CheckCircle size={16} /> داواکاری نێردرا! بەرپرسان پێیان دەگات.</div>
-              ) : newClientStatus === "error" ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#C92A2A", fontSize: 13 }}><AlertCircle size={16} /> هەڵەیەک ڕووی دا، دووبارە هەوڵ بدەرەوە.</div>
-              ) : (
-                <>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>ناوی فرۆشگا *</label><input style={{ ...inputStyle, background: "white" }} value={newClientForm.name} onChange={e => setNewClientForm({ ...newClientForm, name: e.target.value })} placeholder="داروخانەی ..." /></div>
-                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>خاوەن</label><input style={{ ...inputStyle, background: "white" }} value={newClientForm.owner} onChange={e => setNewClientForm({ ...newClientForm, owner: e.target.value })} placeholder="دکتۆر ..." /></div>
-                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>تەلەفۆن</label><input style={{ ...inputStyle, background: "white" }} value={newClientForm.phone} onChange={e => setNewClientForm({ ...newClientForm, phone: e.target.value })} placeholder="07..." /></div>
-                    <div><label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>شار</label><input style={{ ...inputStyle, background: "white" }} value={newClientForm.city} onChange={e => setNewClientForm({ ...newClientForm, city: e.target.value })} placeholder="هەولێر" /></div>
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 11, fontWeight: 600, color: "#5C37D6", display: "block", marginBottom: 4 }}>جۆر</label>
-                    <select style={{ ...selectStyle, background: "white" }} value={newClientForm.type} onChange={e => setNewClientForm({ ...newClientForm, type: e.target.value })}>
-                      <option value="PHARMACY">داروخانە</option>
-                      <option value="HOSPITAL">نەخۆشخانە</option>
-                      <option value="CLINIC">کلینیک</option>
-                      <option value="WHOLESALE">کڕینی گشتی</option>
-                    </select>
-                  </div>
-                  <button type="button" disabled={!newClientForm.name || newClientStatus === "sending"}
-                    onClick={async () => {
-                      setNewClientStatus("sending");
-                      const res = await fetch("/api/clients/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...newClientForm }) });
-                      setNewClientStatus(res.ok ? "sent" : "error");
-                    }}
-                    style={{ padding: "8px 20px", borderRadius: 8, background: "#5C37D6", color: "white", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", opacity: (!newClientForm.name || newClientStatus === "sending") ? 0.6 : 1 }}>
-                    {newClientStatus === "sending" ? "ناردن..." : "نێردنی داواکاری"}
-                  </button>
-                </>
-              )}
+          {/* Product rows */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>بەرهەمەکان</span>
+              <button type="button" onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "" }])}
+                style={{ background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ زیادکردن</button>
             </div>
-          )}
-
-          {/* Order Items */}
-          <div style={{ marginTop: 24, borderTop: "1px solid #E9ECEF", paddingTop: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h4 style={{ fontSize: 14, fontWeight: 700 }}>بەرهەمەکان</h4>
-              <button type="button" onClick={addItemRow} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #DEE2E6", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}><Plus size={12} /> ڕیز</button>
-            </div>
-            {orderItems.map((item, i) => {
-              const { pct, isCustom } = item.productId ? getItemBonusPct(item.productId) : { pct: 0, isCustom: false };
-              const bonusQty = item.productId && item.quantity && pct > 0 ? Math.round(Number(item.quantity) * pct / 100) : 0;
+            {orderItems.map((item, idx) => {
+              const { pct, isCustom } = getItemBonusPct(item.productId);
+              const bonusQty = item.quantity && item.productId ? Math.round(Number(item.quantity) * pct / 100) : 0;
               return (
-                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                  <select style={{ ...selectStyle, flex: 2 }} value={item.productId} onChange={(e) => updateItemRow(i, "productId", e.target.value)}>
+                <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 140px auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                  <select style={selectStyle} value={item.productId} onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: e.target.value } : x))}>
                     <option value="">بەرهەم هەڵبژێرە...</option>
-                    {products.filter(p => p.isActive && p.stock > 0).map((p) => <option key={p.id} value={p.id}>{p.name} — {formatIQD(p.price)} ({p.stock} بەردەست)</option>)}
+                    {products.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
-                  <input style={{ ...inputStyle, flex: 1 }} type="number" min="1" placeholder="بڕ" value={item.quantity} onChange={(e) => updateItemRow(i, "quantity", e.target.value)} />
-                  {/* Bonus badge per product */}
-                  {item.productId && form.warehouseId && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
-                      <span style={{ padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, background: isCustom ? "#7C5CFC" : "#4263EB", color: "white", display: "flex", alignItems: "center", gap: 3 }}>
-                        {isCustom && <Tag size={9} />}
-                        {pct}٪
+                  <div style={{ position: "relative" }}>
+                    <input type="number" min={1} style={inputStyle} placeholder="ژمارە" value={item.quantity}
+                      onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
+                    {bonusQty > 0 && (
+                      <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: isCustom ? "#D1FAE5" : "#EDE9FE", color: isCustom ? "#059669" : "#7C3AED", fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 6px", whiteSpace: "nowrap", pointerEvents: "none" }}>
+                        +{bonusQty}{isCustom ? "★" : ""}
                       </span>
-                      {bonusQty > 0 && <span style={{ fontSize: 10, color: "#40C057", fontWeight: 700 }}>+{bonusQty}</span>}
-                    </div>
-                  )}
+                    )}
+                  </div>
                   {orderItems.length > 1 && (
-                    <button type="button" onClick={() => removeItemRow(i)} style={{ padding: 4, color: "#FA5252", background: "none", border: "none", cursor: "pointer" }}><Trash2 size={14} /></button>
+                    <button type="button" onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}
+                      style={{ background: "#FEE2E2", color: "#DC2626", border: "none", borderRadius: 8, width: 34, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <X size={14} />
+                    </button>
                   )}
                 </div>
               );
             })}
           </div>
 
-          {/* Live bonus analysis */}
-          {liveBonusItems.length > 0 && form.warehouseId && liveBonusItems.some(x => x.pct > 0) && (
-            <div style={{ marginTop: 16, padding: 14, background: "#F8F4FF", borderRadius: 10, border: "1px solid #E9D7FF" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: "#7C5CFC", display: "flex", alignItems: "center", gap: 6 }}>
-                <Tag size={14} /> شیکاری بۆنەس
-              </div>
-              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid #E9D7FF" }}>
-                    <th style={{ textAlign: "right", padding: "4px 6px", color: "#6C757D", fontWeight: 600 }}>بەرهەم</th>
-                    <th style={{ textAlign: "center", padding: "4px 6px", color: "#6C757D", fontWeight: 600 }}>بڕ</th>
-                    <th style={{ textAlign: "center", padding: "4px 6px", color: "#6C757D", fontWeight: 600 }}>ڕێژەی بۆنەس</th>
-                    <th style={{ textAlign: "center", padding: "4px 6px", color: "#6C757D", fontWeight: 600 }}>دانەی بۆنەس</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {liveBonusItems.map((x, i) => (
-                    <tr key={i} style={{ borderBottom: "1px solid #F3EEFF" }}>
-                      <td style={{ padding: "6px 6px", fontWeight: 600 }}>{x.name}</td>
-                      <td style={{ textAlign: "center", padding: "6px 6px" }}>{x.qty}</td>
-                      <td style={{ textAlign: "center", padding: "6px 6px" }}>
-                        <span style={{ padding: "2px 8px", borderRadius: 4, background: x.isCustom ? "#7C5CFC" : "#4263EB", color: "white", fontWeight: 700, fontSize: 11, display: "inline-flex", alignItems: "center", gap: 3 }}>
-                          {x.isCustom && <Tag size={9} />}
-                          {x.pct}٪ {x.isCustom ? "(تایبەت)" : "(بنەڕەت)"}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: "center", padding: "6px 6px", fontWeight: 800, color: "#40C057", fontSize: 14 }}>
-                        +{x.bonusQty} <span style={{ fontSize: 10, fontWeight: 400, color: "#6C757D" }}>دانە</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Bonus preview */}
+          {liveBonusItems.some(i => i.pct > 0) && (
+            <div style={{ marginTop: 14, padding: 12, background: "#FAFAFA", borderRadius: 10, border: "1px solid #E9ECEF" }}>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: "#495057" }}>داڕێژەی بۆنەس</div>
+              {liveBonusItems.filter(i => i.pct > 0).map((i, idx) => (
+                <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#495057", padding: "3px 0" }}>
+                  <span>{i.name}</span>
+                  <span style={{ color: "#059669", fontWeight: 600 }}>{i.qty} + {i.bonusQty} = {i.qty + i.bonusQty} {i.isCustom ? "★" : ""}</span>
+                </div>
+              ))}
             </div>
           )}
 
-          <FormField label="تێبینی"><textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی دڵخوازانە..." /></FormField>
-          <FormActions onCancel={() => setModalOpen(false)} submitLabel="تۆمارکردنی داواکاری" />
+          <FormActions onCancel={() => { setNewOrderOpen(false); resetForm(); }} submitLabel="تۆمارکردنی داواکاری" />
         </form>
       </Modal>
 
-      {/* Order Detail Drawer */}
-      {detailOrder && (
-        <div onClick={() => setDetailOrder(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 400, animation: "fadeIn 0.15s ease" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 480, background: "white", boxShadow: "-10px 0 30px rgba(0,0,0,0.1)", animation: "slideInRight 0.2s ease", overflowY: "auto" }}>
-            <div style={{ padding: "20px 24px", borderBottom: "1px solid #E9ECEF", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700 }}>وردەکاری داواکاری {detailOrder.orderNumber}</h3>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => handlePrint(detailOrder)} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #DEE2E6", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}><Printer size={12} /> چاپ</button>
-                <button onClick={() => setDetailOrder(null)} style={{ background: "#F1F3F5", borderRadius: 8, padding: 6, border: "none", cursor: "pointer" }}><X size={16} /></button>
+      {/* ════════════════════════════════════════════════════════════════
+          ORDER DETAIL DRAWER
+      ════════════════════════════════════════════════════════════════ */}
+      {detailOrder && (() => {
+        const o = orders.find(x => x.id === detailOrder.id) || detailOrder;
+        return (
+          <Modal open={!!detailOrder} onClose={() => setDetailOrder(null)} title={`داواکاری — ${o.orderNumber}`} width={700}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Status + driver */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <StatusBadge status={o.status} />
+                {o.driverName && <span style={{ fontSize: 13, color: "#6C757D" }}>— شوفێر: <strong>{o.driverName}</strong> · {o.driverPhone}</span>}
               </div>
-            </div>
-            <div style={{ padding: 24 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+
+              {/* Info grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {[
-                  { l: "کڕیار", v: detailOrder.clientName },
-                  { l: "نوێنەر", v: detailOrder.repName },
-                  { l: "شێواز", v: routingLabels[detailOrder.routingMode] },
-                  { l: "کۆگا", v: detailOrder.warehouseName || "—" },
-                  { l: "بارودۆخ", v: statusLabels[detailOrder.status] },
-                  { l: "بەروار", v: detailOrder.createdAt },
-                ].map((item, i) => (
-                  <div key={i}><div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 4 }}>{item.l}</div><div style={{ fontSize: 14, fontWeight: 600 }}>{item.v}</div></div>
+                  { label: "کڕیار", value: o.clientName },
+                  { label: "نوێنەر", value: o.repName },
+                  { label: "کۆگا", value: o.warehouseName || "ڕاستەوخۆ" },
+                  { label: "کۆی گشتی", value: formatIQD(o.totalAmount) },
+                  { label: "بەروار", value: new Date(o.createdAt).toLocaleDateString("ku") },
+                  ...(o.rejectionReason ? [{ label: "هۆی ڕەتکردن", value: o.rejectionReason }] : []),
+                  ...(o.deliveredAt ? [{ label: "بەرواری گەیشتن", value: new Date(o.deliveredAt).toLocaleDateString("ku") }] : []),
+                  ...(o.paidAt ? [{ label: "بەرواری پارەدان", value: new Date(o.paidAt).toLocaleDateString("ku") }] : []),
+                ].map(f => (
+                  <div key={f.label} style={{ padding: "10px 14px", background: "#FAFAFA", borderRadius: 10, border: "1px solid #F1F3F5" }}>
+                    <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 2 }}>{f.label}</div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{f.value}</div>
+                  </div>
                 ))}
               </div>
 
-              {/* Per-product bonus breakdown */}
-              <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}><Tag size={14} color="#7C5CFC" /> شیکاری بۆنەس بەرهەم بەرهەم</h4>
-              <div style={{ marginBottom: 20 }}>
-                <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ background: "#F8F4FF", borderBottom: "1px solid #E9D7FF" }}>
-                      <th style={{ textAlign: "right", padding: "6px 8px", fontWeight: 600, color: "#5C37D6" }}>بەرهەم</th>
-                      <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#5C37D6" }}>بڕ</th>
-                      <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#5C37D6" }}>ڕێژەی بۆنەس</th>
-                      <th style={{ textAlign: "center", padding: "6px 8px", fontWeight: 600, color: "#5C37D6" }}>دانەی بۆنەس</th>
-                    </tr>
-                  </thead>
+              {/* Items table */}
+              <div style={{ border: "1px solid #F1F3F5", borderRadius: 10, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead><tr style={{ background: "#FAFAFA" }}>
+                    {["بەرهەم", "ژمارە", "بۆنەس", "نرخ", "کۆ"].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: "#495057" }}>{h}</th>)}
+                  </tr></thead>
                   <tbody>
-                    {detailOrder.items.map((item, i) => (
-                      <tr key={i} style={{ borderBottom: "1px solid #F1F3F5" }}>
-                        <td style={{ padding: "8px", fontWeight: 600 }}>{item.productName}</td>
-                        <td style={{ textAlign: "center", padding: "8px" }}>{item.quantity}</td>
-                        <td style={{ textAlign: "center", padding: "8px" }}>
-                          {item.bonusPct > 0 ? (
-                            <span style={{ padding: "2px 8px", borderRadius: 4, background: "#4263EB", color: "white", fontWeight: 700, fontSize: 11 }}>
-                              {item.bonusPct}٪
-                            </span>
-                          ) : "—"}
-                        </td>
-                        <td style={{ textAlign: "center", padding: "8px", fontWeight: 800, color: "#40C057", fontSize: 14 }}>
-                          +{item.bonusQty} <span style={{ fontSize: 10, fontWeight: 400, color: "#6C757D" }}>دانە</span>
-                        </td>
+                    {o.items.map((item, idx) => (
+                      <tr key={idx} style={{ borderTop: "1px solid #F8F9FA" }}>
+                        <td style={{ padding: "10px 14px" }}>{item.productName}</td>
+                        <td style={{ padding: "10px 14px" }}>{item.quantity}</td>
+                        <td style={{ padding: "10px 14px", color: "#059669", fontWeight: 600 }}>{item.bonusQty > 0 ? `+${item.bonusQty}` : "—"}</td>
+                        <td style={{ padding: "10px 14px" }}>{formatIQD(item.unitPrice)}</td>
+                        <td style={{ padding: "10px 14px", fontWeight: 600 }}>{formatIQD(item.quantity * item.unitPrice)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>کۆی بەرهەمەکان</h4>
-              <table style={{ width: "100%", fontSize: 13 }}>
-                <thead><tr style={{ borderBottom: "1px solid #E9ECEF" }}><th style={{ textAlign: "right", padding: 8, fontWeight: 600 }}>بەرهەم</th><th style={{ textAlign: "right", padding: 8 }}>بڕ</th><th style={{ textAlign: "right", padding: 8 }}>بۆنەس</th><th style={{ textAlign: "right", padding: 8 }}>نرخ</th><th style={{ textAlign: "right", padding: 8 }}>کۆ</th></tr></thead>
-                <tbody>
-                  {detailOrder.items.map((item, i) => (
-                    <tr key={i} style={{ borderBottom: "1px solid #F1F3F5" }}>
-                      <td style={{ padding: 8, fontWeight: 600 }}>{item.productName}</td>
-                      <td style={{ padding: 8 }}>{item.quantity}</td>
-                      <td style={{ padding: 8, color: "#40C057", fontWeight: 600 }}>+{item.bonusQty}</td>
-                      <td style={{ padding: 8 }}>{formatIQD(item.unitPrice)}</td>
-                      <td style={{ padding: 8, fontWeight: 700 }}>{formatIQD(item.quantity * item.unitPrice)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ textAlign: "left", marginTop: 12, fontSize: 18, fontWeight: 800 }}>کۆی گشتی: {formatIQD(detailOrder.totalAmount)}</div>
+              {/* File links */}
+              {o.signedInvoiceUrl && <a href={o.signedInvoiceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#4263EB", fontSize: 13, fontWeight: 600 }}>📄 پسوولەی واژووکراو</a>}
+              {o.signedReceiptUrl && <a href={o.signedReceiptUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#059669", fontSize: 13, fontWeight: 600 }}>🧾 پسوولەی پارەدان</a>}
+
+              {/* ── Workflow action buttons (manager only) ── */}
+              {isManager && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 10, borderTop: "1px solid #F1F3F5" }}>
+                  {o.status === "WAITING" && <>
+                    <button onClick={() => { acceptOrder(o); setDetailOrder(null); }} style={actionBtn("#059669", "#D1FAE5")}><CheckCircle size={14} /> قبووڵکردن</button>
+                    <button onClick={() => { setRejectOrder(o); setDetailOrder(null); }} style={actionBtn("#DC2626", "#FEE2E2")}><XCircle size={14} /> ڕەتکردنەوە</button>
+                  </>}
+                  {o.status === "IN_PROGRESS" && (
+                    <button onClick={() => { markReady(o); setDetailOrder(null); }} style={actionBtn("#059669", "#D1FAE5")}><Package size={14} /> ئامادەیە</button>
+                  )}
+                  {o.status === "READY" && (
+                    <button onClick={() => { setDriverModalOrder(o); setDetailOrder(null); }} style={actionBtn("#7C3AED", "#EDE9FE")}><Truck size={14} /> ناردن</button>
+                  )}
+                  {o.status === "SENT" && (
+                    <button onClick={() => { setInvoiceModalOrder(o); setDetailOrder(null); }} style={actionBtn("#0891B2", "#CFFAFE")}><Upload size={14} /> گەیشت — بارکردنی پسوولە</button>
+                  )}
+                </div>
+              )}
+
+              {o.notes && <p style={{ fontSize: 13, color: "#6C757D", background: "#FAFAFA", padding: "10px 14px", borderRadius: 10, margin: 0 }}>{o.notes}</p>}
             </div>
+          </Modal>
+        );
+      })()}
+
+      {/* ════════════════════════════════════════════════════════════════
+          DRIVER SELECTION MODAL
+      ════════════════════════════════════════════════════════════════ */}
+      <Modal open={!!driverModalOrder} onClose={() => setDriverModalOrder(null)} title="هەڵبژاردنی شوفێر">
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <FormField label="شوفێر">
+            <select style={selectStyle} value={selectedDriverId} onChange={e => setSelectedDriverId(e.target.value)}>
+              <option value="">هەڵبژاردن...</option>
+              {drivers.filter(d => d.isActive).map(d => (
+                <option key={d.id} value={d.id}>{d.name} — {d.city} ({d.phone})</option>
+              ))}
+            </select>
+          </FormField>
+          {selectedDriverId && (() => {
+            const d = drivers.find(x => x.id === selectedDriverId);
+            return d ? (
+              <div style={{ padding: 14, background: "#EDE9FE", borderRadius: 10 }}>
+                <div style={{ fontWeight: 700, color: "#7C3AED", fontSize: 15 }}>{d.name}</div>
+                <div style={{ fontSize: 13, color: "#6C757D", marginTop: 2 }}>{d.phone} · {d.city}</div>
+                {d.telegramChatId && <div style={{ fontSize: 12, color: "#7C3AED", marginTop: 4 }}>📱 Telegram: {d.telegramChatId}</div>}
+              </div>
+            ) : null;
+          })()}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button onClick={() => setDriverModalOrder(null)} style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
+            <button onClick={confirmSend} style={{ padding: "9px 18px", background: "#7C3AED", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>ناردن ✓</button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      <PrintModal open={!!printOrder} onClose={() => setPrintOrder(null)} order={printOrder} />
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={() => { if (deleteId) deleteOrder(deleteId); setDeleteId(null); }} message="ئایا دڵنیایت لە سڕینەوەی ئەم داواکارییە؟" />
+      {/* ════════════════════════════════════════════════════════════════
+          INVOICE UPLOAD MODAL
+      ════════════════════════════════════════════════════════════════ */}
+      <Modal open={!!invoiceModalOrder} onClose={() => setInvoiceModalOrder(null)} title="بارکردنی پسوولەی واژووکراو">
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <p style={{ fontSize: 14, color: "#6C757D", margin: 0 }}>پسوولەی واژووکراو بارکە (ئەگەر هەبوو) تا بارودۆخ بگۆڕدرێت بۆ گەیشتووە.</p>
+          <div style={{ border: "2px dashed #DEE2E6", borderRadius: 12, padding: 24, textAlign: "center", cursor: "pointer" }}
+            onClick={() => invoiceRef.current?.click()}>
+            <Upload size={28} style={{ color: "#ADB5BD", display: "block", margin: "0 auto 8px" }} />
+            <div style={{ fontSize: 13, color: "#6C757D" }}>{invoiceFile ? invoiceFile.name : "کرتەکەیت لێبکە بۆ هەڵبژاردنی فایل"}</div>
+            <input ref={invoiceRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => setInvoiceFile(e.target.files?.[0] || null)} />
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button onClick={() => setInvoiceModalOrder(null)} style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
+            <button onClick={confirmDelivered} disabled={uploading} style={{ padding: "9px 18px", background: "#0891B2", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, opacity: uploading ? 0.7 : 1 }}>
+              {uploading ? "بارکردن..." : "گەیشت ✓"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ════════════════════════════════════════════════════════════════
+          REJECT MODAL
+      ════════════════════════════════════════════════════════════════ */}
+      <Modal open={!!rejectOrder} onClose={() => { setRejectOrder(null); setRejectReason(""); }} title="ڕەتکردنەوەی داواکاری">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <p style={{ fontSize: 14, color: "#6C757D", margin: 0 }}>هۆی ڕەتکردنەوە بنووسە (ئەگەر پێویست بوو).</p>
+          <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={3}
+            placeholder="هۆی ڕەتکردنەوە..." style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button onClick={() => { setRejectOrder(null); setRejectReason(""); }} style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
+            <button onClick={confirmReject} style={{ padding: "9px 18px", background: "#DC2626", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>ڕەتکردنەوە ✓</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Delete confirm ── */}
+      <ConfirmDialog open={!!deleteId} message="دڵنیای لە سڕینەوەی ئەم داواکارییە؟" onConfirm={() => { if (deleteId) { deleteOrder(deleteId); setDeleteId(null); } }} onClose={() => setDeleteId(null)} />
+
+      {/* ── Print ── */}
+      {printOrder && <PrintModal open={true} order={printOrder} onClose={() => setPrintOrder(null)} />}
     </>
   );
 }
