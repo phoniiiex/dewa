@@ -162,8 +162,8 @@ function fromOrder(o: Partial<Order>): Record<string, unknown> {
   if (o.driverPhone !== undefined) m.driver_phone = o.driverPhone;
   if (o.signedInvoiceUrl !== undefined) m.signed_invoice_url = o.signedInvoiceUrl;
   if (o.signedReceiptUrl !== undefined) m.signed_receipt_url = o.signedReceiptUrl;
-  if (o.deliveredAt !== undefined) m.delivered_at = o.deliveredAt;
-  if (o.paidAt !== undefined) m.paid_at = o.paidAt;
+  if (o.deliveredAt !== undefined) m.delivered_at = o.deliveredAt || null;
+  if (o.paidAt !== undefined) m.paid_at = o.paidAt || null;
   if (o.rejectionReason !== undefined) m.rejection_reason = o.rejectionReason;
   if (o.createdAt !== undefined) m.created_at = o.createdAt;
   return m;
