@@ -73,7 +73,7 @@ const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }
 };
 
 export default function ClientsPage() {
-  const { clients, reps, orders, warehouses, addClient, updateClient, deleteClient, markOrdersAsPaid, showToast } = useData();
+  const { clients, reps, orders, warehouses, settings, addClient, updateClient, deleteClient, markOrdersAsPaid, showToast } = useData();
   const { currentUser } = useLayout();
   const isManager = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
 
