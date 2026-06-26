@@ -9,7 +9,7 @@ import { supabase } from "./supabase";
 import type {
   Product, Client, Rep, Warehouse, Supplier, Order,
   Delivery, Transaction, CompanySettings, User, InvoiceTemplate,
-  PriceType, ProductPrice,
+  PriceType, ProductPrice, SampleRequest,
 } from "./types";
 
 // ===== DB ↔ APP MAPPERS =====
@@ -219,6 +219,38 @@ function fromTemplate(t: Partial<InvoiceTemplate>): Record<string, unknown> {
 }
 
 // ===== HELPERS =====
+function toSampleRequest(r: Record<string, unknown>): SampleRequest {
+  return {
+    id: r.id as string,
+    requestNumber: (r.request_number || "") as string,
+    repId: (r.rep_id || "") as string,
+    repName: (r.rep_name || "") as string,
+    items: Array.isArray(r.items) ? r.items as SampleRequest["items"] : [],
+    doctorName: (r.doctor_name || "") as string,
+    status: (r.status || "PENDING") as SampleRequest["status"],
+    note: (r.note || "") as string,
+    sentAt: (r.sent_at || "") as string,
+    arrivedAt: (r.arrived_at || "") as string,
+    declinedReason: (r.declined_reason || "") as string,
+    createdAt: (r.created_at || "") as string,
+  };
+}
+function fromSampleRequest(s: Partial<SampleRequest>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (s.requestNumber !== undefined) m.request_number = s.requestNumber;
+  if (s.repId !== undefined) m.rep_id = s.repId;
+  if (s.repName !== undefined) m.rep_name = s.repName;
+  if (s.items !== undefined) m.items = s.items;
+  if (s.doctorName !== undefined) m.doctor_name = s.doctorName;
+  if (s.status !== undefined) m.status = s.status;
+  if (s.note !== undefined) m.note = s.note;
+  if (s.sentAt !== undefined) m.sent_at = s.sentAt;
+  if (s.arrivedAt !== undefined) m.arrived_at = s.arrivedAt;
+  if (s.declinedReason !== undefined) m.declined_reason = s.declinedReason;
+  return m;
+}
+
+// ===== HELPERS =====
 function genId() {
   return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
@@ -242,7 +274,8 @@ interface DataStore {
   products: Product[]; clients: Client[]; reps: Rep[]; warehouses: Warehouse[];
   suppliers: Supplier[]; orders: Order[]; deliveries: Delivery[];
   transactions: Transaction[]; settings: CompanySettings; users: User[];
-  invoiceTemplates: InvoiceTemplate[]; priceTypes: PriceType[]; loading: boolean;
+  invoiceTemplates: InvoiceTemplate[]; priceTypes: PriceType[];
+  sampleRequests: SampleRequest[]; loading: boolean;
 
   addProduct: (p: Omit<Product, "id" | "createdAt">) => Promise<Product>;
   updateProduct: (id: string, p: Partial<Product>) => void;
@@ -272,6 +305,9 @@ interface DataStore {
   deleteUser: (id: string) => void;
   addTemplate: (t: Omit<InvoiceTemplate, "id" | "createdAt">) => Promise<InvoiceTemplate>;
   deleteTemplate: (id: string) => void;
+  addSampleRequest: (s: Omit<SampleRequest, "id" | "requestNumber" | "createdAt">) => Promise<SampleRequest>;
+  updateSampleRequest: (id: string, s: Partial<SampleRequest>) => void;
+  deleteSampleRequest: (id: string) => void;
   updateSettings: (s: Partial<CompanySettings>) => void;
   showToast: (message: string, type?: "success" | "error") => void;
   toast: { message: string; type: "success" | "error"; visible: boolean };
@@ -299,6 +335,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>([]);
+  const [sampleRequests, setSampleRequests] = useState<SampleRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error"; visible: boolean }>({ message: "", type: "success", visible: false });
 
@@ -310,7 +347,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Fetch all data from Supabase
   const refreshData = useCallback(async () => {
     try {
-      const [pRes, cRes, rRes, wRes, sRes, oRes, dRes, tRes, stRes, prRes, itRes, ptRes] = await Promise.all([
+      const [pRes, cRes, rRes, wRes, sRes, oRes, dRes, tRes, stRes, prRes, itRes, ptRes, srRes] = await Promise.all([
         supabase.from("products").select("*"),
         supabase.from("clients").select("*"),
         supabase.from("reps").select("*"),
@@ -323,6 +360,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         supabase.from("profiles").select("*"),
         supabase.from("invoice_templates").select("*"),
         supabase.from("price_types").select("*").order("created_at"),
+        supabase.from("sample_requests").select("*").order("created_at", { ascending: false }),
       ]);
 
       if (pRes.data) setProducts(pRes.data.map(toProduct));
@@ -337,6 +375,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (prRes.data) setUsers(prRes.data.map(toUser));
       if (itRes.data) setInvoiceTemplates(itRes.data.map(toTemplate));
       if (ptRes.data) setPriceTypes(ptRes.data.map((r) => ({ id: r.id as string, name: r.name as string, createdAt: (r.created_at || "") as string })));
+      if (srRes.data) setSampleRequests(srRes.data.map(toSampleRequest));
     } catch (err) {
       console.error("Failed to fetch data:", err);
     } finally {
@@ -556,11 +595,34 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داڕێژە سڕایەوە");
   }, [showToast]);
 
+  const addSampleRequest = useCallback(async (s: Omit<SampleRequest, "id" | "requestNumber" | "createdAt">): Promise<SampleRequest> => {
+    const rn = `SR-${String(Date.now()).slice(-6)}`;
+    const ns: SampleRequest = { ...s, id: genId(), requestNumber: rn, createdAt: new Date().toISOString() };
+    setSampleRequests((prev) => [ns, ...prev]);
+    const row = fromSampleRequest(ns);
+    row.id = ns.id; row.request_number = rn; row.created_at = ns.createdAt;
+    const { error } = await supabase.from("sample_requests").insert(row);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داواکاری نموونە نێردرا");
+    return ns;
+  }, [showToast]);
+
+  const updateSampleRequest = useCallback(async (id: string, s: Partial<SampleRequest>) => {
+    setSampleRequests((prev) => prev.map((x) => (x.id === id ? { ...x, ...s } : x)));
+    const { error } = await supabase.from("sample_requests").update(fromSampleRequest(s)).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("نموونە نوێکرایەوە");
+  }, [showToast]);
+
+  const deleteSampleRequest = useCallback(async (id: string) => {
+    setSampleRequests((prev) => prev.filter((x) => x.id !== id));
+    const { error } = await supabase.from("sample_requests").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("نموونە سڕایەوە");
+  }, [showToast]);
+
   return (
     <DataContext.Provider
       value={{
         products, clients, reps, warehouses, suppliers, orders, deliveries, transactions, settings,
-        users, invoiceTemplates, priceTypes, loading,
+        users, invoiceTemplates, priceTypes, sampleRequests, loading,
         addProduct, updateProduct, deleteProduct, addPriceType, deletePriceType,
         addClient, updateClient, deleteClient,
         addRep, updateRep, deleteRep,
@@ -571,6 +633,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         addTransaction,
         addUser, updateUser, deleteUser,
         addTemplate, deleteTemplate,
+        addSampleRequest, updateSampleRequest, deleteSampleRequest,
         updateSettings,
         showToast, toast, refreshData,
       }}

@@ -198,3 +198,26 @@ export interface InvoiceTemplate {
   defaultDiscount: number;
   createdAt: string;
 }
+
+export type SampleStatus = 'PENDING' | 'ACCEPTED' | 'SENT' | 'ARRIVED' | 'DECLINED';
+
+export interface SampleItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+}
+
+export interface SampleRequest {
+  id: string;
+  requestNumber: string;
+  repId: string;
+  repName: string;
+  items: SampleItem[];
+  doctorName: string;
+  status: SampleStatus;
+  note: string;
+  sentAt: string;
+  arrivedAt: string;
+  declinedReason: string;
+  createdAt: string;
+}

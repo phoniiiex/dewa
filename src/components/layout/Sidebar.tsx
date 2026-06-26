@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 import {
   LayoutDashboard, BarChart3, Package, ShoppingCart, Truck, Users, Building2,
   Factory, Gift, UserCog, Wallet, Settings, HelpCircle, ChevronLeft, ChevronRight,
-  BadgeCheck, FileText, Bot, Camera, LogOut, Shield,
+  BadgeCheck, FileText, Bot, Camera, LogOut, Shield, FlaskConical,
 } from "lucide-react";
 
 interface NavItem { label: string; href: string; icon: React.ReactNode; badge?: number; managerOnly?: boolean; }
@@ -49,6 +49,7 @@ export default function Sidebar() {
         { label: "داواکارییەکان", href: "/dashboard/orders",   icon: <ShoppingCart size={18} /> },
         { label: "پسوولەکان",    href: "/dashboard/invoices",  icon: <FileText size={18} /> },
         { label: "بۆنەس",        href: "/dashboard/bonus",     icon: <Gift size={18} />,        managerOnly: true },
+        { label: "نموونەکان",     href: "/dashboard/samples",   icon: <FlaskConical size={18} /> },
       ],
     },
     {
