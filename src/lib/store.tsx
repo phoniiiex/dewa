@@ -19,7 +19,8 @@ function toProduct(r: Record<string, unknown>): Product {
     id: r.id as string, name: r.name as string, sku: r.sku as string,
     category: (r.category || "") as string, company: (r.company || "") as string,
     price: Number(r.price || 0), prices: (r.prices || []) as ProductPrice[],
-    stock: Number(r.stock || 0), unitType: (r.unit_type || "") as string,
+    stock: Number(r.stock || 0), lowStock: Number(r.low_stock || 10),
+    unitType: (r.unit_type || "") as string,
     origin: (r.origin || "") as string, supplier: (r.supplier || "") as string,
     issueDate: (r.issue_date || "") as string, expiryDate: (r.expiry_date || "") as string,
     batchNumber: (r.batch_number || "") as string, isSample: !!r.is_sample,
@@ -37,6 +38,7 @@ function fromProduct(p: Partial<Product>): Record<string, unknown> {
   if (p.price !== undefined) m.price = p.price;
   if (p.prices !== undefined) m.prices = p.prices;
   if (p.stock !== undefined) m.stock = p.stock;
+  if (p.lowStock !== undefined) m.low_stock = p.lowStock;
   if (p.unitType !== undefined) m.unit_type = p.unitType;
   if (p.origin !== undefined) m.origin = p.origin;
   if (p.supplier !== undefined) m.supplier = p.supplier;

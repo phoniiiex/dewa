@@ -42,6 +42,7 @@ export interface Product {
   price: number;
   prices: ProductPrice[];
   stock: number;
+  lowStock: number;       // threshold below which stock is considered "low"
   unitType: string;
   origin: string;
   supplier: string;

@@ -15,7 +15,7 @@ export interface ProductPriceEntry { typeId: string; typeName: string; amount: s
 export interface WizardFormData {
   name: string; sku: string; category: string; company: string; description: string;
   prices: ProductPriceEntry[]; imageUrl: string;
-  stock: string; unitType: string;
+  stock: string; lowStock: string; unitType: string;
   origin: string; supplier: string; issueDate: string; expiryDate: string;
   batchNumber: string; isSample: boolean;
 }
@@ -32,7 +32,7 @@ const STEPS: Step[] = [
 const EMPTY: WizardFormData = {
   name: "", sku: "", category: "", company: "", description: "",
   prices: [], imageUrl: "",
-  stock: "", unitType: unitTypes[0],
+  stock: "", lowStock: "10", unitType: unitTypes[0],
   origin: origins[0], supplier: "", issueDate: "", expiryDate: "",
   batchNumber: "", isSample: false,
 };
@@ -427,11 +427,14 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
               {/* STEP 4: Stock */}
               {step === 4 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {/* Current stock */}
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: "#6C757D", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>بڕی کۆگا *</label>
                     <input type="number" value={form.stock} onChange={e => set("stock", e.target.value)} placeholder="٠"
                       style={{ ...iS, fontSize: 22, fontWeight: 800 }} onFocus={e => (e.target.style.borderColor = "#4263EB")} onBlur={e => (e.target.style.borderColor = "#E9ECEF")} />
                   </div>
+
+                  {/* Unit type */}
                   <div>
                     <label style={{ fontSize: 10, fontWeight: 700, color: "#6C757D", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>یەکەی پێوانە</label>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -443,6 +446,35 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
                       ))}
                     </div>
                   </div>
+
+                  {/* Low-stock threshold */}
+                  <div style={{ padding: "12px 14px", background: "#FFF8DB", borderRadius: 10, border: "1.5px solid #FFE066" }}>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: "#856404", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      ⚠️ سنووری کەمی کۆگا (Low Stock Threshold)
+                    </label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <input type="number" min="0" value={form.lowStock} onChange={e => set("lowStock", e.target.value)}
+                        placeholder="10"
+                        style={{ ...iS, width: 100, fontSize: 18, fontWeight: 700, color: "#856404", borderColor: "#FFD43B" }}
+                        onFocus={e => (e.target.style.borderColor = "#F08C00")} onBlur={e => (e.target.style.borderColor = "#FFD43B")} />
+                      <div style={{ fontSize: 12, color: "#856404", lineHeight: 1.5 }}>
+                        کاتێک بڕی کۆگا بگاتە ژێر ئەم ژمارەیە<br />
+                        <strong>ئاگاداری کەمی کۆگا</strong> دەردەکەوێت
+                      </div>
+                    </div>
+                    {form.stock && form.lowStock && (
+                      <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600,
+                        color: Number(form.stock) <= Number(form.lowStock) ? "#C92A2A" : "#2F9E44"
+                      }}>
+                        {Number(form.stock) <= Number(form.lowStock)
+                          ? `⚠ بڕی کۆگا (${form.stock}) لە سنووری کەم (${form.lowStock}) کەمتەرە یان یەکسانە`
+                          : `✓ بڕی کۆگا (${form.stock}) لەسەر سنووری کەم (${form.lowStock}) دەیە`
+                        }
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Stock bar preview */}
                   {form.stock && (
                     <div style={{ padding: 12, background: "#F8F9FA", borderRadius: 10, border: "1.5px solid #E9ECEF" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
