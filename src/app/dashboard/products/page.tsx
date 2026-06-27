@@ -1,5 +1,5 @@
 "use client";
-import { useState, FormEvent } from "react";
+import { useState } from "react";
 import {
   Search, Plus, Package, Edit3, Trash2, Eye, X,
   Grid3X3, List, AlertTriangle, ImageIcon, MoreVertical, ChevronDown, ChevronUp,
@@ -7,9 +7,7 @@ import {
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Product } from "@/lib/types";
-import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
 import ExportButton from "@/components/ui/ExportButton";
 import type { ExportColumn } from "@/lib/export";
 import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
@@ -176,7 +174,7 @@ function ProductGridCard({ p, onEdit, onDelete, onView }: { p: Product; onEdit: 
 }
 
 export default function ProductsPage() {
-  const { products, priceTypes, addProduct, updateProduct, deleteProduct, loading } = useData();
+  const { products, addProduct, updateProduct, deleteProduct, loading } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("هەموو");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
@@ -189,30 +187,9 @@ export default function ProductsPage() {
   // Dynamic categories from actual products
   const allCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
 
-  // Edit form state — mirrors all Product fields
-  const [form, setForm] = useState({
-    name: "", sku: "", company: "", category: "", price: "", stock: "", lowStock: "10",
-    unitType: unitTypes[0], origin: origins[0], supplier: "",
-    issueDate: "", expiryDate: "", batchNumber: "", isSample: false, isActive: true,
-    imageUrl: "",
-    // per price-type amounts: typeId -> amount string
-    priceAmounts: {} as Record<string, string>,
-  });
-
+  // openEdit: just store the product; the wizard seeds itself from initialProduct
   const openEdit = (p: Product) => {
     setEditingProduct(p);
-    // Build priceAmounts map from existing prices
-    const priceAmounts: Record<string, string> = {};
-    (p.prices || []).forEach(pp => { priceAmounts[pp.typeId] = String(pp.amount); });
-    setForm({
-      name: p.name, sku: p.sku, company: p.company || "", category: p.category,
-      price: String(p.price), stock: String(p.stock), lowStock: String(p.lowStock ?? 10),
-      unitType: p.unitType, origin: p.origin, supplier: p.supplier,
-      issueDate: p.issueDate || "", expiryDate: p.expiryDate,
-      batchNumber: p.batchNumber, isSample: p.isSample, isActive: p.isActive,
-      imageUrl: p.imageUrl || "",
-      priceAmounts,
-    });
     setEditModalOpen(true);
   };
 
@@ -231,25 +208,21 @@ export default function ProductsPage() {
     });
   };
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (editingProduct) {
-      // Build prices array from priceAmounts
-      const prices = priceTypes
-        .filter(pt => form.priceAmounts[pt.id])
-        .map(pt => ({ typeId: pt.id, typeName: pt.name, amount: Number(form.priceAmounts[pt.id]) }));
-      const firstPrice = prices[0];
-      updateProduct(editingProduct.id, {
-        name: form.name, sku: form.sku, company: form.company, category: form.category,
-        price: firstPrice ? firstPrice.amount : Number(form.price),
-        prices,
-        stock: Number(form.stock), lowStock: Number(form.lowStock) || 10,
-        unitType: form.unitType, origin: form.origin, supplier: form.supplier,
-        issueDate: form.issueDate, expiryDate: form.expiryDate,
-        batchNumber: form.batchNumber, isSample: form.isSample, isActive: form.isActive,
-        imageUrl: form.imageUrl,
-      });
-    }
+  const handleEditSubmit = (data: WizardFormData) => {
+    if (!editingProduct) return;
+    const firstPrice = data.prices.find(p => p.amount);
+    updateProduct(editingProduct.id, {
+      name: data.name, sku: data.sku, category: data.category, company: data.company,
+      price: firstPrice ? Number(firstPrice.amount) : 0,
+      prices: data.prices.filter(p => p.amount).map(p => ({ typeId: p.typeId, typeName: p.typeName, amount: Number(p.amount) })),
+      stock: Number(data.stock), lowStock: Number(data.lowStock) || 10,
+      unitType: data.unitType,
+      origin: data.origin, supplier: data.supplier,
+      issueDate: data.issueDate, expiryDate: data.expiryDate,
+      batchNumber: data.batchNumber, isSample: data.isSample,
+      isActive: editingProduct.isActive,
+      imageUrl: data.imageUrl,
+    });
     setEditModalOpen(false);
   };
 
@@ -404,88 +377,13 @@ export default function ProductsPage() {
       {/* ── Wizard: Add product ── */}
       <AddProductWizard open={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleWizardSubmit} />
 
-      {/* ── Edit Modal ── */}
-      <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} title="دەستکاری بەرهەم" width={720}>
-        <form onSubmit={handleSubmit}>
-
-          {/* ─ Section: Basic Info ─ */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, paddingBottom: 6, borderBottom: "1px solid var(--color-border)" }}>زانیاری گشتی</div>
-            <FormGrid>
-              <FormField label="ناوی بەرهەم" required><input style={inputStyle} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
-              <FormField label="کۆمپانیا / بەرهەمهێنەر"><input style={inputStyle} value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Pfizer, Novartis..." /></FormField>
-              <FormField label="SKU"><input style={inputStyle} value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></FormField>
-              <FormField label="جۆر"><input style={inputStyle} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} list="edit-categories" /><datalist id="edit-categories">{allCategories.map(c => <option key={c} value={c} />)}</datalist></FormField>
-              <FormField label="ولاتی بەرهەمهێنان"><select style={selectStyle} value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })}>{origins.map((o) => <option key={o} value={o}>{o}</option>)}</select></FormField>
-              <FormField label="دابینکەر"><input style={inputStyle} value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} placeholder="ناوی دابینکەر" /></FormField>
-            </FormGrid>
-          </div>
-
-          {/* ─ Section: Prices ─ */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, paddingBottom: 6, borderBottom: "1px solid var(--color-border)" }}>نرخەکان بە جۆر</div>
-            {priceTypes.length === 0 ? (
-              <div style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "10px 12px", background: "var(--color-bg-hover)", borderRadius: 8 }}>ھیچ جۆریکی نرخ نییە. لە ڕێکخستنەکەی نرخەکان جۆرەکان زیاد بکە.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {priceTypes.map(pt => (
-                  <div key={pt.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, width: 110, flexShrink: 0, color: "var(--color-text-secondary)" }}>{pt.name}</span>
-                    <div style={{ position: "relative", flex: 1 }}>
-                      <input
-                        type="number"
-                        value={form.priceAmounts[pt.id] || ""}
-                        onChange={e => setForm({ ...form, priceAmounts: { ...form.priceAmounts, [pt.id]: e.target.value } })}
-                        placeholder="٠"
-                        style={{ ...inputStyle, paddingLeft: 40, fontWeight: 700 }}
-                      />
-                      <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#ADB5BD" }}>د.ع</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* ─ Section: Stock ─ */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, paddingBottom: 6, borderBottom: "1px solid var(--color-border)" }}>کۆگا</div>
-            <FormGrid>
-              <FormField label="بڕی کۆگا" required><input style={inputStyle} type="number" required value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} /></FormField>
-              <FormField label="یەکەی پێوانە"><select style={selectStyle} value={form.unitType} onChange={(e) => setForm({ ...form, unitType: e.target.value })}>{unitTypes.map((u) => <option key={u} value={u}>{u}</option>)}</select></FormField>
-              <FormField label="⚠️ سنووری کەمی کۆگا">
-                <input style={{ ...inputStyle, borderColor: "#FFD43B" }} type="number" min="0" value={form.lowStock}
-                  onChange={(e) => setForm({ ...form, lowStock: e.target.value })} placeholder="10" />
-              </FormField>
-            </FormGrid>
-          </div>
-
-          {/* ─ Section: Dates & Batch ─ */}
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-secondary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, paddingBottom: 6, borderBottom: "1px solid var(--color-border)" }}>زانیاری زیادە</div>
-            <FormGrid>
-              <FormField label="ژمارەی بەچ"><input style={inputStyle} value={form.batchNumber} onChange={(e) => setForm({ ...form, batchNumber: e.target.value })} /></FormField>
-              <FormField label="بەرواری بەرهەمهێنان"><input style={inputStyle} type="date" value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} /></FormField>
-              <FormField label="بەرواری بەسەرچوون"><input style={inputStyle} type="date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} /></FormField>
-              <FormField label="وێنەی بەرهەم (URL)"><input style={inputStyle} value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..." /></FormField>
-            </FormGrid>
-          </div>
-
-          {/* ─ Flags ─ */}
-          <div style={{ display: "flex", gap: 20, marginBottom: 16 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-              <input type="checkbox" checked={form.isSample} onChange={(e) => setForm({ ...form, isSample: e.target.checked })} style={{ width: 15, height: 15, accentColor: "#4263EB" }} />
-              نموونە (بۆ بەخشین)
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-              <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} style={{ width: 15, height: 15, accentColor: "#40C057" }} />
-              چالاکە (Active)
-            </label>
-          </div>
-
-          <FormActions onCancel={() => setEditModalOpen(false)} isEdit={true} />
-        </form>
-      </Modal>
+      {/* ── Wizard: Edit product (same wizard, pre-filled) ── */}
+      <AddProductWizard
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        onSubmit={handleEditSubmit}
+        initialProduct={editingProduct ?? undefined}
+      />
 
       {/* ── Detail Drawer ── */}
       {detailProduct && (

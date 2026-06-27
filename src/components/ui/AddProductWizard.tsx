@@ -2,10 +2,11 @@
 import { useState, useRef, ReactNode, useEffect } from "react";
 import {
   X, Package, Tag, ImageIcon, BarChart2, FileText,
-  Check, ChevronRight, ChevronLeft, Plus, Upload, Search, Trash2,
+  Check, ChevronRight, ChevronLeft, Plus, Upload, Search, Trash2, Edit3,
 } from "lucide-react";
 import { formatIQD } from "@/lib/currency";
 import { useData } from "@/lib/store";
+import type { Product } from "@/lib/types";
 
 const unitTypes = ["پاکەت", "بوتل", "ئەمپوول", "تیوب", "قوتی"];
 const origins = ["تورکیا 🇹🇷", "فەرەنسا 🇫🇷", "ئوردن 🇯🇴", "هندستان 🇮🇳", "سوویسرا 🇨🇭", "عێراق 🇮🇶", "ئەمریکا 🇺🇸"];
@@ -111,9 +112,15 @@ function CategoryCombobox({ value, onChange, allCategories }: { value: string; o
   );
 }
 
-interface Props { open: boolean; onClose: () => void; onSubmit: (data: WizardFormData) => void; }
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (data: WizardFormData) => void;
+  /** When provided the wizard opens in edit-mode, pre-filled with this product */
+  initialProduct?: Product;
+}
 
-export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
+export default function AddProductWizard({ open, onClose, onSubmit, initialProduct }: Props) {
   const { products, priceTypes, addPriceType } = useData();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<WizardFormData>(EMPTY);
@@ -131,12 +138,38 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
   const [removedTypeIds, setRemovedTypeIds] = useState<Set<string>>(new Set());
 
   // Reset per-session price state when the modal opens/closes
+  // When editing, seed from the product's existing prices
   useEffect(() => {
     if (!open) {
       setPriceAmounts({});
       setRemovedTypeIds(new Set());
+      setForm(EMPTY);
+    } else if (initialProduct) {
+      // Edit mode: pre-fill form from existing product
+      const amounts: Record<string, string> = {};
+      (initialProduct.prices || []).forEach(pp => { amounts[pp.typeId] = String(pp.amount); });
+      setPriceAmounts(amounts);
+      setRemovedTypeIds(new Set());
+      setForm({
+        name: initialProduct.name,
+        sku: initialProduct.sku,
+        category: initialProduct.category,
+        company: initialProduct.company || "",
+        description: "",
+        prices: [],
+        imageUrl: initialProduct.imageUrl || "",
+        stock: String(initialProduct.stock),
+        lowStock: String(initialProduct.lowStock ?? 10),
+        unitType: initialProduct.unitType,
+        origin: initialProduct.origin,
+        supplier: initialProduct.supplier,
+        issueDate: initialProduct.issueDate || "",
+        expiryDate: initialProduct.expiryDate || "",
+        batchNumber: initialProduct.batchNumber || "",
+        isSample: initialProduct.isSample,
+      });
     }
-  }, [open]);
+  }, [open, initialProduct]);
 
   if (!open) return null;
 
@@ -275,7 +308,9 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
 
           {/* Step Sidebar */}
           <div style={{ background: "#FAFAFA", borderLeft: "1px solid #F1F3F5", padding: "28px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1A1A2E", marginBottom: 16, paddingRight: 6 }}>بەرهەمی نوێ</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1A1A2E", marginBottom: 16, paddingRight: 6, display: "flex", alignItems: "center", gap: 5 }}>
+              {initialProduct ? <><Edit3 size={13} style={{ color: "#4263EB" }} /> دەستکاری بەرهەم</> : "بەرهەمی نوێ"}
+            </div>
             {STEPS.map(s => {
               const done = step > s.id; const active = step === s.id;
               return (
@@ -552,9 +587,9 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
                     <span>پێشتر</span> <ChevronLeft size={13} />
                   </button>
                 ) : (
-                  <button onClick={handleFinish} style={{ ...btnNext, background: "linear-gradient(135deg, #2B8A3E, #40C057)" }}
-                    disabled={!form.name || !form.stock || !form.expiryDate}>
-                    <Check size={13} /> <span>زیادکردنی بەرهەم</span>
+                  <button onClick={handleFinish} style={{ ...btnNext, background: initialProduct ? "linear-gradient(135deg, #4263EB, #7C5CFC)" : "linear-gradient(135deg, #2B8A3E, #40C057)" }}
+                    disabled={!form.name || !form.stock}>
+                    {initialProduct ? <><Edit3 size={13} /> <span>پاشەکەوتکردنی گۆڕانکاری</span></> : <><Check size={13} /> <span>زیادکردنی بەرهەم</span></>}
                   </button>
                 )}
               </div>
