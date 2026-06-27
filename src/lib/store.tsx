@@ -297,9 +297,9 @@ function getNextOrderNumber(orders: Order[]): string {
 }
 
 const defaultSettings: CompanySettings = {
-  name: "دەوا فارما", nameEn: "Dewa Pharma", phone: "0770 000 1234",
-  email: "info@dewapharma.com", city: "سلێمانی",
-  address: "شەقامی سالم، تاوەری ئازادی، نهۆم ٣", currency: "IQD", language: "ckb",
+  name: "", nameEn: "", phone: "",
+  email: "", city: "",
+  address: "", currency: "IQD", language: "ckb",
   telegramBotToken: "", telegramBotUsername: "", telegramNotifyChatIds: [],
 };
 

@@ -18,7 +18,9 @@ interface LayoutContextType {
   notifOpen: boolean;
   setNotifOpen: (v: boolean) => void;
   logout: () => void;
-  currentUser: { id: string; email: string; name: string; role: string } | null;
+  currentUser: { id: string; email: string; name: string; role: string; avatarUrl: string; phone: string } | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<{ id: string; email: string; name: string; role: string; avatarUrl: string; phone: string } | null>>;
+  updateCurrentUserProfile: (data: { name?: string; phone?: string; avatarUrl?: string }) => Promise<void>;
   darkMode: boolean;
   toggleDarkMode: () => void;
   sidebarPosition: SidebarPosition;
@@ -38,7 +40,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: string; avatarUrl: string; phone: string } | null>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarPosition, setSidebarPositionState] = useState<SidebarPosition>("right");
 
@@ -73,7 +75,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       } else {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("name, role")
+          .select("name, role, avatar_url, phone")
           .eq("id", session.user.id)
           .single();
 
@@ -82,6 +84,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           email: session.user.email || "",
           name: profile?.name || session.user.user_metadata?.name || "",
           role: profile?.role || session.user.user_metadata?.role || "REP",
+          avatarUrl: (profile as Record<string, string>)?.avatar_url || "",
+          phone: (profile as Record<string, string>)?.phone || "",
         });
         setAuthed(true);
       }
@@ -97,6 +101,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const logout = async () => {
     await supabase.auth.signOut();
     router.replace("/");
+  };
+
+  const updateCurrentUserProfile = async (data: { name?: string; phone?: string; avatarUrl?: string }) => {
+    if (!currentUser) return;
+    const update: Record<string, string> = {};
+    if (data.name !== undefined) update.name = data.name;
+    if (data.phone !== undefined) update.phone = data.phone;
+    if (data.avatarUrl !== undefined) update.avatar_url = data.avatarUrl;
+    await supabase.from("profiles").update(update).eq("id", currentUser.id);
+    setCurrentUser(prev => prev ? {
+      ...prev,
+      name: data.name ?? prev.name,
+      phone: data.phone ?? prev.phone,
+      avatarUrl: data.avatarUrl ?? prev.avatarUrl,
+    } : prev);
   };
 
   if (!authed) return (
@@ -115,6 +134,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         notifOpen, setNotifOpen,
         logout,
         currentUser,
+        setCurrentUser,
+        updateCurrentUserProfile,
         darkMode,
         toggleDarkMode,
         sidebarPosition,
