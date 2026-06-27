@@ -147,7 +147,24 @@ export default function AddProductWizard({ open, onClose, onSubmit, initialProdu
     } else if (initialProduct) {
       // Edit mode: pre-fill form from existing product
       const amounts: Record<string, string> = {};
-      (initialProduct.prices || []).forEach(pp => { amounts[pp.typeId] = String(pp.amount); });
+
+      // Pass 1: exact typeId match (works for products added after price_types table)
+      (initialProduct.prices || []).forEach(pp => {
+        if (pp.amount) amounts[pp.typeId] = String(pp.amount);
+      });
+
+      // Pass 2: typeName fallback for products added before price_types table existed.
+      // Their stored typeIds are local UUIDs that don't exist in the DB price_types table.
+      // We match the stored typeName against the real priceTypes from the store.
+      priceTypes.forEach(pt => {
+        if (!amounts[pt.id]) {
+          const byName = (initialProduct.prices || []).find(
+            pp => pp.typeName === pt.name && pp.amount
+          );
+          if (byName) amounts[pt.id] = String(byName.amount);
+        }
+      });
+
       setPriceAmounts(amounts);
       setRemovedTypeIds(new Set());
       setForm({
@@ -169,7 +186,8 @@ export default function AddProductWizard({ open, onClose, onSubmit, initialProdu
         isSample: initialProduct.isSample,
       });
     }
-  }, [open, initialProduct]);
+  }, [open, initialProduct, priceTypes]);
+
 
   if (!open) return null;
 
