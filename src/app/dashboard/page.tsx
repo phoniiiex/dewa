@@ -3,11 +3,10 @@ import { useState, useEffect } from "react";
 import {
   Package, Users, ShoppingCart, DollarSign, TrendingUp, Truck,
   AlertTriangle, Clock, UserCheck, GripVertical, Plus, X,
-  Wallet, BarChart2, CheckCircle, Building2, LayoutDashboard,
+  Wallet, BarChart2, CheckCircle, Building2,
   Settings2, ArrowUpRight, Boxes, Activity,
 } from "lucide-react";
 import { useData } from "@/lib/store";
-import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
 import Link from "next/link";
 
@@ -131,7 +130,6 @@ function WidgetHeader({ title, link, color = "#4263EB" }: { title: string; link?
 // ─── Main Page ────────────────────────────────────────────
 export default function DashboardPage() {
   const { orders, products, clients, reps, transactions } = useData();
-  const { currentUser } = useLayout();
 
   const [layout, setLayout] = useState<string[]>(DEFAULT_LAYOUT);
   const [isEditing, setIsEditing] = useState(false);
@@ -501,31 +499,8 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          {/* User avatar */}
-          {currentUser?.avatarUrl ? (
-            <img src={currentUser.avatarUrl} alt="avatar"
-              style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", border: "3px solid #EDF2FF", flexShrink: 0 }} />
-          ) : (
-            <div style={{
-              width: 52, height: 52, borderRadius: "50%",
-              background: "linear-gradient(135deg,#4263EB,#7C5CFC)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 20, fontWeight: 800, color: "white", flexShrink: 0,
-              border: "3px solid #EDF2FF",
-            }}>
-              {currentUser?.name?.[0] || "؟"}
-            </div>
-          )}
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--color-text-primary)", display: "flex", alignItems: "center", gap: 8, margin: 0 }}>
-              بەخێربێیتەوە،&nbsp;<span style={{ background: "linear-gradient(135deg,#4263EB,#7C5CFC)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{currentUser?.name || ""}</span>&nbsp;👋
-            </h1>
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginTop: 4 }}>پوختەی گشتی سیستەم</p>
-          </div>
-        </div>
+      {/* Customize button only — welcome header is in TopBar */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 24 }}>
         <button onClick={() => { setIsEditing(!isEditing); if (isEditing) setShowCatalog(false); }}
           style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 18px", borderRadius: 10, border: isEditing ? "none" : "1.5px solid var(--color-border)", background: isEditing ? "linear-gradient(135deg, #4263EB, #7C5CFC)" : "var(--color-surface)", color: isEditing ? "white" : "var(--color-text-primary)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: isEditing ? "0 4px 14px rgba(66,99,235,0.3)" : "none", transition: "all 0.15s" }}>
           {isEditing ? <><CheckCircle size={15} /> تەواوکردن</> : <><Settings2 size={15} /> تەرخانکردن</>}

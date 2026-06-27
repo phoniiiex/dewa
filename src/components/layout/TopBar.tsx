@@ -49,20 +49,29 @@ export default function TopBar() {
       <header className="topbar" id="topbar">
         <div className="topbar-right">
           <div className="topbar-welcome">
-            {/* Profile avatar — initials from currentUser.name */}
-            <div className="topbar-avatar" style={{
-              background: "linear-gradient(135deg, #4263EB, #7C5CFC)",
-              color: "white",
-              fontWeight: 700,
-              fontSize: currentUser?.name && currentUser.name.trim().split(" ").length >= 2 ? 13 : 16,
-              letterSpacing: 0.5,
-              userSelect: "none",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {currentUser?.name
-                ? currentUser.name.trim().split(" ").slice(0, 2).map((w: string) => w[0]).join("")
-                : "؟"}
-            </div>
+            {/* Profile avatar — photo or gradient initials */}
+            {currentUser?.avatarUrl ? (
+              <img
+                src={currentUser.avatarUrl}
+                alt={currentUser.name}
+                className="topbar-avatar"
+                style={{ objectFit: "cover", border: "2px solid #EDF2FF" }}
+              />
+            ) : (
+              <div className="topbar-avatar" style={{
+                background: "linear-gradient(135deg, #4263EB, #7C5CFC)",
+                color: "white",
+                fontWeight: 700,
+                fontSize: currentUser?.name && currentUser.name.trim().split(" ").length >= 2 ? 13 : 16,
+                letterSpacing: 0.5,
+                userSelect: "none",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {currentUser?.name
+                  ? currentUser.name.trim().split(" ").slice(0, 2).map((w: string) => w[0]).join("")
+                  : "؟"}
+              </div>
+            )}
             <div className="topbar-greeting">
               <h2>بەخێربێیتەوە، {firstName}</h2>
               <p>بەخێربێیتەوە بۆ دەوا 🌿</p>
