@@ -144,8 +144,8 @@
   --space-16: 4rem;     /* 64px */
 
   /* Layout */
-  --sidebar-width: 272px;
-  --sidebar-collapsed: 72px;
+  --sidebar-width: 68px;
+  --sidebar-collapsed: 68px;
   --topbar-height: 64px;
   --content-max-width: 1440px;
 
