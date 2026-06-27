@@ -1,5 +1,5 @@
 "use client";
-import { useState, FormEvent, useRef } from "react";
+import { useState, useEffect, FormEvent, useRef } from "react";
 import {
   Settings2, Building2, Save, RefreshCw, Camera, Upload, Users, ArrowLeft,
   Sun, Moon, AlignRight, AlignLeft, AlignCenter, Check,
@@ -77,23 +77,58 @@ export default function SettingsPage() {
   });
   const [profileSaving, setProfileSaving] = useState(false);
 
-  const handleProfileAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // sync profileForm whenever currentUser changes (handles async load)
+  useEffect(() => {
+    if (currentUser) {
+      setProfileForm(p => ({
+        name: p.name || currentUser.name || "",
+        phone: p.phone || currentUser.phone || "",
+        avatar: p.avatar || currentUser.avatarUrl || "",
+      }));
+    }
+  }, [currentUser?.id]); // only re-sync when user changes, not on every render
+
+  // Resize image to max 200×200 before storing — keeps base64 under ~30KB
+  const resizeImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 200;
+          const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+          const canvas = document.createElement("canvas");
+          canvas.width  = Math.round(img.width  * ratio);
+          canvas.height = Math.round(img.height * ratio);
+          canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.onerror = reject;
+        img.src = ev.target!.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleProfileAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 700_000) { alert("فایلەکە زۆر گەورەیە (حد: 700KB)"); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (ev.target?.result) setProfileForm(p => ({ ...p, avatar: ev.target!.result as string }));
-    };
-    reader.readAsDataURL(file);
+    try {
+      const resized = await resizeImage(file);
+      setProfileForm(p => ({ ...p, avatar: resized }));
+    } catch { alert("گۆڕینی وێنەکە نەکرای"); }
   };
 
   const handleProfileSave = async (e: FormEvent) => {
     e.preventDefault();
     setProfileSaving(true);
-    await updateCurrentUserProfile({ name: profileForm.name.trim(), phone: profileForm.phone.trim(), avatarUrl: profileForm.avatar });
+    try {
+      await updateCurrentUserProfile({ name: profileForm.name.trim(), phone: profileForm.phone.trim(), avatarUrl: profileForm.avatar });
+      showToast("زانیاری کەسی پاشەکەوتکرا", "success");
+    } catch {
+      showToast("هەڵەیەک ڕوویدا — دوبارە هەوڵ بکەیتەوە", "error");
+    }
     setProfileSaving(false);
-    showToast("زانیاری کەسی پاشەکەوتکرا", "success");
   };
 
   const roleLabel = currentUser?.role === "ADMIN" ? "بەڕێوەبەر" : currentUser?.role === "MANAGER" ? "بەڕێوەبەری مامناوەند" : "نوێنەر";

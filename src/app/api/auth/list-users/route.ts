@@ -36,6 +36,7 @@ export async function GET() {
         permissions: (profile?.permissions as string[]) || [],
         created_at: u.created_at,
         has_profile: !!profile,
+        avatar_url: (profile?.avatar_url as string) || "",
       };
     });
 

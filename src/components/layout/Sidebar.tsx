@@ -39,9 +39,20 @@ function EditProfileModal({
   if (!open) return null;
 
   const handleImageFile = (file: File) => {
-    if (file.size > 700_000) { alert("فایلەکە زۆر گەورەیە (حد: 700KB)"); return; }
     const reader = new FileReader();
-    reader.onload = (ev) => { if (ev.target?.result) setAvatar(ev.target.result as string); };
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 200;
+        const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width  = Math.round(img.width  * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setAvatar(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = ev.target!.result as string;
+    };
     reader.readAsDataURL(file);
   };
 
