@@ -122,29 +122,33 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
   const [addingPriceType, setAddingPriceType] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Collect all existing categories from products
-  const allCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
+  // Separate state: typeId -> amount string.
+  // We derive the displayed list from priceTypes (store), never append to a list.
+  // This makes duplication impossible because the source of truth for WHICH
+  // rows appear is priceTypes, not a local array that could grow out of sync.
+  const [priceAmounts, setPriceAmounts] = useState<Record<string, string>>({});
+  // Track IDs the user explicitly removed in this session
+  const [removedTypeIds, setRemovedTypeIds] = useState<Set<string>>(new Set());
 
-  // Sync price entries once when the modal opens and priceTypes are available.
-  // Using a ref flag so this never re-runs when priceTypes changes later
-  // (e.g. after addPriceType), which was causing duplicate rows.
-  const pricesInitialized = useRef(false);
+  // Reset per-session price state when the modal opens/closes
   useEffect(() => {
     if (!open) {
-      // Reset the flag so next open re-initialises
-      pricesInitialized.current = false;
-      return;
+      setPriceAmounts({});
+      setRemovedTypeIds(new Set());
     }
-    if (!pricesInitialized.current && priceTypes.length > 0) {
-      pricesInitialized.current = true;
-      setForm(prev => ({
-        ...prev,
-        prices: priceTypes.map(pt => ({ typeId: pt.id, typeName: pt.name, amount: "" })),
-      }));
-    }
-  }, [open, priceTypes]);
+  }, [open]);
 
   if (!open) return null;
+
+  // The canonical list of price rows = priceTypes minus removed ones
+  const activePriceRows = priceTypes.filter(pt => !removedTypeIds.has(pt.id));
+
+  // Build the ProductPriceEntry array for the form (used at submit time)
+  const buildPrices = (): ProductPriceEntry[] =>
+    activePriceRows.map(pt => ({ typeId: pt.id, typeName: pt.name, amount: priceAmounts[pt.id] || "" }));
+
+  // Collect all existing categories from products
+  const allCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
 
   const set = (k: keyof WizardFormData, v: string | boolean | ProductPriceEntry[]) =>
     setForm(prev => ({ ...prev, [k]: v }));
@@ -154,7 +158,9 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
   const handleBack = () => { if (step > 1) setStep(s => s - 1); };
   const handleFinish = () => {
     if (!form.name.trim()) { setStep(1); return; }
-    onSubmit(form); setStep(1); setForm(EMPTY); setNewPriceTypeName(""); onClose();
+    // Inject the built prices into the form before submitting
+    onSubmit({ ...form, prices: buildPrices() });
+    setStep(1); setForm(EMPTY); setNewPriceTypeName(""); onClose();
   };
 
   const handleImageFile = (file: File) => {
@@ -165,34 +171,34 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
   const handleDrop = (e: React.DragEvent) => { e.preventDefault(); setDragging(false); const file = e.dataTransfer.files[0]; if (file?.type.startsWith("image/")) handleImageFile(file); };
 
   const updatePriceAmount = (typeId: string, amount: string) => {
-    set("prices", form.prices.map(p => p.typeId === typeId ? { ...p, amount } : p));
+    setPriceAmounts(prev => ({ ...prev, [typeId]: amount }));
   };
 
   const handleAddNewPriceType = async () => {
     if (!newPriceTypeName.trim()) return;
-    // Guard: skip if this name is already in the current price list
-    if (form.prices.some(p => p.typeName === newPriceTypeName.trim())) {
+    // Guard: skip if a priceType with this name already exists
+    if (priceTypes.some(pt => pt.name === newPriceTypeName.trim())) {
       setNewPriceTypeName("");
       return;
     }
     setAddingPriceType(true);
     const nt = await addPriceType(newPriceTypeName.trim());
-    // Only add to form.prices here; the useEffect will NOT re-run because
-    // pricesInitialized.current is already true.
-    setForm(prev => ({ ...prev, prices: [...prev.prices, { typeId: nt.id, typeName: nt.name, amount: "" }] }));
+    // Un-remove the new type (in case it was previously removed)
+    setRemovedTypeIds(prev => { const s = new Set(prev); s.delete(nt.id); return s; });
     setNewPriceTypeName("");
     setAddingPriceType(false);
   };
 
   const removePriceRow = (typeId: string) => {
-    set("prices", form.prices.filter(p => p.typeId !== typeId));
+    setRemovedTypeIds(prev => new Set([...prev, typeId]));
   };
 
   // Preview
   const previewName = form.name || "ناوی بەرهەم";
   const previewCategory = form.category || "جۆر";
-  const previewPrice = form.prices.find(p => p.amount)
-    ? formatIQD(Number(form.prices.find(p => p.amount)!.amount))
+  const firstPriceRow = activePriceRows.find(pt => priceAmounts[pt.id]);
+  const previewPrice = firstPriceRow
+    ? formatIQD(Number(priceAmounts[firstPriceRow.id]))
     : "٠ د.ع";
   const previewSku = form.sku || "SKU-000-00";
   const previewStock = Number(form.stock) || 0;
@@ -245,10 +251,10 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
               <div style={{ fontSize: 10, color: "#ADB5BD", fontWeight: 700, marginBottom: 3 }}>{previewCategory}</div>
               <div style={{ fontSize: 14, fontWeight: 800, color: "#1A1A2E", marginBottom: 5, lineHeight: 1.3 }}>{previewName}</div>
               <div style={{ fontSize: 20, fontWeight: 900, background: "linear-gradient(135deg, #4263EB, #7C5CFC)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{previewPrice}</div>
-              {form.prices.filter(p => p.amount).length > 1 && (
+              {activePriceRows.filter(pt => priceAmounts[pt.id]).length > 1 && (
                 <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 2 }}>
-                  {form.prices.filter(p => p.amount).slice(1).map(p => (
-                    <div key={p.typeId} style={{ fontSize: 10, color: "#6C757D" }}>{p.typeName}: {formatIQD(Number(p.amount))}</div>
+                  {activePriceRows.filter(pt => priceAmounts[pt.id]).slice(1).map(pt => (
+                    <div key={pt.id} style={{ fontSize: 10, color: "#6C757D" }}>{pt.name}: {formatIQD(Number(priceAmounts[pt.id]))}</div>
                   ))}
                 </div>
               )}
@@ -351,18 +357,18 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
                     بۆ هەر جۆرێکی نرخ نرخی تایبەتی بنووسە
                   </div>
 
-                  {form.prices.map(p => (
-                    <div key={p.typeId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "#FAFAFA", borderRadius: 10, border: "1.5px solid #E9ECEF" }}>
+                  {activePriceRows.map(pt => (
+                    <div key={pt.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "var(--color-bg-hover)", borderRadius: 10, border: "1.5px solid var(--color-border)" }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: "#6C757D", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.4 }}>{p.typeName}</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.4 }}>{pt.name}</div>
                         <div style={{ position: "relative" }}>
-                          <input type="number" value={p.amount} onChange={e => updatePriceAmount(p.typeId, e.target.value)}
-                            placeholder="٠" style={{ ...iS, paddingLeft: 50, fontSize: 16, fontWeight: 700, color: "#1A1A2E" }}
-                            onFocus={e => (e.target.style.borderColor = "#4263EB")} onBlur={e => (e.target.style.borderColor = "#E9ECEF")} />
+                          <input type="number" value={priceAmounts[pt.id] || ""} onChange={e => updatePriceAmount(pt.id, e.target.value)}
+                            placeholder="٠" style={{ ...iS, paddingLeft: 50, fontSize: 16, fontWeight: 700 }}
+                            onFocus={e => (e.target.style.borderColor = "#4263EB")} onBlur={e => (e.target.style.borderColor = "")} />
                           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#ADB5BD", fontWeight: 600 }}>د.ع</span>
                         </div>
                       </div>
-                      <button onClick={() => removePriceRow(p.typeId)} style={{ width: 28, height: 28, borderRadius: 7, border: "none", background: "#FFE3E3", color: "#C92A2A", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <button onClick={() => removePriceRow(pt.id)} style={{ width: 28, height: 28, borderRadius: 7, border: "none", background: "#FFE3E3", color: "#C92A2A", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         <Trash2 size={12} />
                       </button>
                     </div>
