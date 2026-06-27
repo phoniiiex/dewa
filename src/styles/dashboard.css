@@ -766,8 +766,14 @@
   justify-content: center;
 }
 
-/* Sidebar rail is always 68px — no collapsed override needed */
-/* (sidebar-rail expands to 260px on hover as an overlay) */
+/* Adjust layout when sidebar is collapsed */
+.app-layout.sidebar-collapsed .main-content {
+  margin-right: 72px;
+}
+
+.app-layout.sidebar-collapsed .topbar {
+  right: 72px;
+}
 
 /* === LEFT Sidebar Placement === */
 [data-sidebar="left"] .sidebar {
@@ -784,9 +790,17 @@
   right: 0 !important;
   left: var(--sidebar-width) !important;
 }
+[data-sidebar="left"] .app-layout.sidebar-collapsed .topbar {
+  left: 72px !important;
+  right: 0 !important;
+}
 [data-sidebar="left"] .main-content {
   margin-right: 0 !important;
   margin-left: var(--sidebar-width);
+}
+[data-sidebar="left"] .app-layout.sidebar-collapsed .main-content {
+  margin-left: 72px !important;
+  margin-right: 0 !important;
 }
 
 /* === TOP NAV — clean class-based styles (no overrides needed) === */
