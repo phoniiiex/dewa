@@ -3,7 +3,7 @@ import { useState, FormEvent, useRef } from "react";
 import {
   Settings2, Building2, Save, RefreshCw, Camera, Upload, Users, ArrowLeft,
   Sun, Moon, AlignRight, AlignLeft, AlignCenter, Check,
-  Trash2, Download, AlertTriangle, Shield,
+  Trash2, Download, AlertTriangle, Shield, User, Phone, Mail, BadgeCheck,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
@@ -65,8 +65,39 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 
 export default function SettingsPage() {
   const { settings, updateSettings, showToast } = useData();
-  const { darkMode, toggleDarkMode, sidebarPosition, setSidebarPosition } = useLayout();
+  const { darkMode, toggleDarkMode, sidebarPosition, setSidebarPosition, currentUser, updateCurrentUserProfile } = useLayout();
   const [companyForm, setCompanyForm] = useState(settings);
+
+  // ── My Profile state ────────────────────────────────────
+  const profileFileRef = useRef<HTMLInputElement>(null);
+  const [profileForm, setProfileForm] = useState({
+    name: currentUser?.name || "",
+    phone: currentUser?.phone || "",
+    avatar: currentUser?.avatarUrl || "",
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const handleProfileAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 700_000) { alert("فایلەکە زۆر گەورەیە (حد: 700KB)"); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) setProfileForm(p => ({ ...p, avatar: ev.target!.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleProfileSave = async (e: FormEvent) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    await updateCurrentUserProfile({ name: profileForm.name.trim(), phone: profileForm.phone.trim(), avatarUrl: profileForm.avatar });
+    setProfileSaving(false);
+    showToast("زانیاری کەسی پاشەکەوتکرا", "success");
+  };
+
+  const roleLabel = currentUser?.role === "ADMIN" ? "بەڕێوەبەر" : currentUser?.role === "MANAGER" ? "بەڕێوەبەری مامناوەند" : "نوێنەر";
+  const roleColor = currentUser?.role === "ADMIN" ? "#4263EB" : currentUser?.role === "MANAGER" ? "#7C5CFC" : "#40C057";
 
   const handleCompanySave = (e: FormEvent) => {
     e.preventDefault();
@@ -167,6 +198,121 @@ export default function SettingsPage() {
 
       <div style={{ display: "flex", gap: 24 }}>
         <div style={{ flex: 1, maxWidth: 700 }}>
+
+        {/* ─── My Profile Card ─── */}
+          <div style={cardStyle}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>
+              <User size={18} color="#4263EB" /> پرۆفایلی من
+            </h3>
+
+            <form onSubmit={handleProfileSave}>
+              {/* Avatar picker row */}
+              <div style={{ display: "flex", alignItems: "center", gap: 24, padding: "20px", background: "var(--color-bg)", borderRadius: 14, marginBottom: 24 }}>
+                {/* Avatar */}
+                <div style={{ position: "relative", flexShrink: 0 }}>
+                  <div
+                    onClick={() => profileFileRef.current?.click()}
+                    style={{ width: 88, height: 88, borderRadius: "50%", cursor: "pointer", overflow: "hidden", border: "3px solid #4263EB", position: "relative" }}
+                  >
+                    {profileForm.avatar ? (
+                      <img src={profileForm.avatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 800, color: "white" }}>
+                        {profileForm.name?.[0] || currentUser?.name?.[0] || "؟"}
+                      </div>
+                    )}
+                    {/* hover overlay */}
+                    <div
+                      style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.2s" }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = "0")}
+                    >
+                      <Camera size={20} color="white" />
+                    </div>
+                  </div>
+                  <input ref={profileFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleProfileAvatarFile} />
+                </div>
+
+                {/* Info beside avatar */}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: "var(--color-text-primary)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                    {currentUser?.name || "بەکارهێنەر"}
+                    <BadgeCheck size={16} color={roleColor} />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: `${roleColor}15`, color: roleColor }}>{roleLabel}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{currentUser?.email}</div>
+                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 4 }}>کلیک لەسەر وێنەکە بکە بۆ گۆڕینی</div>
+                </div>
+              </div>
+
+              {/* Fields */}
+              <FormGrid>
+                <FormField label="ناو">
+                  <div style={{ position: "relative" }}>
+                    <User size={13} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }} />
+                    <input
+                      style={{ ...inputStyle, paddingRight: 30 }}
+                      value={profileForm.name}
+                      onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))}
+                      placeholder="ناوی خۆت بنووسە"
+                    />
+                  </div>
+                </FormField>
+
+                <FormField label="ژمارەی مۆبایل">
+                  <div style={{ position: "relative" }}>
+                    <Phone size={13} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }} />
+                    <input
+                      style={{ ...inputStyle, paddingRight: 30 }}
+                      value={profileForm.phone}
+                      onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))}
+                      placeholder="07XX XXX XXXX"
+                      type="tel"
+                    />
+                  </div>
+                </FormField>
+
+                <FormField label="ئیمەیڵ (ناگۆڕدرێت)">
+                  <div style={{ position: "relative" }}>
+                    <Mail size={13} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }} />
+                    <input
+                      style={{ ...inputStyle, paddingRight: 30, opacity: 0.6, cursor: "not-allowed" }}
+                      value={currentUser?.email || ""}
+                      readOnly
+                    />
+                  </div>
+                </FormField>
+
+                <FormField label="ئەندازە (ناگۆڕدرێت)">
+                  <input
+                    style={{ ...inputStyle, opacity: 0.6, cursor: "not-allowed" }}
+                    value={roleLabel}
+                    readOnly
+                  />
+                </FormField>
+              </FormGrid>
+
+              {profileForm.avatar && (
+                <div style={{ marginTop: 12 }}>
+                  <button type="button" onClick={() => setProfileForm(p => ({ ...p, avatar: "" }))} style={{ fontSize: 11, color: "#FA5252", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                    سڕینەوەی وێنەی پرۆفایل
+                  </button>
+                </div>
+              )}
+
+              <div style={{ marginTop: 20 }}>
+                <button
+                  type="submit"
+                  disabled={profileSaving || !profileForm.name.trim()}
+                  style={{ padding: "10px 28px", borderRadius: 8, background: profileSaving ? "#ADB5BD" : "linear-gradient(135deg,#4263EB,#7C5CFC)", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: profileSaving ? "default" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  <Save size={14} /> {profileSaving ? "پاشەکەوتکردن..." : "پاشەکەوتکردنی پرۆفایل"}
+                </button>
+              </div>
+            </form>
+          </div>
 
           {/* ─── Appearance Card ─── */}
           <div style={cardStyle}>
