@@ -565,7 +565,7 @@ export default function DashboardPage() {
 
       {layout.length === 0 && (
         <div style={{ textAlign: "center", padding: "80px 24px", color: "#ADB5BD" }}>
-          <LayoutDashboard size={48} style={{ marginBottom: 12, opacity: 0.3 }} />
+          <Boxes size={48} style={{ marginBottom: 12, opacity: 0.3 }} />
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>داشبۆرد بەتاڵە</div>
           <div style={{ fontSize: 13 }}>کرتە بکە لە "تەرخانکردن" بۆ زیادکردنی ویجێت</div>
         </div>
