@@ -125,15 +125,24 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
   // Collect all existing categories from products
   const allCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
 
-  // Sync price entries whenever priceTypes loads
+  // Sync price entries once when the modal opens and priceTypes are available.
+  // Using a ref flag so this never re-runs when priceTypes changes later
+  // (e.g. after addPriceType), which was causing duplicate rows.
+  const pricesInitialized = useRef(false);
   useEffect(() => {
-    if (priceTypes.length > 0 && form.prices.length === 0) {
+    if (!open) {
+      // Reset the flag so next open re-initialises
+      pricesInitialized.current = false;
+      return;
+    }
+    if (!pricesInitialized.current && priceTypes.length > 0) {
+      pricesInitialized.current = true;
       setForm(prev => ({
         ...prev,
         prices: priceTypes.map(pt => ({ typeId: pt.id, typeName: pt.name, amount: "" })),
       }));
     }
-  }, [priceTypes]);
+  }, [open, priceTypes]);
 
   if (!open) return null;
 
@@ -143,7 +152,10 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
   const handleClose = () => { setStep(1); setForm(EMPTY); setNewPriceTypeName(""); onClose(); };
   const handleNext = () => { if (step < 5) setStep(s => s + 1); };
   const handleBack = () => { if (step > 1) setStep(s => s - 1); };
-  const handleFinish = () => { onSubmit(form); setStep(1); setForm(EMPTY); setNewPriceTypeName(""); onClose(); };
+  const handleFinish = () => {
+    if (!form.name.trim()) { setStep(1); return; }
+    onSubmit(form); setStep(1); setForm(EMPTY); setNewPriceTypeName(""); onClose();
+  };
 
   const handleImageFile = (file: File) => {
     const reader = new FileReader();
@@ -158,8 +170,15 @@ export default function AddProductWizard({ open, onClose, onSubmit }: Props) {
 
   const handleAddNewPriceType = async () => {
     if (!newPriceTypeName.trim()) return;
+    // Guard: skip if this name is already in the current price list
+    if (form.prices.some(p => p.typeName === newPriceTypeName.trim())) {
+      setNewPriceTypeName("");
+      return;
+    }
     setAddingPriceType(true);
     const nt = await addPriceType(newPriceTypeName.trim());
+    // Only add to form.prices here; the useEffect will NOT re-run because
+    // pricesInitialized.current is already true.
     setForm(prev => ({ ...prev, prices: [...prev.prices, { typeId: nt.id, typeName: nt.name, amount: "" }] }));
     setNewPriceTypeName("");
     setAddingPriceType(false);
