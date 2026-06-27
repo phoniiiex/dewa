@@ -1,8 +1,8 @@
 "use client";
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, FormEvent, useRef } from "react";
 import {
   Users, Plus, Link2, Copy, Check, Trash2, Edit3,
-  Mail, Phone, MapPin, RefreshCw, Shield, AlertCircle, Lock, Key
+  Mail, Phone, MapPin, RefreshCw, Shield, AlertCircle, Lock, Key, Camera,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -89,11 +89,34 @@ export default function UsersPage() {
   const [inviteUrl, setInviteUrl] = useState("");
   const [copied, setCopied] = useState(false);
 
-  // ── Edit user permissions ──
+  // ── Edit user permissions + avatar ──
   const [editUser, setEditUser] = useState<AuthUser | null>(null);
   const [editRole, setEditRole] = useState("REP");
   const [editPerms, setEditPerms] = useState<string[]>([]);
+  const [editAvatar, setEditAvatar] = useState("");
   const [editLoading, setEditLoading] = useState(false);
+  const editAvatarRef = useRef<HTMLInputElement>(null);
+
+  const resizeImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 200;
+          const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+          const canvas = document.createElement("canvas");
+          canvas.width  = Math.round(img.width  * ratio);
+          canvas.height = Math.round(img.height * ratio);
+          canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.onerror = reject;
+        img.src = ev.target!.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
   // ── Deactivate ──
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
@@ -163,13 +186,13 @@ export default function UsersPage() {
   };
 
   // ── Edit permissions ──
-  const openEdit = (u: AuthUser) => { setEditUser(u); setEditRole(u.role); setEditPerms(u.permissions || []); };
+  const openEdit = (u: AuthUser) => { setEditUser(u); setEditRole(u.role); setEditPerms(u.permissions || []); setEditAvatar(u.avatar_url || ""); };
   const handleSaveEdit = async () => {
     if (!editUser) return;
     setEditLoading(true);
     await fetch("/api/auth/list-users", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: editUser.id, role: editRole, permissions: editPerms }),
+      body: JSON.stringify({ id: editUser.id, role: editRole, permissions: editPerms, avatar_url: editAvatar }),
     });
     setEditLoading(false); setEditUser(null); await loadUsers();
   };
@@ -416,15 +439,47 @@ export default function UsersPage() {
       <Modal open={!!editUser} onClose={() => setEditUser(null)} title={`دەستکاری: ${editUser?.name || editUser?.email || ""}`} width={560}>
         {editUser && (
           <>
-            <div style={{ padding: "12px 16px", background: "#F8F9FA", borderRadius: 10, marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg, #4263EB, #7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 13, fontWeight: 700 }}>
-                {editUser.name?.[0] || editUser.email?.[0] || "؟"}
+            {/* Avatar picker */}
+            <div style={{ padding: "14px 16px", background: "var(--color-bg,#F8F9FA)", borderRadius: 12, marginBottom: 20, display: "flex", alignItems: "center", gap: 16 }}>
+              <div
+                onClick={() => editAvatarRef.current?.click()}
+                style={{ width: 64, height: 64, borderRadius: "50%", cursor: "pointer", overflow: "hidden", border: "3px solid #4263EB", flexShrink: 0, position: "relative" }}
+              >
+                {editAvatar ? (
+                  <img src={editAvatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #4263EB, #7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 22, fontWeight: 800 }}>
+                    {editUser.name?.[0] || editUser.email?.[0] || "؟"}
+                  </div>
+                )}
+                <div
+                  style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.2s" }}
+                  onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                  onMouseLeave={e => (e.currentTarget.style.opacity = "0")}
+                >
+                  <Camera size={16} color="white" />
+                </div>
               </div>
+              <input ref={editAvatarRef} type="file" accept="image/*" style={{ display: "none" }}
+                onChange={async e => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  try { setEditAvatar(await resizeImage(f)); } catch { alert("گۆڕینی وێنەکە نەکرای"); }
+                }}
+              />
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{editUser.name}</div>
-                <div style={{ fontSize: 12, color: "#6C757D" }}>{editUser.email}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{editUser.name}</div>
+                <div style={{ fontSize: 12, color: "#6C757D", marginBottom: 8 }}>{editUser.email}</div>
+                <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 6 }}>کلیک لەسەر وێنەکە بکە بۆ گۆڕین</div>
+                {editAvatar && (
+                  <button type="button" onClick={() => setEditAvatar("")}
+                    style={{ fontSize: 11, color: "#FA5252", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
+                    سڕینەوەی وێنە
+                  </button>
+                )}
               </div>
             </div>
+
             <FormField label="ڕۆڵ">
               <select style={selectStyle} value={editRole} onChange={e => setEditRole(e.target.value)}>
                 <option value="REP">نوێنەر</option>
@@ -432,6 +487,7 @@ export default function UsersPage() {
                 <option value="ADMIN">ئەدمین</option>
               </select>
             </FormField>
+
             <div style={{ marginTop: 16 }}>
               <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 8 }}>مۆڵەتەکان</label>
               <PermissionGrid permissions={editPerms} onChange={setEditPerms} />

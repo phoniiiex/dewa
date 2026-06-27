@@ -50,7 +50,7 @@ export async function GET() {
 export async function PATCH(req: Request) {
   // Update a user's role/permissions/active status
   try {
-    const { id, role, permissions, is_active } = await req.json();
+    const { id, role, permissions, is_active, avatar_url } = await req.json();
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -64,6 +64,7 @@ export async function PATCH(req: Request) {
     if (role !== undefined) update.role = role;
     if (permissions !== undefined) update.permissions = permissions;
     if (is_active !== undefined) update.is_active = is_active;
+    if (avatar_url !== undefined) update.avatar_url = avatar_url;
 
     const { error } = await admin.from("profiles").upsert(update);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
