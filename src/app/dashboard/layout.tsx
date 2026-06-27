@@ -75,15 +75,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       } else {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("name, role, avatar_url, phone")
+          .select("*")
           .eq("id", session.user.id)
           .single();
 
         setCurrentUser({
           id: session.user.id,
           email: session.user.email || "",
-          name: profile?.name || session.user.user_metadata?.name || "",
-          role: profile?.role || session.user.user_metadata?.role || "REP",
+          name: (profile as Record<string, string>)?.name || session.user.user_metadata?.name || "",
+          role: (profile as Record<string, string>)?.role || session.user.user_metadata?.role || "REP",
           avatarUrl: (profile as Record<string, string>)?.avatar_url || "",
           phone: (profile as Record<string, string>)?.phone || "",
         });
