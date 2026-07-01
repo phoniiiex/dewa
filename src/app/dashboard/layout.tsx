@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import Toast from "@/components/ui/Toast";
+import AiPanel from "@/components/ai/AiPanel";
 import { DataProvider } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import "@/styles/dashboard.css";
@@ -17,6 +18,8 @@ interface LayoutContextType {
   setSearchOpen: (v: boolean) => void;
   notifOpen: boolean;
   setNotifOpen: (v: boolean) => void;
+  aiOpen: boolean;
+  setAiOpen: (v: boolean) => void;
   logout: () => void;
   currentUser: { id: string; email: string; name: string; role: string; avatarUrl: string; phone: string } | null;
   setCurrentUser: React.Dispatch<React.SetStateAction<{ id: string; email: string; name: string; role: string; avatarUrl: string; phone: string } | null>>;
@@ -39,6 +42,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: string; avatarUrl: string; phone: string } | null>(null);
   const [darkMode, setDarkMode] = useState(false);
@@ -132,6 +136,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         toggleSidebar: () => setSidebarCollapsed(p => !p),
         searchOpen, setSearchOpen,
         notifOpen, setNotifOpen,
+        aiOpen, setAiOpen,
         logout,
         currentUser,
         setCurrentUser,
@@ -146,6 +151,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <TopBar />
           <main className="main-content">{children}</main>
           <Toast />
+          <AiPanel open={aiOpen} onClose={() => setAiOpen(false)} />
         </div>
       </LayoutContext.Provider>
     </DataProvider>

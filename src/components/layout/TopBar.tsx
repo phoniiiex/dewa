@@ -1,14 +1,14 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Bell, Calendar, SlidersHorizontal, Plus, X } from "lucide-react";
+import { Search, Bell, Calendar, SlidersHorizontal, Plus, X, Sparkles } from "lucide-react";
 import { useLayout } from "@/app/dashboard/layout";
 import CommandMenu from "@/components/ui/CommandMenu";
 
 
 export default function TopBar() {
   const router = useRouter();
-  const { searchOpen, setSearchOpen, notifOpen, setNotifOpen, currentUser } = useLayout();
+  const { searchOpen, setSearchOpen, notifOpen, setNotifOpen, currentUser, setAiOpen } = useLayout();
   const [dateOpen, setDateOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -82,6 +82,37 @@ export default function TopBar() {
         <div className="topbar-left">
           <button className="topbar-btn" aria-label="Search" id="topbar-search" onClick={() => setSearchOpen(true)}>
             <Search size={18} />
+          </button>
+          {/* AI Assistant button */}
+          <button
+            id="topbar-ai"
+            aria-label="AI Assistant"
+            onClick={() => setAiOpen(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "7px 14px", borderRadius: 20,
+              border: "1px solid #C7D2FE",
+              background: "linear-gradient(135deg, #EEF2FF, #F5F3FF)",
+              color: "#4263EB", fontSize: 13, fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+              boxShadow: "0 1px 4px rgba(66,99,235,0.15)",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = "linear-gradient(135deg, #4263EB, #7C5CFC)";
+              e.currentTarget.style.color = "white";
+              e.currentTarget.style.borderColor = "transparent";
+              e.currentTarget.style.boxShadow = "0 2px 12px rgba(66,99,235,0.4)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = "linear-gradient(135deg, #EEF2FF, #F5F3FF)";
+              e.currentTarget.style.color = "#4263EB";
+              e.currentTarget.style.borderColor = "#C7D2FE";
+              e.currentTarget.style.boxShadow = "0 1px 4px rgba(66,99,235,0.15)";
+            }}
+          >
+            <Sparkles size={15} />
+            <span>دەوا AI</span>
           </button>
           <div style={{ position: "relative" }}>
             <button className="topbar-btn" aria-label="Notifications" id="topbar-notifications" onClick={() => setNotifOpen(!notifOpen)} style={{ position: "relative" }}>
