@@ -3,7 +3,7 @@ import { useState, FormEvent, useRef, useMemo, useEffect } from "react";
 
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
-  CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign,
+  CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign, Pencil,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
@@ -109,17 +109,21 @@ export default function OrdersPage() {
 
 
   // ── New order form ────────────────────────────────────────────────────
-  const [form, setForm] = useState({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
+  const [form, setForm] = useState({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "", repBonusPct: "" });
   // Each item: productId, quantity, manualBonusPct (only for direct orders)
   const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string; manualBonusPct: string }[]>([{ productId: "", quantity: "", manualBonusPct: "" }]);
+  // Edit mode
+  const [editOrder, setEditOrder] = useState<Order | null>(null);
 
   const resetForm = () => {
-    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
+    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "", repBonusPct: "" });
     setOrderItems([{ productId: "", quantity: "", manualBonusPct: "" }]);
+    setEditOrder(null);
   };
 
   const isDirect = !form.warehouseId;
   const selectedWarehouse = warehouses.find(w => w.id === form.warehouseId);
+  const repBonusPctNum = parseFloat(form.repBonusPct) || 0;
 
   // Bonus calculation — warehouse order: use warehouse rules; direct order: use manual %
   const getItemBonusPct = (productId: string, manualPct: string): { pct: number; isCustom: boolean } => {
@@ -136,7 +140,9 @@ export default function OrdersPage() {
     const prod = products.find(p => p.id === i.productId);
     const qty = Number(i.quantity);
     const { pct, isCustom } = getItemBonusPct(i.productId, orderItems[idx].manualBonusPct);
-    return { name: prod?.name || "", qty, pct, isCustom, bonusQty: Math.round(qty * pct / 100) };
+    const warehouseBonusQty = Math.round(qty * pct / 100);
+    const repBonusQty = isDirect ? 0 : Math.round(qty * repBonusPctNum / 100);
+    return { name: prod?.name || "", qty, pct, isCustom, bonusQty: warehouseBonusQty + repBonusQty, warehouseBonusQty, repBonusQty, repPct: repBonusPctNum };
   });
 
   const handleSubmit = async (e: FormEvent) => {
@@ -151,12 +157,42 @@ export default function OrdersPage() {
       const prod = products.find(p => p.id === i.productId);
       const qty  = Number(i.quantity);
       const { pct } = getItemBonusPct(i.productId, i.manualBonusPct);
-      return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: Math.round(qty * pct / 100), unitPrice: prod?.price || 0, bonusPct: pct };
+      const warehouseBonusQty = Math.round(qty * pct / 100);
+      const repBQ = isDirect ? 0 : Math.round(qty * repBonusPctNum / 100);
+      return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: warehouseBonusQty + repBQ, unitPrice: prod?.price || 0, bonusPct: pct, warehouseBonusQty, repBonusQty: repBQ };
     });
     if (items.length === 0) { showToast("تکایە بەرهەمێک زیادبکە", "error"); return; }
 
     const totalAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
 
+    // ── EDIT MODE ──
+    if (editOrder) {
+      if (isManager) {
+        // Manager: apply changes immediately
+        await updateOrder(editOrder.id, {
+          clientId: client.id, clientName: client.name,
+          repId: repRecord.id, repName: repRecord.name,
+          warehouseId: wh?.id || null, warehouseName: wh?.name || null,
+          items, totalAmount, notes: form.notes,
+        });
+        showToast("داواکاری نوێکرایەوە");
+      } else {
+        // Rep: embed edit request in notes for manager approval
+        const editPayload = JSON.stringify({
+          clientId: client.id, clientName: client.name,
+          repId: repRecord.id, repName: repRecord.name,
+          warehouseId: wh?.id || null, warehouseName: wh?.name || null,
+          items, totalAmount, notes: form.notes,
+        });
+        await updateOrder(editOrder.id, { notes: `[EDIT_REQUEST]:${editPayload}` });
+        showToast("داوای گۆڕانکاری نێردرا — چاوەڕوانی ڕەزامەندی بەڕێوەبەر");
+      }
+      setNewOrderOpen(false);
+      resetForm();
+      return;
+    }
+
+    // ── NEW ORDER ──
     await addOrder({
       clientId: client.id, clientName: client.name,
       repId: repRecord.id, repName: repRecord.name,
@@ -168,6 +204,34 @@ export default function OrdersPage() {
     });
     setNewOrderOpen(false);
     resetForm();
+  };
+
+  // ── Open edit modal (pre-fill form from existing order) ──
+  const openEditModal = (o: Order) => {
+    setEditOrder(o);
+    setForm({
+      clientId: o.clientId, clientName: o.clientName,
+      repId: o.repId, warehouseId: o.warehouseId || "",
+      notes: o.notes.startsWith("[EDIT_REQUEST]:") ? "" : o.notes,
+      repBonusPct: "",
+    });
+    setOrderItems(o.items.map(i => ({
+      productId: i.productId, quantity: String(i.quantity), manualBonusPct: String(i.bonusPct || ""),
+    })));
+    setNewOrderOpen(true);
+  };
+
+  // ── Approve / Reject edit request (manager only) ──
+  const approveEditRequest = (o: Order) => {
+    try {
+      const payload = JSON.parse(o.notes.replace("[EDIT_REQUEST]:", ""));
+      updateOrder(o.id, { ...payload, notes: payload.notes || "" });
+      showToast("گۆڕانکاری قبووڵکرا");
+    } catch { showToast("هەڵە لە خوێندنەوەی داواکاری", "error"); }
+  };
+  const rejectEditRequest = (o: Order) => {
+    updateOrder(o.id, { notes: "" });
+    showToast("داوای گۆڕانکاری ڕەتکرایەوە");
   };
 
   // ── Workflow actions ──────────────────────────────────────────────────
@@ -384,8 +448,17 @@ export default function OrdersPage() {
                   {/* ── Inline action buttons ── */}
                   <td style={{ padding: "12px 16px" }}>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {/* Edit request badge */}
+                      {o.notes.startsWith("[EDIT_REQUEST]:") && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 8px", borderRadius: 99, fontSize: 11, fontWeight: 700, background: "#FEF3C7", color: "#D97706" }}>📝 داوای گۆڕانکاری</span>
+                      )}
+                      {/* Manager approve/reject edit request */}
+                      {isManager && o.notes.startsWith("[EDIT_REQUEST]:") && <>
+                        <button onClick={() => approveEditRequest(o)} style={actionBtn("#059669", "#D1FAE5")}><CheckCircle size={12} /> قبووڵ</button>
+                        <button onClick={() => rejectEditRequest(o)} style={actionBtn("#DC2626", "#FEE2E2")}><XCircle size={12} /> ڕەت</button>
+                      </>}
                       {/* Status-specific actions (manager only) */}
-                      {isManager && o.status === "WAITING" && <>
+                      {isManager && o.status === "WAITING" && !o.notes.startsWith("[EDIT_REQUEST]:") && <>
                         <button onClick={() => acceptOrder(o)} style={actionBtn("#059669", "#D1FAE5")}><CheckCircle size={12} /> قبووڵکردن</button>
                         <button onClick={() => setRejectOrder(o)} style={actionBtn("#DC2626", "#FEE2E2")}><XCircle size={12} /> ڕەتکردن</button>
                       </>}
@@ -400,6 +473,10 @@ export default function OrdersPage() {
                       )}
                       {isManager && o.status === "DELIVERED" && (
                         <button onClick={() => { setPayModalOrder(o); setPayMethod("CASH"); }} style={actionBtn("#059669", "#D1FAE5")}><DollarSign size={12} /> پارەدان</button>
+                      )}
+                      {/* Edit button */}
+                      {((isManager && (o.status === "WAITING" || o.status === "IN_PROGRESS")) || (isRep && o.status === "WAITING" && o.repId === myRep?.id)) && (
+                        <button onClick={() => openEditModal(o)} style={{ padding: "5px 8px", background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center" }}><Pencil size={13} /></button>
                       )}
                       {/* Always available */}
                       <button onClick={() => setDetailOrder(o)} style={{ padding: "5px 8px", background: "#F1F3F5", color: "#495057", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center" }}><Eye size={13} /></button>
@@ -438,7 +515,7 @@ export default function OrdersPage() {
       {/* ════════════════════════════════════════════════════════════════
           NEW ORDER MODAL
       ════════════════════════════════════════════════════════════════ */}
-      <Modal open={newOrderOpen} onClose={() => { setNewOrderOpen(false); resetForm(); }} title="داواکاری نوێ" width={720}>
+      <Modal open={newOrderOpen} onClose={() => { setNewOrderOpen(false); resetForm(); }} title={editOrder ? `گۆڕینی داواکاری — ${editOrder.orderNumber}` : "داواکاری نوێ"} width={720}>
         <form onSubmit={handleSubmit}>
           <FormGrid cols={2}>
             <FormField label="کڕیار" required>
@@ -471,11 +548,19 @@ export default function OrdersPage() {
             </FormField>
           </FormGrid>
 
-          {/* Warehouse bonus info banner */}
+          {/* Warehouse bonus info banner + rep bonus input */}
           {selectedWarehouse && (
-            <div style={{ marginBottom: 12, padding: "10px 14px", background: "#EDE9FE", borderRadius: 10, fontSize: 13, color: "#7C3AED" }}>
-              🏪 <strong>{selectedWarehouse.name}</strong> — بۆنەسی بنەڕەتی: <strong>{selectedWarehouse.bonusPct}%</strong>
-              {selectedWarehouse.bonusRules.length > 0 && <span> · {selectedWarehouse.bonusRules.length} ڕێگەی تایبەت</span>}
+            <div style={{ marginBottom: 12, padding: "12px 14px", background: "#EDE9FE", borderRadius: 10, fontSize: 13, color: "#7C3AED" }}>
+              <div style={{ marginBottom: 8 }}>
+                🏪 <strong>{selectedWarehouse.name}</strong> — بۆنەسی کۆگا: <strong>{selectedWarehouse.bonusPct}%</strong>
+                {selectedWarehouse.bonusRules.length > 0 && <span> · {selectedWarehouse.bonusRules.length} ڕێگەی تایبەت</span>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.5)", padding: "8px 10px", borderRadius: 8 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "#495057", whiteSpace: "nowrap" }}>👤 بۆنەسی نوێنەر %</label>
+                <input type="number" min={0} max={100} style={{ ...inputStyle, width: 90, textAlign: "center" }} placeholder="0"
+                  value={form.repBonusPct} onChange={e => setForm({ ...form, repBonusPct: e.target.value })} />
+                {repBonusPctNum > 0 && <span style={{ fontSize: 11, color: "#059669", fontWeight: 700 }}>نوێنەر {repBonusPctNum}% وەردەگرێت</span>}
+              </div>
             </div>
           )}
           {isDirect && (
@@ -539,20 +624,31 @@ export default function OrdersPage() {
             })}
           </div>
 
-          {/* Bonus preview */}
-          {liveBonusItems.some(i => i.pct > 0) && (
+          {/* Bonus preview — warehouse vs rep breakdown */}
+          {liveBonusItems.some(i => i.bonusQty > 0) && (
             <div style={{ marginTop: 14, padding: 12, background: "#FAFAFA", borderRadius: 10, border: "1px solid #E9ECEF" }}>
-              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: "#495057" }}>داڕێژەی بۆنەس</div>
-              {liveBonusItems.filter(i => i.pct > 0).map((i, idx) => (
-                <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#495057", padding: "3px 0" }}>
-                  <span>{i.name}</span>
-                  <span style={{ color: isDirect ? "#D97706" : "#059669", fontWeight: 600 }}>{i.qty} + {i.bonusQty} = {i.qty + i.bonusQty} ({i.pct}%{i.isCustom ? " ★" : ""})</span>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: "#495057" }}>داڕێژەی بۆنەس</div>
+              {liveBonusItems.filter(i => i.bonusQty > 0).map((i, idx) => (
+                <div key={idx} style={{ marginBottom: 10, padding: "8px 10px", background: "white", borderRadius: 8, border: "1px solid #F1F3F5" }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1A1A2E", marginBottom: 6 }}>{i.name} — {i.qty} دانە</div>
+                  {i.warehouseBonusQty > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#7C3AED", padding: "2px 0" }}>
+                      <span style={{ width: 20, textAlign: "center" }}>🏪</span>
+                      <span>بۆنەسی کۆگا: <strong>+{i.warehouseBonusQty}</strong> ({i.pct}%) — لەگەڵ کاڵاکە دەنێردرێت</span>
+                    </div>
+                  )}
+                  {i.repBonusQty > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#059669", padding: "2px 0" }}>
+                      <span style={{ width: 20, textAlign: "center" }}>👤</span>
+                      <span>بۆنەسی نوێنەر: <strong>+{i.repBonusQty}</strong> ({i.repPct}%) — نوێنەر وەردەگرێت</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
 
-          <FormActions onCancel={() => { setNewOrderOpen(false); resetForm(); }} submitLabel="تۆمارکردنی داواکاری" />
+          <FormActions onCancel={() => { setNewOrderOpen(false); resetForm(); }} submitLabel={editOrder ? (isManager ? "پاشەکەوتکردنی گۆڕانکاری" : "ناردنی داوای گۆڕانکاری") : "تۆمارکردنی داواکاری"} />
         </form>
       </Modal>
 
@@ -588,14 +684,15 @@ export default function OrdersPage() {
               <div style={{ border: "1px solid #F1F3F5", borderRadius: 10, overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead><tr style={{ background: "#FAFAFA" }}>
-                    {["بەرهەم", "ژمارە", "بۆنەس", "نرخ", "کۆ"].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: "#495057" }}>{h}</th>)}
+                    {["بەرهەم", "ژمارە", "🏪 کۆگا", "👤 نوێنەر", "نرخ", "کۆ"].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: "#495057" }}>{h}</th>)}
                   </tr></thead>
                   <tbody>
                     {o.items.map((item, idx) => (
                       <tr key={idx} style={{ borderTop: "1px solid #F8F9FA" }}>
                         <td style={{ padding: "10px 14px" }}>{item.productName}</td>
                         <td style={{ padding: "10px 14px" }}>{item.quantity}</td>
-                        <td style={{ padding: "10px 14px", color: "#059669", fontWeight: 600 }}>{item.bonusQty > 0 ? `+${item.bonusQty}` : "—"}</td>
+                        <td style={{ padding: "10px 14px", color: "#7C3AED", fontWeight: 600 }}>{(item.warehouseBonusQty || item.bonusQty || 0) > 0 ? `+${item.warehouseBonusQty ?? item.bonusQty}` : "—"}</td>
+                        <td style={{ padding: "10px 14px", color: "#059669", fontWeight: 600 }}>{(item.repBonusQty || 0) > 0 ? `+${item.repBonusQty}` : "—"}</td>
                         <td style={{ padding: "10px 14px" }}>{formatIQD(item.unitPrice)}</td>
                         <td style={{ padding: "10px 14px", fontWeight: 600 }}>{formatIQD(item.quantity * item.unitPrice)}</td>
                       </tr>

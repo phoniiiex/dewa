@@ -8,6 +8,7 @@ import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Order, InvoiceTemplate } from "@/lib/types";
 import { useRouter } from "next/navigation";
+import { generateQRSvg } from "@/lib/qr";
 
 type DocType = InvoiceTemplate["docType"];
 
@@ -26,7 +27,7 @@ interface Props {
 
 export default function PrintModal({ open, onClose, order }: Props) {
   const router = useRouter();
-  const { invoiceTemplates, clients, settings } = useData();
+  const { invoiceTemplates, clients, settings, orders } = useData();
   const [docTypeFilter, setDocTypeFilter] = useState<DocType>("invoice");
   const [selectedTemplate, setSelectedTemplate] = useState<InvoiceTemplate | null>(null);
   const [step, setStep] = useState<"pick" | "preview">("pick");
@@ -43,9 +44,25 @@ export default function PrintModal({ open, onClose, order }: Props) {
     setStep("preview");
   };
 
-  const handleQuickPrint = () => {
-    // Quick print with default layout (no template)
-    const html = buildQuickPrintHTML(order, client, settings, docTypeFilter, subtotal);
+  // Build QR data for the client portal
+  const buildQrSvg = async (): Promise<string> => {
+    if (!client || !order) return "";
+    const clientOrders = orders.filter(o => o.clientId === order.clientId);
+    const qrData = {
+      n: client.name, t: client.type, p: client.phone,
+      c: client.city, b: client.balance,
+      o: clientOrders.length,
+      ta: clientOrders.reduce((s, o) => s + o.totalAmount, 0),
+      pc: clientOrders.filter(o => o.status === "PAID").length,
+      co: settings.name, ce: settings.nameEn,
+    };
+    const url = `${window.location.origin}/client/${order.clientId}#d=${btoa(unescape(encodeURIComponent(JSON.stringify(qrData))))}`;
+    return await generateQRSvg(url, 140);
+  };
+
+  const handleQuickPrint = async () => {
+    const qrSvg = await buildQrSvg();
+    const html = buildQuickPrintHTML(order, client, settings, docTypeFilter, subtotal, qrSvg);
     const w = window.open("", "_blank");
     if (!w) return;
     w.document.write(html);
@@ -54,9 +71,10 @@ export default function PrintModal({ open, onClose, order }: Props) {
     onClose();
   };
 
-  const handlePrintWithTemplate = () => {
+  const handlePrintWithTemplate = async () => {
     if (!selectedTemplate) return;
-    const html = buildTemplateHTML(order, client, settings, selectedTemplate, subtotal);
+    const qrSvg = await buildQrSvg();
+    const html = buildTemplateHTML(order, client, settings, selectedTemplate, subtotal, qrSvg);
     const w = window.open("", "_blank");
     if (!w) return;
     w.document.write(html);
@@ -236,7 +254,7 @@ export default function PrintModal({ open, onClose, order }: Props) {
 function buildTemplateHTML(
   order: Order, client: { name: string; phone: string; city: string } | undefined,
   settings: { name: string; nameEn: string; phone: string; email: string; address: string },
-  t: InvoiceTemplate, subtotal: number
+  t: InvoiceTemplate, subtotal: number, qrSvg: string
 ): string {
   const docLabel = { invoice: "پسووڵە", receipt: "وەسڵ", delivery: "وەرقەی گەیاندن", quote: "نرخنامە" }[t.docType];
   const disc = subtotal * (t.defaultDiscount / 100);
@@ -257,6 +275,7 @@ function buildTemplateHTML(
     else if (b.id === "note" && (t.defaultNote || order.notes)) parts.push(`<div class="inv-note"><div style="font-size:11px;font-weight:700;color:#E67700;margin-bottom:4px">تێبینی</div><div style="font-size:12px">${t.defaultNote || order.notes}</div></div>`);
     else if (b.id === "terms" && t.defaultTerms) parts.push(`<div class="inv-terms"><div style="font-size:11px;font-weight:700;color:#2E7D32;margin-bottom:4px">مەرجەکان</div><div style="font-size:12px">${t.defaultTerms}</div></div>`);
     else if (b.id === "signature") parts.push(`<div class="inv-signature"><div class="inv-sig-box"><div class="inv-sig-line"></div><div class="inv-sig-label">واژووی فرۆشیار</div></div><div class="inv-sig-box"><div class="inv-sig-line"></div><div class="inv-sig-label">واژووی کڕیار</div></div></div>`);
+    else if (b.id === "qr" && qrSvg) parts.push(`<div style="display:flex;align-items:center;gap:16px;padding:16px;background:#F8F9FA;border-radius:10px;margin-bottom:16px;border:1px solid #E9ECEF"><div style="flex-shrink:0">${qrSvg}</div><div><div style="font-size:12px;font-weight:700;color:#495057;margin-bottom:4px">QR کۆد</div><div style="font-size:11px;color:#868E96">ئەم QR کۆدە سکان بکە بۆ بینینی داواکارییەکانت و باڵانسەکەت</div></div></div>`);
     else if (b.id === "footer") parts.push(`<div class="inv-footer"><p style="font-size:13px;color:#868E96;font-weight:600">سوپاس — ${settings.name}</p><p style="font-size:11px;color:#CED4DA;margin-top:4px">${settings.phone} | ${settings.email} | ${settings.address}</p></div>`);
     else if (b.type === "custom" && b.customText) parts.push(`<div class="inv-custom"><div style="font-size:11px;font-weight:700;color:#495057;margin-bottom:4px">${b.label}</div><div class="inv-custom-text">${(b.customText || "").replace(/\n/g, "<br/>")}</div></div>`);
   }
@@ -270,7 +289,7 @@ function buildTemplateHTML(
 function buildQuickPrintHTML(
   order: Order, client: { name: string; phone: string; city: string } | undefined,
   settings: { name: string; nameEn: string; phone: string; email: string; address: string },
-  docType: DocType, subtotal: number
+  docType: DocType, subtotal: number, qrSvg: string
 ): string {
   const docLabel = { invoice: "پسووڵە", receipt: "وەسڵ", delivery: "وەرقەی گەیاندن", quote: "نرخنامە" }[docType];
   const stL: Record<string, string> = { PENDING: "چاوەڕوان", PROCESSING: "لە پڕۆسەدا", SHIPPED: "نێردرا", DELIVERED: "گەیشت", PAID: "پارەدراو", CANCELLED: "هەڵوەشاوە" };
@@ -291,6 +310,7 @@ function buildQuickPrintHTML(
 <table style="width:100%;border-collapse:collapse;margin-bottom:24px;border-radius:10px;overflow:hidden"><thead><tr style="background:linear-gradient(135deg,#1A1A2E,#2D2B55)"><th style="padding:12px 16px;text-align:right;font-size:11px;font-weight:700;color:white">#</th><th style="padding:12px 16px;text-align:right;font-size:11px;font-weight:700;color:white">بەرهەم</th><th style="padding:12px 16px;text-align:right;font-size:11px;font-weight:700;color:white">بڕ</th><th style="padding:12px 16px;text-align:right;font-size:11px;font-weight:700;color:white">بۆنەس</th><th style="padding:12px 16px;text-align:right;font-size:11px;font-weight:700;color:white">نرخی یەکە</th><th style="padding:12px 16px;text-align:right;font-size:11px;font-weight:700;color:white">کۆ</th></tr></thead><tbody>${rows}</tbody></table>
 <div style="display:flex;justify-content:flex-start;margin-bottom:20px"><div style="width:320px;border:1px solid #E9ECEF;border-radius:10px;overflow:hidden"><div style="display:flex;justify-content:space-between;padding:12px 16px;background:linear-gradient(135deg,#4263EB,#7C5CFC)"><span style="color:white;font-size:16px;font-weight:800">کۆی گشتی</span><span style="color:white;font-size:16px;font-weight:800">${formatIQD(order.totalAmount)}</span></div></div></div>
 ${order.notes ? `<div style="padding:14px 16px;background:#FFF8DB;border-radius:10px;margin-bottom:16px;border:1px solid #FFE066"><div style="font-size:11px;font-weight:700;color:#E67700;margin-bottom:4px">تێبینی</div><div style="font-size:12px">${order.notes}</div></div>` : ""}
+${qrSvg ? `<div style="display:flex;align-items:center;gap:16px;padding:16px;background:#F8F9FA;border-radius:10px;margin-bottom:16px;border:1px solid #E9ECEF"><div style="flex-shrink:0">${qrSvg}</div><div><div style="font-size:12px;font-weight:700;color:#495057;margin-bottom:4px">QR کۆد</div><div style="font-size:11px;color:#868E96">ئەم QR کۆدە سکان بکە بۆ بینینی داواکارییەکانت و باڵانسەکەت</div></div></div>` : ""}
 <div style="border-top:2px solid #E9ECEF;padding-top:16px;margin-top:24px;text-align:center"><p style="font-size:13px;color:#868E96;font-weight:600">سوپاس بۆ هاوکارییەکەتان — ${settings.name || "دەوا"}</p><p style="font-size:11px;color:#CED4DA;margin-top:4px">${settings.phone} | ${settings.address}</p></div>`;
 
   const CSS = `*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;direction:rtl;color:#1A1A2E;background:#fff;padding:40px}@media print{body{padding:20px}}`;

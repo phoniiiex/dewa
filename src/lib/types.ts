@@ -126,6 +126,8 @@ export interface OrderItem {
   bonusQty: number;
   unitPrice: number;
   bonusPct: number; // actual bonus % applied (custom rule or warehouse default)
+  warehouseBonusQty: number; // bonus units sent through the warehouse
+  repBonusQty: number;       // bonus units the representative takes
 }
 
 export interface Order {
