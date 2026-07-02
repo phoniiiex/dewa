@@ -61,7 +61,7 @@ export default function DebtPage() {
 
   const { client, orders, totalUnpaidOrders, settings } = data;
   const typeLabel: Record<string, string> = { PHARMACY: "دەرمانخانە", HOSPITAL: "نەخۆشخانە", CLINIC: "کلینیک" };
-  const hasDebt = client.balance > 0 || orders.length > 0;
+  const hasDebt = totalUnpaidOrders > 0;
   const companyName = settings?.name || "";
   const companyNameEn = settings?.nameEn || "";
 
@@ -118,7 +118,7 @@ export default function DebtPage() {
             قەرزی ماوە
           </div>
           <div style={{ fontSize: 36, fontWeight: 900, color: "white", marginBottom: 4 }}>
-            {formatIQD(Math.abs(client.balance))}
+            {formatIQD(totalUnpaidOrders)}
           </div>
           {!hasDebt && (
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 4 }}>✅ هیچ قەرزێک نییە — سوپاس!</div>
