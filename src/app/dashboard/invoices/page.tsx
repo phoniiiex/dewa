@@ -472,7 +472,19 @@ function renderPreview({ blocks, showBonusCol, customNote, customTerms, customDi
             </div>
           </div>
         );
-        if (block.id === "bonus") return <div key="bonus" style={{ padding: 12, background: "#F3F0FF", borderRadius: 8, marginBottom: 12, border: "1px solid #E8E0FF", fontSize: 12, color: "#7C5CFC" }}>بۆنەسی گشتی: %٥ | کۆگا: %٣ | نوێنەر: %٢</div>;
+        if (block.id === "bonus") {
+          const totalWh = previewOrder.items.reduce((s: number, i: { bonusQty: number }) => s + i.bonusQty, 0);
+          return <div key="bonus" style={{ padding: 12, background: "#F3F0FF", borderRadius: 8, marginBottom: 12, border: "1px solid #E8E0FF", fontSize: 12 }}>
+            <div style={{ fontWeight: 700, color: "#7C5CFC", marginBottom: 6 }}>شیکاری بۆنەس</div>
+            {previewOrder.items.filter((i: { bonusQty: number }) => i.bonusQty > 0).map((i: { productName: string; quantity: number; bonusQty: number }, idx: number) => (
+              <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "#495057" }}>
+                <span>{i.productName}</span>
+                <span style={{ color: "#7C3AED", fontWeight: 600 }}>🏪 +{i.bonusQty}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 4, fontWeight: 600, color: "#7C5CFC" }}>کۆی بۆنەس: {totalWh} دانە</div>
+          </div>;
+        }
         if (block.id === "note" && customNote) return <div key="note" style={{ padding: 12, background: "#FFF8DB", borderRadius: 8, marginBottom: 12, border: "1px solid #FFE066" }}><div style={{ fontSize: 10, fontWeight: 700, color: "#E67700", marginBottom: 3 }}>تێبینی</div><div style={{ fontSize: 12, color: "#495057" }}>{customNote}</div></div>;
         if (block.id === "terms" && customTerms) return <div key="terms" style={{ padding: 12, background: "#E8F5E9", borderRadius: 8, marginBottom: 12, border: "1px solid #A5D6A7" }}><div style={{ fontSize: 10, fontWeight: 700, color: "#2E7D32", marginBottom: 3 }}>مەرجەکان</div><div style={{ fontSize: 12, color: "#495057" }}>{customTerms}</div></div>;
         if (block.id === "signature") return <div key="sig" style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, padding: "12px 0" }}>{["واژووی فرۆشیار", "واژووی کڕیار"].map(l => <div key={l} style={{ textAlign: "center", flex: 1 }}><div style={{ width: 120, borderBottom: "1px solid #ADB5BD", margin: "24px auto 6px" }} /><div style={{ fontSize: 10, color: "#6C757D" }}>{l}</div></div>)}</div>;
