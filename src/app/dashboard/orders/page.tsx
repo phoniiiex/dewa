@@ -114,15 +114,21 @@ export default function OrdersPage() {
   const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string; manualBonusPct: string; repBonusPct: string }[]>([{ productId: "", quantity: "", manualBonusPct: "", repBonusPct: "" }]);
   // Edit mode
   const [editOrder, setEditOrder] = useState<Order | null>(null);
+  // "To warehouse" toggle — warehouse is the customer, not transit
+  const [toWarehouse, setToWarehouse] = useState(false);
+  const [toWarehouseId, setToWarehouseId] = useState("");
 
   const resetForm = () => {
     setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
     setOrderItems([{ productId: "", quantity: "", manualBonusPct: "", repBonusPct: "" }]);
     setEditOrder(null);
+    setToWarehouse(false);
+    setToWarehouseId("");
   };
 
-  const isDirect = !form.warehouseId;
-  const selectedWarehouse = warehouses.find(w => w.id === form.warehouseId);
+  const isDirect = !form.warehouseId && !toWarehouse;
+  const selectedWarehouse = toWarehouse ? warehouses.find(w => w.id === toWarehouseId) : warehouses.find(w => w.id === form.warehouseId);
+  const isToWarehouse = toWarehouse && !!toWarehouseId;
 
   // Bonus calculation — warehouse order: use warehouse rules; direct order: use manual %
   const getItemBonusPct = (productId: string, manualPct: string): { pct: number; isCustom: boolean } => {
@@ -154,12 +160,26 @@ export default function OrdersPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const client = clients.find(c => c.id === form.clientId);
-    if (!client) { showToast("تکایە کڕیارێک هەڵبژێرە", "error"); return; }
+
+    // Resolve client — normal or toWarehouse
+    let clientId = form.clientId;
+    let clientName = form.clientName;
+    if (toWarehouse) {
+      const twh = warehouses.find(w => w.id === toWarehouseId);
+      if (!twh) { showToast("تکایە کۆگایەک هەڵبژێرە", "error"); return; }
+      clientId = twh.id;
+      clientName = twh.name;
+    } else {
+      const client = clients.find(c => c.id === form.clientId);
+      if (!client) { showToast("تکایە کڕیارێک هەڵبژێرە", "error"); return; }
+      clientId = client.id;
+      clientName = client.name;
+    }
+
     const repRecord = isRep ? myRep : reps.find(r => r.id === form.repId);
     if (!repRecord) { showToast("تکایە نوێنەرێک هەڵبژێرە", "error"); return; }
 
-    const wh = warehouses.find(w => w.id === form.warehouseId);
+    const wh = toWarehouse ? warehouses.find(w => w.id === toWarehouseId) : warehouses.find(w => w.id === form.warehouseId);
     const items: OrderItem[] = orderItems.filter(i => i.productId && i.quantity).map((i) => {
       const prod = products.find(p => p.id === i.productId);
       const qty  = Number(i.quantity);
@@ -168,9 +188,11 @@ export default function OrdersPage() {
         const directBonus = Math.round(qty * directPct / 100);
         return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: directBonus, unitPrice: prod?.price || 0, bonusPct: directPct, warehouseBonusQty: 0, repBonusQty: 0 };
       }
+      // Warehouse order (transit or toWarehouse)
       const { pct } = getItemBonusPct(i.productId, i.manualBonusPct);
       const warehouseBonusQty = Math.round(qty * pct / 100);
-      const itemRepPct = parseFloat(i.repBonusPct) || 0;
+      // No rep bonus when sending to warehouse
+      const itemRepPct = toWarehouse ? 0 : (parseFloat(i.repBonusPct) || 0);
       const repBQ = Math.round(qty * itemRepPct / 100);
       return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: warehouseBonusQty + repBQ, unitPrice: prod?.price || 0, bonusPct: pct, warehouseBonusQty, repBonusQty: repBQ };
     });
@@ -181,18 +203,16 @@ export default function OrdersPage() {
     // ── EDIT MODE ──
     if (editOrder) {
       if (isManager) {
-        // Manager: apply changes immediately
         await updateOrder(editOrder.id, {
-          clientId: client.id, clientName: client.name,
+          clientId, clientName,
           repId: repRecord.id, repName: repRecord.name,
           warehouseId: wh?.id || null, warehouseName: wh?.name || null,
           items, totalAmount, notes: form.notes,
         });
         showToast("داواکاری نوێکرایەوە");
       } else {
-        // Rep: embed edit request in notes for manager approval
         const editPayload = JSON.stringify({
-          clientId: client.id, clientName: client.name,
+          clientId, clientName,
           repId: repRecord.id, repName: repRecord.name,
           warehouseId: wh?.id || null, warehouseName: wh?.name || null,
           items, totalAmount, notes: form.notes,
@@ -207,10 +227,10 @@ export default function OrdersPage() {
 
     // ── NEW ORDER ──
     await addOrder({
-      clientId: client.id, clientName: client.name,
+      clientId, clientName,
       repId: repRecord.id, repName: repRecord.name,
       warehouseId: wh?.id || null, warehouseName: wh?.name || null,
-      items, status: "WAITING", totalAmount, notes: form.notes,
+      items, status: "WAITING", totalAmount, notes: toWarehouse ? `[TO_WAREHOUSE]${form.notes}` : form.notes,
       driverId: "", driverName: "", driverPhone: "",
       signedInvoiceUrl: "", signedReceiptUrl: "",
       deliveredAt: "", paidAt: "", rejectionReason: "",
@@ -541,12 +561,37 @@ export default function OrdersPage() {
       ════════════════════════════════════════════════════════════════ */}
       <Modal open={newOrderOpen} onClose={() => { setNewOrderOpen(false); resetForm(); }} title={editOrder ? `گۆڕینی داواکاری — ${editOrder.orderNumber}` : "داواکاری نوێ"} width={720}>
         <form onSubmit={handleSubmit}>
+          {/* To-warehouse toggle */}
+          {!editOrder && (
+            <div style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
+              <button type="button" onClick={() => { setToWarehouse(!toWarehouse); setToWarehouseId(""); setForm({ ...form, warehouseId: "" }); }}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, border: "1.5px solid", cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all .15s",
+                  borderColor: toWarehouse ? "#7C3AED" : "#DEE2E6",
+                  background: toWarehouse ? "#F3F0FF" : "#fff",
+                  color: toWarehouse ? "#7C3AED" : "#6C757D",
+                }}>
+                🏪 {toWarehouse ? "داواکاری بۆ کۆگا ✓" : "داواکاری بۆ کۆگا"}
+              </button>
+              {toWarehouse && <span style={{ fontSize: 12, color: "#7C3AED" }}>کۆگا وەکو وەرگر — بۆنەسی کۆگا بەکاردەهێنرێت، بۆنەسی نوێنەر نییە</span>}
+            </div>
+          )}
+
           <FormGrid cols={2}>
-            <FormField label="کڕیار" required>
-              <ClientCombobox clients={clients} value={form.clientId} clientName={form.clientName}
-                onChange={(id, name) => setForm({ ...form, clientId: id, clientName: name })}
-                onRequestNew={(name) => setForm({ ...form, clientName: name })} />
-            </FormField>
+            {/* Client or Warehouse selector based on toggle */}
+            {toWarehouse ? (
+              <FormField label="🏪 کۆگا (وەرگر)" required>
+                <select style={selectStyle} value={toWarehouseId} onChange={e => setToWarehouseId(e.target.value)} required>
+                  <option value="">کۆگا هەڵبژێرە...</option>
+                  {warehouses.filter(w => w.isActive).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </FormField>
+            ) : (
+              <FormField label="کڕیار" required>
+                <ClientCombobox clients={clients} value={form.clientId} clientName={form.clientName}
+                  onChange={(id, name) => setForm({ ...form, clientId: id, clientName: name })}
+                  onRequestNew={(name) => setForm({ ...form, clientName: name })} />
+              </FormField>
+            )}
             {!isRep ? (
               <FormField label="نوێنەر" required>
                 <select style={selectStyle} value={form.repId} onChange={e => setForm({ ...form, repId: e.target.value })} required>
@@ -560,17 +605,27 @@ export default function OrdersPage() {
               </FormField>
             )}
           </FormGrid>
-          <FormGrid cols={2}>
-            <FormField label="کۆگا">
-              <select style={selectStyle} value={form.warehouseId} onChange={e => setForm({ ...form, warehouseId: e.target.value })}>
-                <option value="">— ڕاستەوخۆ (بێ کۆگا) —</option>
-                {warehouses.filter(w => w.isActive).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
-            </FormField>
-            <FormField label="تێبینی">
-              <input style={inputStyle} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
-            </FormField>
-          </FormGrid>
+          {/* Warehouse transit selector — hidden when toWarehouse */}
+          {!toWarehouse && (
+            <FormGrid cols={2}>
+              <FormField label="کۆگا">
+                <select style={selectStyle} value={form.warehouseId} onChange={e => setForm({ ...form, warehouseId: e.target.value })}>
+                  <option value="">— ڕاستەوخۆ (بێ کۆگا) —</option>
+                  {warehouses.filter(w => w.isActive).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </FormField>
+              <FormField label="تێبینی">
+                <input style={inputStyle} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
+              </FormField>
+            </FormGrid>
+          )}
+          {toWarehouse && (
+            <FormGrid cols={1}>
+              <FormField label="تێبینی">
+                <input style={inputStyle} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
+              </FormField>
+            </FormGrid>
+          )}
 
           {/* Warehouse bonus info banner (no global rep input anymore) */}
           {selectedWarehouse && (
@@ -593,27 +648,29 @@ export default function OrdersPage() {
                 style={{ background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ زیادکردن</button>
             </div>
             {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 110px auto", gap: 8, marginBottom: 4 }}>
+            <div style={{ display: "grid", gridTemplateColumns: toWarehouse ? "1fr 120px auto" : "1fr 120px 110px auto", gap: 8, marginBottom: 4 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#6C757D" }}>بەرهەم</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#6C757D" }}>ژمارە</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: isDirect ? "#D97706" : "#059669" }}>{isDirect ? "بۆنەس %" : "👤 نوێنەر %"}</div>
+              {!toWarehouse && <div style={{ fontSize: 12, fontWeight: 600, color: isDirect ? "#D97706" : "#059669" }}>{isDirect ? "بۆنەس %" : "👤 نوێنەر %"}</div>}
               <div />
             </div>
             {orderItems.map((item, idx) => (
-              <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 120px 110px auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
+              <div key={idx} style={{ display: "grid", gridTemplateColumns: toWarehouse ? "1fr 120px auto" : "1fr 120px 110px auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
                 <select style={selectStyle} value={item.productId} onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: e.target.value } : x))}>
                   <option value="">بەرهەم هەڵبژێرە...</option>
                   {products.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
                 <input type="number" min={1} style={inputStyle} placeholder="ژمارە" value={item.quantity}
                   onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
-                {/* Bonus % input: direct = manualBonusPct, warehouse = repBonusPct */}
-                <div style={{ position: "relative" }}>
-                  <input type="number" min={0} max={100} style={{ ...inputStyle, paddingRight: 28 }} placeholder="0"
-                    value={isDirect ? item.manualBonusPct : item.repBonusPct}
-                    onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, [isDirect ? "manualBonusPct" : "repBonusPct"]: e.target.value } : x))} />
-                  <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#ADB5BD", pointerEvents: "none" }}>%</span>
-                </div>
+                {/* Bonus % input: direct = manualBonusPct, warehouse transit = repBonusPct, toWarehouse = hidden */}
+                {!toWarehouse && (
+                  <div style={{ position: "relative" }}>
+                    <input type="number" min={0} max={100} style={{ ...inputStyle, paddingRight: 28 }} placeholder="0"
+                      value={isDirect ? item.manualBonusPct : item.repBonusPct}
+                      onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, [isDirect ? "manualBonusPct" : "repBonusPct"]: e.target.value } : x))} />
+                    <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#ADB5BD", pointerEvents: "none" }}>%</span>
+                  </div>
+                )}
                 {orderItems.length > 1 && (
                   <button type="button" onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}
                     style={{ background: "#FEE2E2", color: "#DC2626", border: "none", borderRadius: 8, width: 34, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
