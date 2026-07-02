@@ -12,6 +12,8 @@ import "@/styles/dashboard.css";
 
 type SidebarPosition = "right" | "left" | "top";
 
+export type DateRange = { from: Date | null; to: Date | null; label: string };
+
 interface LayoutContextType {
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
@@ -29,6 +31,10 @@ interface LayoutContextType {
   toggleDarkMode: () => void;
   sidebarPosition: SidebarPosition;
   setSidebarPosition: (pos: SidebarPosition) => void;
+  dateRange: DateRange;
+  setDateRange: (r: DateRange) => void;
+  globalStatusFilter: string;
+  setGlobalStatusFilter: (s: string) => void;
 }
 
 const LayoutContext = createContext<LayoutContextType | null>(null);
@@ -48,6 +54,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: string; avatarUrl: string; phone: string } | null>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarPosition, setSidebarPositionState] = useState<SidebarPosition>("right");
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null, label: "هەموو ماوەکان" });
+  const [globalStatusFilter, setGlobalStatusFilter] = useState("هەموو");
 
   // Load appearance preferences from localStorage
   useEffect(() => {
@@ -147,6 +155,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           toggleDarkMode,
           sidebarPosition,
           setSidebarPosition,
+          dateRange, setDateRange,
+          globalStatusFilter, setGlobalStatusFilter,
         }}>
           <div className={`app-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
             <Sidebar />

@@ -1,14 +1,34 @@
 "use client";
-import { BarChart3, TrendingUp, Users, Package, ShoppingCart, DollarSign, MapPin, Truck } from "lucide-react";
+import { useMemo } from "react";
+import { BarChart3, TrendingUp, Users, Package, ShoppingCart, DollarSign, MapPin, Calendar } from "lucide-react";
 import { useData } from "@/lib/store";
+import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
 
 export default function AnalyticsPage() {
   const { orders, products, clients, reps, transactions, warehouses } = useData();
+  const { dateRange } = useLayout();
 
-  const totalRevenue = orders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0);
-  const totalIncome = transactions.filter(t => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0);
+  // Filter by date range if set
+  const filteredOrders = useMemo(() => {
+    if (!dateRange.from) return orders;
+    return orders.filter(o => {
+      const d = new Date(o.createdAt);
+      return d >= dateRange.from! && d <= dateRange.to!;
+    });
+  }, [orders, dateRange]);
+
+  const filteredTransactions = useMemo(() => {
+    if (!dateRange.from) return transactions;
+    return transactions.filter(t => {
+      const d = new Date(t.createdAt);
+      return d >= dateRange.from! && d <= dateRange.to!;
+    });
+  }, [transactions, dateRange]);
+
+  const totalRevenue  = filteredOrders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0);
+  const totalIncome   = filteredTransactions.filter(t => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
+  const totalExpense  = filteredTransactions.filter(t => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0);
 
   // City distribution
   const cityStats = clients.reduce((acc, c) => {
@@ -22,34 +42,42 @@ export default function AnalyticsPage() {
     return acc;
   }, {} as Record<string, number>);
 
-  // Order status distribution
-  const statusStats = orders.reduce((acc, o) => {
+  // Order status distribution (from filtered orders)
+  const statusStats = filteredOrders.reduce((acc, o) => {
     acc[o.status] = (acc[o.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
   const statusLabels: Record<string, string> = { WAITING: "چاوەڕوان", IN_PROGRESS: "لە پڕۆسەدا", NOT_ACCEPTED: "ڕەتکراوە", READY: "ئامادەیە", SENT: "نێردراوە", DELIVERED: "گەیشتووە", PAID: "پارەدراوە" };
 
-  // Top products by order count
-  const productOrderCount = orders.flatMap(o => o.items).reduce((acc, i) => {
+  // Top products by order count (filtered)
+  const productOrderCount = filteredOrders.flatMap(o => o.items).reduce((acc, i) => {
     acc[i.productName] = (acc[i.productName] || 0) + i.quantity;
     return acc;
   }, {} as Record<string, number>);
   const topProducts = Object.entries(productOrderCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  // Top reps
+  // Top reps (filtered)
   const topReps = reps.map(r => ({
     name: r.name,
-    orders: orders.filter(o => o.repId === r.id).length,
-    revenue: orders.filter(o => o.repId === r.id && o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0),
+    orders: filteredOrders.filter(o => o.repId === r.id).length,
+    revenue: filteredOrders.filter(o => o.repId === r.id && o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0),
   })).sort((a, b) => b.revenue - a.revenue);
 
   const barMax = (entries: [string, number][]) => Math.max(...entries.map(e => e[1]), 1);
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <div style={{ width: 40, height: 40, background: "#EDF2FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#4263EB" }}><BarChart3 size={20} /></div>
-        <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>شیکاری و ڕاپۆرتەکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>شیکاری گشتی ئەدای سیستەم</p></div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 40, height: 40, background: "#EDF2FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#4263EB" }}><BarChart3 size={20} /></div>
+          <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>شیکاری و ڕاپۆرتەکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>شیکاری گشتی ئەدای سیستەم</p></div>
+        </div>
+        {dateRange.from && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: "#EDF2FF", borderRadius: 20, fontSize: 12, fontWeight: 600, color: "#4263EB" }}>
+            <Calendar size={13} />
+            {dateRange.label}
+          </div>
+        )}
       </div>
 
       {/* KPIs */}

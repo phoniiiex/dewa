@@ -1,5 +1,5 @@
 "use client";
-import { useState, FormEvent, useRef, useMemo } from "react";
+import { useState, FormEvent, useRef, useMemo, useEffect } from "react";
 
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
@@ -55,7 +55,7 @@ function actionBtn(color: string, bg: string): React.CSSProperties {
 
 export default function OrdersPage() {
   const { orders, clients, reps, warehouses, products, drivers, settings, addOrder, updateOrder, deleteOrder, showToast, loading } = useData();
-  const { currentUser } = useLayout();
+  const { currentUser, globalStatusFilter } = useLayout();
 
   const isRep     = currentUser?.role === "REP";
   const isManager = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
@@ -63,9 +63,15 @@ export default function OrdersPage() {
 
   // ── Filters ─────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm]   = useState("");
-  const [statusFilter, setStatusFilter] = useState("هەموو");
+  const [statusFilter, setStatusFilter] = useState(globalStatusFilter || "هەموو");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 25;
+
+  // Sync when TopBar status filter changes
+  useEffect(() => {
+    setStatusFilter(globalStatusFilter);
+    setPage(1);
+  }, [globalStatusFilter]);
 
   // ── Modal visibility ─────────────────────────────────────────────────
   const [newOrderOpen, setNewOrderOpen]       = useState(false);

@@ -1,5 +1,5 @@
 "use client";
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useMemo } from "react";
 import { Search, Plus, UserCheck, Phone, MapPin, Edit3, Trash2, Eye, X } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
@@ -36,11 +36,13 @@ export default function RepsPage() {
     setModalOpen(false);
   };
 
+  const filtered = useMemo(
+    () => reps.filter(r => r.name.includes(searchTerm) || r.phone.includes(searchTerm)),
+    [reps, searchTerm]
+  );
   const getRepClients = (repId: string) => clients.filter(c => c.repId === repId);
-  const getRepOrders = (repId: string) => orders.filter(o => o.repId === repId);
+  const getRepOrders  = (repId: string) => orders.filter(o => o.repId === repId);
   const getRepRevenue = (repId: string) => getRepOrders(repId).filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0);
-
-  const filtered = reps.filter(r => r.name.includes(searchTerm) || r.phone.includes(searchTerm));
 
   return (
     <>
