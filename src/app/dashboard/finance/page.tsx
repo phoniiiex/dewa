@@ -1,6 +1,7 @@
 "use client";
 import { useState, FormEvent, useMemo } from "react";
-import { Plus, DollarSign, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, DollarSign, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Search, ExternalLink } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { TransactionType, PaymentMethod } from "@/lib/types";
@@ -20,6 +21,7 @@ const typeLabels: Record<TransactionType, string> = { INCOME: "داهات", EXPE
 const methodLabels: Record<PaymentMethod, string> = { CASH: "کاش", TRANSFER: "حاوالە" };
 
 export default function FinancePage() {
+  const router = useRouter();
   const { transactions, addTransaction } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("هەموو");
@@ -103,13 +105,26 @@ export default function FinancePage() {
           <thead><tr><th>جۆر</th><th>وەسف</th><th>بڕ</th><th>شێواز</th><th>بەروار</th></tr></thead>
           <tbody>
             {filtered.map(t => (
-              <tr key={t.id}>
+              <tr key={t.id}
+                onClick={() => { if (t.relatedOrderId) router.push("/dashboard/orders"); }}
+                style={{ cursor: t.relatedOrderId ? "pointer" : "default" }}
+                title={t.relatedOrderId ? "کرتەبکە بۆ بینینی داواکاری" : undefined}
+              >
                 <td>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: t.type === "INCOME" ? "#D3F9D8" : "#FFE3E3", color: t.type === "INCOME" ? "#2B8A3E" : "#C92A2A" }}>
                     {t.type === "INCOME" ? <TrendingUp size={12} /> : <TrendingDown size={12} />} {typeLabels[t.type]}
                   </span>
                 </td>
-                <td style={{ fontWeight: 600, fontSize: 13 }}>{t.description}</td>
+                <td style={{ fontWeight: 600, fontSize: 13 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {t.description}
+                    {t.relatedOrderId && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#4263EB", background: "#EDF2FF", padding: "1px 6px", borderRadius: 4 }}>
+                        <ExternalLink size={9} /> داواکاری
+                      </span>
+                    )}
+                  </span>
+                </td>
                 <td style={{ fontWeight: 700, fontSize: 14, color: t.type === "INCOME" ? "#40C057" : "#FA5252" }}>{t.type === "INCOME" ? "+" : "-"}{formatIQD(t.amount)}</td>
                 <td><span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, background: "#F1F3F5" }}>{methodLabels[t.method]}</span></td>
                 <td style={{ fontSize: 12, color: "#6C757D" }}>{t.createdAt}</td>

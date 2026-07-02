@@ -326,7 +326,10 @@ export default function ProductsPage() {
               {loading ? (
                 <SkeletonTableRows rows={6} cols={10} />
               ) : filtered.map((p) => (
-                <tr key={p.id}>
+                <tr key={p.id} style={{
+                  background: isExpired(p.expiryDate) ? "#FFF5F5" : isNearExpiry(p.expiryDate) ? "#FFF9F0" : undefined,
+                  transition: "background 0.2s",
+                }}>
                   <td style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</td>
                   <td style={{ fontSize: 12, color: "#6C757D" }}>{p.company || "—"}</td>
                   <td style={{ fontSize: 11, color: "#6C757D", fontFamily: "monospace" }}>{p.sku}</td>

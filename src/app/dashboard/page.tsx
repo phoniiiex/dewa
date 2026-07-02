@@ -185,6 +185,7 @@ export default function DashboardPage() {
     totalRevenue, pendingOrders, totalIncome, totalExpense,
     activeDeliveries, nearExpiryProducts, expiredProducts, lowStockProducts,
     last7, recentOrders, statusBreakdown, repStats, clientStats,
+    todayOrders, todayRevenue, todayDelivered, todayPending,
   } = useMemo(() => {
     const paidOrders   = orders.filter(o => o.status === "PAID");
     const waitingOrders = orders.filter(o => o.status === "WAITING");
@@ -217,6 +218,11 @@ export default function DashboardPage() {
       name: c.name, city: c.city,
       count: orders.filter(o => o.clientId === c.id).length,
     })).sort((a, b) => b.count - a.count);
+    const todayStr = new Date().toISOString().split("T")[0];
+    const todayOrders    = orders.filter(o => o.createdAt?.startsWith(todayStr));
+    const todayRevenue   = orders.filter(o => o.paidAt?.startsWith(todayStr)).reduce((s, o) => s + o.totalAmount, 0);
+    const todayDelivered = orders.filter(o => o.deliveredAt?.startsWith(todayStr)).length;
+
     return {
       totalRevenue:      paidOrders.reduce((s, o) => s + o.totalAmount, 0),
       pendingOrders:     waitingOrders.length,
@@ -231,6 +237,10 @@ export default function DashboardPage() {
       statusBreakdown:   breakdown,
       repStats:          rStats,
       clientStats:       cStats,
+      todayOrders:       todayOrders.length,
+      todayRevenue,
+      todayDelivered,
+      todayPending:      waitingOrders.length,
     };
   }, [orders, products, clients, reps, transactions]);
 
@@ -533,6 +543,28 @@ export default function DashboardPage() {
     <>
 
 
+
+      {/* Today KPI Strip */}
+      {!loading && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+          {[
+            { label: "داواکارییەکانی ئەمڕۆ", value: todayOrders, icon: <ShoppingCart size={14} />, color: "#4263EB", bg: "#EDF2FF" },
+            { label: "داهاتی ئەمڕۆ", value: formatIQD(todayRevenue), icon: <DollarSign size={14} />, color: "#40C057", bg: "#EBFBEE" },
+            { label: "گەیاندنی ئەمڕۆ", value: todayDelivered, icon: <Truck size={14} />, color: "#7C5CFC", bg: "#F3F0FF" },
+            { label: "چاوەڕوانن", value: todayPending, icon: <Clock size={14} />, color: "#F47B35", bg: "#FEF3EB" },
+          ].map(k => (
+            <div key={k.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "white", borderRadius: 12, border: "1px solid #E9ECEF", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: k.bg, display: "flex", alignItems: "center", justifyContent: "center", color: k.color, flexShrink: 0 }}>
+                {k.icon}
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: k.color, lineHeight: 1.1 }}>{k.value}</div>
+                <div style={{ fontSize: 10, color: "#ADB5BD", marginTop: 2, fontWeight: 600 }}>{k.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Edit Mode Toolbar */}
       {isEditing && (

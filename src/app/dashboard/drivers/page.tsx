@@ -5,13 +5,14 @@ import { useData } from "@/lib/store";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
 import Modal from "@/components/ui/Modal";
 import { getTelegramUpdates } from "@/lib/telegram";
+import { SkeletonKPI } from "@/components/ui/Skeleton";
 
 const CITIES = ["هەولێر", "سلێمانی", "کەرکووک", "دهۆک", "زاخۆ", "ڕانیە", "کۆیە", "چەمچەماڵ", "شاری دیگر"];
 
 type TelegramUser = { chatId: string; firstName: string; lastName: string; username: string };
 
 export default function DriversPage() {
-  const { drivers, settings, addDriver, updateDriver, deleteDriver, showToast } = useData();
+  const { drivers, settings, addDriver, updateDriver, deleteDriver, showToast, loading } = useData();
 
   const [search, setSearch] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
@@ -127,7 +128,11 @@ export default function DriversPage() {
       </div>
 
       {/* Drivers grid */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+          {[0,1,2].map(i => <SkeletonKPI key={i} />)}
+        </div>
+      ) : filtered.length === 0 ? (
         <div style={{ ...card, padding: 48, textAlign: "center", color: "#ADB5BD" }}>
           هیچ شوفێرێک نەدۆزرایەوە
         </div>

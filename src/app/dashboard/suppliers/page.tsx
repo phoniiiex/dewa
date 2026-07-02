@@ -8,6 +8,7 @@ import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle } from "@/components/ui/FormField";
 import ExportButton from "@/components/ui/ExportButton";
+import { SkeletonTableRows } from "@/components/ui/Skeleton";
 
 const supplierExportCols = [
   { key: "name", label: "ناو" }, { key: "contact", label: "پەیوەند" },
@@ -16,7 +17,7 @@ const supplierExportCols = [
 ];
 
 export default function SuppliersPage() {
-  const { suppliers, addSupplier, updateSupplier, deleteSupplier } = useData();
+  const { suppliers, addSupplier, updateSupplier, deleteSupplier, loading } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | null>(null);
@@ -71,7 +72,9 @@ export default function SuppliersPage() {
         <table className="data-table">
           <thead><tr><th>دابینکەر</th><th>پەیوەندیدار</th><th>تەلەفۆن</th><th>ئیمەیڵ</th><th>وڵات</th><th>مامەڵە</th><th>بارودۆخ</th><th></th></tr></thead>
           <tbody>
-            {filtered.map(s => (
+            {loading ? (
+              <SkeletonTableRows rows={5} cols={8} />
+            ) : filtered.map(s => (
               <tr key={s.id}>
                 <td style={{ fontWeight: 600, fontSize: 13 }}>{s.name}</td>
                 <td style={{ fontSize: 13, color: "#6C757D" }}>{s.contact}</td>

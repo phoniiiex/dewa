@@ -7,6 +7,7 @@ import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
 import ExportButton from "@/components/ui/ExportButton";
+import { SkeletonKPI } from "@/components/ui/Skeleton";
 
 const warehouseExportCols = [
   { key: "name", label: "ناو" }, { key: "city", label: "شار" },
@@ -17,7 +18,7 @@ const warehouseExportCols = [
 const cities = ["سلێمانی", "هەولێر", "دهۆک", "کەرکوک", "هەڵەبجە"];
 
 export default function WarehousesPage() {
-  const { warehouses, orders, products, addWarehouse, updateWarehouse, deleteWarehouse } = useData();
+  const { warehouses, orders, products, addWarehouse, updateWarehouse, deleteWarehouse, loading } = useData();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Warehouse | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -85,7 +86,9 @@ export default function WarehousesPage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
-        {warehouses.map(w => {
+        {loading ? (
+          [0,1,2].map(i => <SkeletonKPI key={i} />)
+        ) : warehouses.map(w => {
           const rules = w.bonusRules || [];
           return (
             <div key={w.id} style={{ background: "white", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>

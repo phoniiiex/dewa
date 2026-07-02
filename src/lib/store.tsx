@@ -654,7 +654,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const updateOrder = useCallback(async (id: string, o: Partial<Order>) => {
     setOrders((prev) => prev.map((x) => (x.id === id ? { ...x, ...o } : x)));
     const { error } = await supabase.from("orders").update(fromOrder(o)).eq("id", id);
-    if (error) showToast("هەڵە: " + error.message, "error");
+    if (error) { showToast("هەڵە: " + error.message, "error"); return; }
+
+    // Decrement stock when order is marked DELIVERED
+    if (o.status === "DELIVERED") {
+      setOrders((prev) => {
+        const order = prev.find((x) => x.id === id);
+        if (!order) return prev;
+        // Optimistic stock update
+        setProducts((pp) => pp.map((p) => {
+          const item = order.items.find((i) => i.productId === p.id);
+          if (!item) return p;
+          const newStock = Math.max(0, p.stock - item.quantity);
+          supabase.from("products").update({ stock: newStock }).eq("id", p.id);
+          return { ...p, stock: newStock };
+        }));
+        return prev;
+      });
+    }
   }, [showToast]);
 
   const deleteOrder = useCallback(async (id: string) => {
