@@ -53,7 +53,7 @@ function fromProduct(p: Partial<Product>): Record<string, unknown> {
 }
 
 function toClient(r: Record<string, unknown>): Client {
-  return { id: r.id as string, name: r.name as string, owner: (r.owner || "") as string, phone: (r.phone || "") as string, city: (r.city || "") as string, type: (r.type || "PHARMACY") as Client["type"], repId: (r.rep_id || "") as string, paymentTerms: (r.payment_terms || "IMMEDIATE") as Client["paymentTerms"], balance: Number(r.balance || 0), isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
+  return { id: r.id as string, name: r.name as string, owner: (r.owner || "") as string, phone: (r.phone || "") as string, city: (r.city || "") as string, type: (r.type || "PHARMACY") as Client["type"], repId: (r.rep_id || "") as string, paymentTerms: (r.payment_terms || "IMMEDIATE") as Client["paymentTerms"], balance: Number(r.balance || 0), qrToken: (r.qr_token || "") as string, isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
 }
 function fromClient(c: Partial<Client>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
@@ -66,6 +66,7 @@ function fromClient(c: Partial<Client>): Record<string, unknown> {
   if (c.repId !== undefined) m.rep_id = c.repId;
   if (c.paymentTerms !== undefined) m.payment_terms = c.paymentTerms;
   if (c.balance !== undefined) m.balance = c.balance;
+  if (c.qrToken !== undefined) m.qr_token = c.qrToken;
   if (c.isActive !== undefined) m.is_active = c.isActive;
   if (c.createdAt !== undefined) m.created_at = c.createdAt;
   return m;

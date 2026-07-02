@@ -27,7 +27,7 @@ interface Props {
 
 export default function PrintModal({ open, onClose, order }: Props) {
   const router = useRouter();
-  const { invoiceTemplates, clients, settings } = useData();
+  const { invoiceTemplates, clients, settings, updateClient } = useData();
   const [docTypeFilter, setDocTypeFilter] = useState<DocType>("invoice");
   const [selectedTemplate, setSelectedTemplate] = useState<InvoiceTemplate | null>(null);
   const [step, setStep] = useState<"pick" | "preview">("pick");
@@ -44,10 +44,21 @@ export default function PrintModal({ open, onClose, order }: Props) {
     setStep("preview");
   };
 
-  // Build QR data for the client portal — just a short URL with clientId
+  // Generate a random token for QR URL (non-guessable)
+  const genToken = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  };
+
+  // Build QR — uses /q/[token] URL, generates token if client doesn't have one
   const buildQrSvg = async (): Promise<string> => {
     if (!client || !order) return "";
-    const url = `${window.location.origin}/client/${order.clientId}`;
+    let token = client.qrToken;
+    if (!token) {
+      token = genToken();
+      await updateClient(client.id, { qrToken: token });
+    }
+    const url = `${window.location.origin}/q/${token}`;
     return await generateQRSvg(url, 140);
   };
 

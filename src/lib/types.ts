@@ -65,6 +65,7 @@ export interface Client {
   repId: string;
   paymentTerms: PaymentTerms;
   balance: number;
+  qrToken: string;
   isActive: boolean;
   createdAt: string;
 }

@@ -154,7 +154,7 @@ export default function ClientsPage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const data = { ...form, balance: Number(form.balance) };
+    const data = { ...form, balance: Number(form.balance), qrToken: "" };
     if (editing) updateClient(editing.id, data);
     else addClient(data);
     setModalOpen(false);
