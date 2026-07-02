@@ -38,7 +38,7 @@ const STATUS: Record<OrderStatus, StatusMeta> = {
   PAID:         { label: "پارەدراوە",  color: "#059669", bg: "#D1FAE5", icon: <DollarSign size={13} /> },
 };
 
-const STATUS_TABS = ["هەموو", ...Object.values(STATUS).map(s => s.label)];
+const STATUS_TABS = ["هەموو", ...Object.values(STATUS).map(s => s.label), "📝 گۆڕانکاری"];
 
 function StatusBadge({ status }: { status: OrderStatus }) {
   const s = STATUS[status] ?? { label: status, color: "#6C757D", bg: "#F1F3F5", icon: <Clock size={13} /> };
@@ -366,6 +366,7 @@ export default function OrdersPage() {
   const filtered = useMemo(() => orders.filter(o => {
     if (isRep && myRep && o.repId !== myRep.id && o.repName !== myRep.name) return false;
     const matchSearch = o.orderNumber.includes(searchTerm) || o.clientName.includes(searchTerm) || o.repName.includes(searchTerm);
+    if (statusFilter === "📝 گۆڕانکاری") return matchSearch && o.notes.startsWith("[EDIT_REQUEST]:");
     const matchStatus = statusFilter === "هەموو" || STATUS[o.status]?.label === statusFilter;
     return matchSearch && matchStatus;
   }), [orders, isRep, myRep, searchTerm, statusFilter]);
@@ -424,11 +425,22 @@ export default function OrdersPage() {
           <input value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setPage(1); }} placeholder="گەڕان بە ژمارە یان کڕیار..." style={{ ...inputStyle, paddingLeft: 38, width: "100%", boxSizing: "border-box" }} />
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {STATUS_TABS.map(t => (
-            <button key={t} onClick={() => { setStatusFilter(t); setPage(1); }} style={{ padding: "6px 14px", borderRadius: 99, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: statusFilter === t ? "#4263EB" : "#DEE2E6", background: statusFilter === t ? "#EDF2FF" : "#fff", color: statusFilter === t ? "#4263EB" : "#495057", transition: "all .15s" }}>
-              {t}
-            </button>
-          ))}
+          {STATUS_TABS.map(t => {
+            const isEditTab = t === "📝 گۆڕانکاری";
+            const editCount = isEditTab ? orders.filter(o => o.notes.startsWith("[EDIT_REQUEST]:")).length : 0;
+            const active = statusFilter === t;
+            return (
+              <button key={t} onClick={() => { setStatusFilter(t); setPage(1); }} style={{
+                padding: "6px 14px", borderRadius: 99, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .15s", display: "flex", alignItems: "center", gap: 4,
+                borderColor: active ? (isEditTab ? "#D97706" : "#4263EB") : "#DEE2E6",
+                background: active ? (isEditTab ? "#FEF3C7" : "#EDF2FF") : "#fff",
+                color: active ? (isEditTab ? "#D97706" : "#4263EB") : "#495057",
+              }}>
+                {t}
+                {isEditTab && editCount > 0 && <span style={{ background: "#D97706", color: "white", borderRadius: 99, padding: "1px 6px", fontSize: 10, fontWeight: 800, marginRight: 2 }}>{editCount}</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -612,20 +624,29 @@ export default function OrdersPage() {
             ))}
           </div>
 
-          {/* Bonus preview — warehouse vs rep breakdown */}
+          {/* Bonus preview */}
           {liveBonusItems.some(i => i.bonusQty > 0) && (
             <div style={{ marginTop: 14, padding: 12, background: "#FAFAFA", borderRadius: 10, border: "1px solid #E9ECEF" }}>
               <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: "#495057" }}>داڕێژەی بۆنەس</div>
               {liveBonusItems.filter(i => i.bonusQty > 0).map((i, idx) => (
                 <div key={idx} style={{ marginBottom: 10, padding: "8px 10px", background: "white", borderRadius: 8, border: "1px solid #F1F3F5" }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1A1A2E", marginBottom: 6 }}>{i.name} — {i.qty} دانە</div>
-                  {i.warehouseBonusQty > 0 && (
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1A1A2E", marginBottom: 6 }}>{i.name}</div>
+                  <div style={{ fontSize: 12, color: "#495057", padding: "2px 0" }}>
+                    دەبێیت: <strong>{i.qty} + {i.bonusQty} = {i.qty + i.bonusQty}</strong> دانە
+                  </div>
+                  {isDirect && i.bonusQty > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#D97706", padding: "2px 0" }}>
+                      <span style={{ width: 20, textAlign: "center" }}>📦</span>
+                      <span>بۆنەس: <strong>+{i.bonusQty}</strong> ({i.pct}%)</span>
+                    </div>
+                  )}
+                  {!isDirect && i.warehouseBonusQty > 0 && (
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#7C3AED", padding: "2px 0" }}>
                       <span style={{ width: 20, textAlign: "center" }}>🏪</span>
                       <span>بۆنەسی کۆگا: <strong>+{i.warehouseBonusQty}</strong> ({i.pct}%) — لەگەڵ کاڵاکە دەنێردرێت</span>
                     </div>
                   )}
-                  {i.repBonusQty > 0 && (
+                  {!isDirect && i.repBonusQty > 0 && (
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#059669", padding: "2px 0" }}>
                       <span style={{ width: 20, textAlign: "center" }}>👤</span>
                       <span>بۆنەسی نوێنەر: <strong>+{i.repBonusQty}</strong> ({i.repPct}%) — نوێنەر وەردەگرێت</span>
