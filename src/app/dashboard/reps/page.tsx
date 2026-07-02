@@ -40,9 +40,20 @@ export default function RepsPage() {
     () => reps.filter(r => r.name.includes(searchTerm) || r.phone.includes(searchTerm)),
     [reps, searchTerm]
   );
-  const getRepClients = (repId: string) => clients.filter(c => c.repId === repId);
-  const getRepOrders  = (repId: string) => orders.filter(o => o.repId === repId);
-  const getRepRevenue = (repId: string) => getRepOrders(repId).filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0);
+
+  // Pre-compute per-rep stats once instead of calling filter() per row per render
+  const repStats = useMemo(() => {
+    const map: Record<string, { clientCount: number; orderCount: number; revenue: number }> = {};
+    reps.forEach(r => {
+      const repOrders = orders.filter(o => o.repId === r.id);
+      map[r.id] = {
+        clientCount: clients.filter(c => c.repId === r.id).length,
+        orderCount:  repOrders.length,
+        revenue:     repOrders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0),
+      };
+    });
+    return map;
+  }, [reps, orders, clients]);
 
   return (
     <>
@@ -91,9 +102,9 @@ export default function RepsPage() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#6C757D", marginBottom: 12 }}><Phone size={12} /> <span style={{ direction: "ltr" }}>{r.phone}</span></div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, padding: 12, background: "#F8F9FA", borderRadius: 8 }}>
-              <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#4263EB" }}>{getRepClients(r.id).length}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>کڕیار</div></div>
-              <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#F47B35" }}>{getRepOrders(r.id).length}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>داواکاری</div></div>
-              <div style={{ textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 800, color: "#40C057" }}>{formatIQD(getRepRevenue(r.id))}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>داهات</div></div>
+              <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#4263EB" }}>{repStats[r.id]?.clientCount ?? 0}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>کڕیار</div></div>
+              <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#F47B35" }}>{repStats[r.id]?.orderCount ?? 0}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>داواکاری</div></div>
+              <div style={{ textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 800, color: "#40C057" }}>{formatIQD(repStats[r.id]?.revenue ?? 0)}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>داهات</div></div>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 12, justifyContent: "flex-end" }}>
               <button onClick={(e) => { e.stopPropagation(); openEdit(r); }} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #DEE2E6", background: "white", fontSize: 11, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}><Edit3 size={12} /> دەستکاری</button>
@@ -134,15 +145,15 @@ export default function RepsPage() {
                 <div><div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 4 }}>تەلەفۆن</div><div style={{ fontSize: 14, fontWeight: 600 }}>{detailRep.phone}</div></div>
                 <div><div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 4 }}>شار</div><div style={{ fontSize: 14, fontWeight: 600 }}>{detailRep.city}</div></div>
               </div>
-              <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>کڕیارانی تایبەت ({getRepClients(detailRep.id).length})</h4>
-              {getRepClients(detailRep.id).map(c => (
+              <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>کڕیارانی تایبەت ({clients.filter(c => c.repId === detailRep.id).length})</h4>
+              {clients.filter(c => c.repId === detailRep.id).map(c => (
                 <div key={c.id} style={{ padding: "10px 12px", background: "#F8F9FA", borderRadius: 8, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
                   <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
                   <span style={{ fontSize: 12, color: "#6C757D" }}>{c.city}</span>
                 </div>
               ))}
-              <h4 style={{ fontSize: 14, fontWeight: 700, marginTop: 20, marginBottom: 12 }}>داواکارییەکان ({getRepOrders(detailRep.id).length})</h4>
-              {getRepOrders(detailRep.id).map(o => (
+              <h4 style={{ fontSize: 14, fontWeight: 700, marginTop: 20, marginBottom: 12 }}>داواکارییەکان ({orders.filter(o => o.repId === detailRep.id).length})</h4>
+              {orders.filter(o => o.repId === detailRep.id).map(o => (
                 <div key={o.id} style={{ padding: "10px 12px", background: "#F8F9FA", borderRadius: 8, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
                   <div><span style={{ fontWeight: 600, fontSize: 13 }}>{o.orderNumber}</span> <span style={{ fontSize: 11, color: "#ADB5BD" }}>{o.clientName}</span></div>
                   <span style={{ fontWeight: 600, fontSize: 13 }}>{formatIQD(o.totalAmount)}</span>
