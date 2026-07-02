@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, FormEvent, useRef } from "react";
+import { useState, useEffect, FormEvent, useRef, useMemo } from "react";
 import { Search, Plus, Users, Phone, MapPin, Edit3, Trash2, Eye, X, Building2, Stethoscope, ShoppingBag, Clock, CheckCircle, XCircle, RefreshCw, AlertCircle, History, CreditCard, Upload, Printer, Warehouse, TrendingUp, Package, DollarSign, ArrowLeft } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
@@ -110,41 +110,43 @@ export default function ClientsPage() {
   const [clearingHistory, setClearingHistory] = useState(false);
 
   // Build unified rows: real clients + warehouses
-  const warehouseRows: UnifiedRow[] = (warehouses || []).map(w => ({
-    id: `wh_${w.id}`,
-    name: w.name,
-    owner: w.contact || "—",
-    phone: w.phone || "—",
-    city: w.city,
-    entityType: "WAREHOUSE",
-    displayType: "WAREHOUSE",
-    repId: "",
-    paymentTerms: "IMMEDIATE",
-    balance: 0,
-    isActive: w.isActive,
-  }));
-  const clientRows: UnifiedRow[] = clients.map(c => ({
-    id: c.id,
-    name: c.name,
-    owner: c.owner,
-    phone: c.phone,
-    city: c.city,
-    entityType: "CLIENT",
-    displayType: c.type,
-    repId: c.repId,
-    paymentTerms: c.paymentTerms,
-    balance: c.balance,
-    isActive: c.isActive,
-    clientRef: c,
-  }));
-  const allRows: UnifiedRow[] = [...clientRows, ...warehouseRows];
-
-  const filtered = allRows.filter(r => {
-    const matchSearch = r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.owner.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchCity   = cityFilter === "هەموو" || r.city === cityFilter;
-    const matchType   = typeFilter === "هەموو" || r.displayType === typeFilter;
-    return matchSearch && matchCity && matchType;
-  });
+  const { allRows, filtered } = useMemo(() => {
+    const warehouseRows: UnifiedRow[] = (warehouses || []).map(w => ({
+      id: `wh_${w.id}`,
+      name: w.name,
+      owner: w.contact || "—",
+      phone: w.phone || "—",
+      city: w.city,
+      entityType: "WAREHOUSE" as const,
+      displayType: "WAREHOUSE",
+      repId: "",
+      paymentTerms: "IMMEDIATE" as PaymentTerms,
+      balance: 0,
+      isActive: w.isActive,
+    }));
+    const clientRows: UnifiedRow[] = clients.map(c => ({
+      id: c.id,
+      name: c.name,
+      owner: c.owner,
+      phone: c.phone,
+      city: c.city,
+      entityType: "CLIENT" as const,
+      displayType: c.type,
+      repId: c.repId,
+      paymentTerms: c.paymentTerms,
+      balance: c.balance,
+      isActive: c.isActive,
+      clientRef: c,
+    }));
+    const all: UnifiedRow[] = [...clientRows, ...warehouseRows];
+    const filt = all.filter(r => {
+      const matchSearch = r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.owner.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchCity   = cityFilter === "هەموو" || r.city === cityFilter;
+      const matchType   = typeFilter === "هەموو" || r.displayType === typeFilter;
+      return matchSearch && matchCity && matchType;
+    });
+    return { allRows: all, filtered: filt };
+  }, [clients, warehouses, searchTerm, cityFilter, typeFilter]);
 
   const resetForm = () => setForm({ name: "", owner: "", phone: "", city: cities[0], type: "PHARMACY", repId: reps[0]?.id || "", paymentTerms: "IMMEDIATE", balance: "0", isActive: true });
   const openAdd  = () => { resetForm(); setEditing(null); setModalOpen(true); };

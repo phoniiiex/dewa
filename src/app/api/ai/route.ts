@@ -1,131 +1,206 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const GEMINI_API_KEY = "REDACTED";
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-];
-function geminiUrl(model: string) {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-}
+// ── AI Providers (tried in order until one works) ─────────────────────────
+// Both Gemini AI Studio and Groq use the OpenAI-compatible format
+const GEMINI_KEY = process.env.GEMINI_API_KEY!;
+const GROQ_KEY   = process.env.GROQ_API_KEY!;
 
+const PROVIDERS = [
+  // Gemini — smarter, primary
+  { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: GEMINI_KEY, model: "gemini-2.5-flash" },
+  { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: GEMINI_KEY, model: "gemini-2.0-flash" },
+  // Groq — fallback when Gemini quota is exhausted
+  { url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ_KEY, model: "llama-3.3-70b-versatile" },
+  { url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ_KEY, model: "meta-llama/llama-4-scout-17b-16e-instruct" },
+  { url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ_KEY, model: "llama-3.1-8b-instant" },
+];
+
+// ── Supabase ───────────────────────────────────────────────────────────────
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// ── Tool definitions ───────────────────────────────────────────────────────
+// ── Tool definitions (OpenAI format) ──────────────────────────────────────
 const tools = [
   {
-    functionDeclarations: [
-      {
-        name: "list_orders",
-        description: "List recent orders from the system. Can filter by status or client name.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            limit: { type: "INTEGER", description: "Max number of orders to return (default 10)" },
-            status: { type: "STRING", description: "Filter by status: WAITING, IN_PROGRESS, READY, SENT, DELIVERED, PAID, NOT_ACCEPTED" },
-            client_name: { type: "STRING", description: "Filter by client name (partial match)" },
+    type: "function",
+    function: {
+      name: "list_orders",
+      description: "List recent orders from the system. Can filter by status or client name.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "integer", description: "Max number of orders to return (default 10)" },
+          status: { type: "string", description: "Filter by status: WAITING, IN_PROGRESS, READY, SENT, DELIVERED, PAID, NOT_ACCEPTED" },
+          client_name: { type: "string", description: "Filter by client name (partial match)" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_dashboard_stats",
+      description: "Get today's dashboard statistics: revenue, order count, delivered count.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_products",
+      description: "List products from the system. Can filter by name or low stock.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "integer", description: "Max number of products to return (default 10)" },
+          search: { type: "string", description: "Search by product name" },
+          low_stock: { type: "boolean", description: "If true, return only low-stock products" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_clients",
+      description: "List clients from the system.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "integer", description: "Max number of clients to return (default 10)" },
+          search: { type: "string", description: "Search by client name or city" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_order",
+      description: "Create a new order in the system.",
+      parameters: {
+        type: "object",
+        required: ["client_id", "client_name", "items"],
+        properties: {
+          client_id: { type: "string", description: "The client's ID" },
+          client_name: { type: "string", description: "The client's display name" },
+          rep_id: { type: "string", description: "The sales rep's ID (optional)" },
+          rep_name: { type: "string", description: "The sales rep's name (optional)" },
+          warehouse_id: { type: "string", description: "The warehouse ID (optional)" },
+          warehouse_name: { type: "string", description: "The warehouse display name (optional)" },
+          notes: { type: "string", description: "Order notes" },
+          items: {
+            type: "array",
+            description: "Order line items. Each element must be an object with: product_id (string, required), product_name (string, required), quantity (integer, required), unit_price (number in IQD, required - never 0).",
           },
         },
       },
-      {
-        name: "get_dashboard_stats",
-        description: "Get today's dashboard statistics: revenue, order count, delivered count.",
-        parameters: { type: "OBJECT", properties: {} },
-      },
-      {
-        name: "list_products",
-        description: "List products from the system. Can filter by name or category.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            limit: { type: "INTEGER", description: "Max number of products to return (default 10)" },
-            search: { type: "STRING", description: "Search by product name" },
-            low_stock: { type: "BOOLEAN", description: "If true, return only low-stock products" },
-          },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_order_status",
+      description: "Update the status of an existing order.",
+      parameters: {
+        type: "object",
+        required: ["order_id", "new_status"],
+        properties: {
+          order_id: { type: "string", description: "The order's ID" },
+          new_status: { type: "string", description: "New status: WAITING, IN_PROGRESS, READY, SENT, DELIVERED, PAID, NOT_ACCEPTED" },
         },
       },
-      {
-        name: "list_clients",
-        description: "List clients from the system.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            limit: { type: "INTEGER", description: "Max number of clients to return (default 10)" },
-            search: { type: "STRING", description: "Search by client name or city" },
-          },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "find_client_by_name",
+      description: "Find a client by their name to get their ID.",
+      parameters: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", description: "Client name to search for" },
         },
       },
-      {
-        name: "create_order",
-        description: "Create a new order in the system.",
-        parameters: {
-          type: "OBJECT",
-          required: ["client_id", "client_name", "items"],
-          properties: {
-            client_id: { type: "STRING", description: "The client's ID" },
-            client_name: { type: "STRING", description: "The client's display name" },
-            rep_id: { type: "STRING", description: "The sales rep's ID (optional)" },
-            rep_name: { type: "STRING", description: "The sales rep's name (optional)" },
-            notes: { type: "STRING", description: "Order notes" },
-            items: {
-              type: "ARRAY",
-              description: "Order line items",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  product_id: { type: "STRING" },
-                  product_name: { type: "STRING" },
-                  quantity: { type: "INTEGER" },
-                  unit_price: { type: "NUMBER" },
-                },
-              },
-            },
-          },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "find_product_by_name",
+      description: "Find a product by name to get its ID and price.",
+      parameters: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", description: "Product name to search for" },
         },
       },
-      {
-        name: "update_order_status",
-        description: "Update the status of an existing order.",
-        parameters: {
-          type: "OBJECT",
-          required: ["order_id", "new_status"],
-          properties: {
-            order_id: { type: "STRING", description: "The order's ID" },
-            new_status: { type: "STRING", description: "New status: WAITING, IN_PROGRESS, READY, SENT, DELIVERED, PAID, NOT_ACCEPTED" },
-          },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_warehouses",
+      description: "List all available warehouses (کۆگاکان) in the system.",
+      parameters: {
+        type: "object",
+        properties: {
+          search: { type: "string", description: "Optional: search by warehouse name or city" },
         },
       },
-      {
-        name: "find_client_by_name",
-        description: "Find a client by their name to get their ID.",
-        parameters: {
-          type: "OBJECT",
-          required: ["name"],
-          properties: {
-            name: { type: "STRING", description: "Client name to search for" },
-          },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "find_warehouse_by_name",
+      description: "Find a warehouse (کۆگا) by name to get its ID. Use this before creating an order that involves a warehouse.",
+      parameters: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", description: "Warehouse name or partial name to search for" },
         },
       },
-      {
-        name: "find_product_by_name",
-        description: "Find a product by name to get its ID and price.",
-        parameters: {
-          type: "OBJECT",
-          required: ["name"],
-          properties: {
-            name: { type: "STRING", description: "Product name to search for" },
-          },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "find_rep_by_name",
+      description: "Find a sales representative (نوێنەر) by name to get their ID. Use this when the user mentions a rep/representative name.",
+      parameters: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", description: "Rep name or partial name to search for" },
         },
       },
-    ],
+    },
   },
 ];
 
-// ── Tool execution ────────────────────────────────────────────────────────
+// ── Kurdish character normalization ───────────────────────────────────────
+// Handles variant Unicode chars so searches work regardless of keyboard/font
+function kNorm(s: string): string {
+  return s
+    .replace(/ڵ/g, 'ل')         // Kurdish ll → Arabic l
+    .replace(/ڕ/g, 'ر')         // Kurdish rr → Arabic r
+    .replace(/ێ/g, 'ی')         // Kurdish ê → Arabic y
+    .replace(/ك/g, 'ک')         // Arabic kaf → Farsi/Kurdish kaf
+    .replace(/ى/g, 'ی')         // Arabic alef maqsura → ya
+    .replace(/ة/g, 'ه')         // ta marbuta → ha
+    .replace(/[أإآ]/g, 'ا')     // hamza variants → alef
+    .trim();
+}
+
+// ── Tool execution ─────────────────────────────────────────────────────────
 async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case "list_orders": {
@@ -171,18 +246,35 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
     }
 
     case "find_client_by_name": {
-      const { data } = await supabase.from("clients").select("id, name, city").ilike("name", `%${args.name}%`).limit(5);
+      const term = kNorm(String(args.name || ""));
+      const { data } = await supabase.from("clients").select("id, name, city").ilike("name", `%${term}%`).limit(5);
+      if (!data || data.length === 0) return { notFound: true, term };
       return data;
     }
 
     case "find_product_by_name": {
-      const { data } = await supabase.from("products").select("id, name, price, stock").ilike("name", `%${args.name}%`).limit(5);
+      const term = kNorm(String(args.name || ""));
+      const { data } = await supabase.from("products").select("id, name, price, stock").ilike("name", `%${term}%`).limit(5);
       return data;
     }
 
     case "create_order": {
-      const items = (args.items as Record<string, unknown>[]) || [];
-      const totalAmount = items.reduce((s, item) => s + ((item.quantity as number) * (item.unit_price as number)), 0);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items = (args.items as Record<string, any>[]) || [];
+
+      // Normalize: accept both snake_case and camelCase from the model
+      const normalizedItems = items.map(item => ({
+        product_id:   String(item.product_id   ?? item.productId   ?? ""),
+        product_name: String(item.product_name ?? item.productName ?? ""),
+        quantity:     Number(item.quantity  ?? 1),
+        unit_price:   Number(item.unit_price ?? item.unitPrice ?? 0),
+      }));
+
+      // Validate — refuse to create order with $0 prices
+      const zeroPrice = normalizedItems.find(i => i.unit_price === 0);
+      if (zeroPrice) return { error: `unit_price is 0 for "${zeroPrice.product_name}" — look up the product first with find_product_by_name` };
+
+      const totalAmount = normalizedItems.reduce((s, item) => s + (item.quantity * item.unit_price), 0);
       const orderNumber = "ORD-" + String(Date.now()).slice(-6);
 
       const { data, error } = await supabase.from("orders").insert({
@@ -191,10 +283,12 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
         client_name: args.client_name,
         rep_id: args.rep_id || null,
         rep_name: args.rep_name || null,
+        warehouse_id: args.warehouse_id || null,
+        warehouse_name: args.warehouse_name || null,
         status: "WAITING",
         total_amount: totalAmount,
         notes: args.notes || "",
-        items: items.map(item => ({
+        items: normalizedItems.map(item => ({
           productId: item.product_id,
           productName: item.product_name,
           quantity: item.quantity,
@@ -205,15 +299,28 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
         driver_id: null,
         driver_name: "",
         driver_phone: "",
-        warehouse_id: null,
-        warehouse_name: null,
         signed_invoice_url: "",
         signed_receipt_url: "",
         rejection_reason: "",
       }).select().single();
 
       if (error) return { error: error.message };
-      return { success: true, orderNumber, id: (data as Record<string, unknown>)?.id, totalAmount };
+      return {
+        success: true,
+        orderNumber,
+        id: (data as Record<string, unknown>)?.id,
+        totalAmount,
+        clientName: args.client_name,
+        repName: args.rep_name || null,
+        warehouseName: args.warehouse_name || null,
+        status: "WAITING",
+        items: normalizedItems.map(i => ({
+          productName: i.product_name,
+          quantity: i.quantity,
+          unitPrice: i.unit_price,
+          total: i.quantity * i.unit_price,
+        })),
+      };
     }
 
     case "update_order_status": {
@@ -222,122 +329,207 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       return { success: true, message: `Order status updated to ${args.new_status}` };
     }
 
+    case "list_warehouses": {
+      let query = supabase.from("warehouses").select("id, name, city, address, is_active").eq("is_active", true).order("name");
+      if (args.search) query = query.or(`name.ilike.%${args.search}%,city.ilike.%${args.search}%`);
+      const { data, error } = await query;
+      if (error) return { error: error.message };
+      return data;
+    }
+
+    case "find_warehouse_by_name": {
+      const term = kNorm(String(args.name || ""));
+      const { data, error } = await supabase
+        .from("warehouses")
+        .select("id, name, city, address")
+        .ilike("name", `%${term}%`)
+        .eq("is_active", true)
+        .limit(5);
+      if (error) return { error: error.message };
+      if (!data || data.length === 0) return { notFound: true, term };
+      return data;
+    }
+
+    case "find_rep_by_name": {
+      const { data, error } = await supabase
+        .from("reps")
+        .select("id, name")
+        .ilike("name", `%${kNorm(String(args.name || ""))}%`)
+        .limit(5);
+      if (error) return { error: error.message };
+      return data;
+    }
+
     default:
       return { error: `Unknown tool: ${name}` };
   }
 }
 
-// ── System prompt ─────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are Dewa AI Assistant — an intelligent AGI for the Dewa pharmaceutical management system (دەوا سیستەمی بەڕێوەبردنی دەرمانسازی).
+// ── System prompt ──────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are Dewa AI Assistant for the Dewa pharmaceutical management system (دەوا).
 
-You can:
-- List and search orders, products, clients
-- Create new orders on behalf of the user
-- Update order statuses
-- Show dashboard statistics
-- Help with any data-related task in the system
+RESPOND in Kurdish (Sorani) when user writes Kurdish, English when they write English.
 
-Respond in Kurdish (Sorani/ckb) when the user writes in Kurdish, or English when they write in English. Be concise, helpful, and action-oriented.
+## SMART SEARCH BEHAVIOR:
 
-When creating orders: always first find the client and products by name using the search tools, then create the order with the correct IDs and prices.
+When searching for products, clients, warehouses, or reps:
 
-Format currency as: [amount] IQD
-Format numbers with commas for thousands.
+1. FUZZY MATCHING: Kurdish spelling varies (e.g. user writes "پاراسیتامۆڵ" but DB has "پاراسیتامۆل 500مغ"). If the first search returns nothing, try a shorter version of the name (e.g. "پاراسیتا" instead of the full word). Always find the closest match.
 
-When you complete an action (like creating an order), summarize what you did clearly.`;
+2. MULTIPLE RESULTS: If search returns more than one result, pick the BEST match (closest to what the user wrote) and mention which one you used in the final reply.
 
-// ── Main handler ──────────────────────────────────────────────────────────
+3. ZERO RESULTS: If nothing is found even after a shorter search, call list_products (or list_clients / list_warehouses) to show all options, then ask the user to pick one.
+
+## ORDER CREATION — ONE SHOT:
+Complete ALL lookups first, then create the order in a single pass. DO NOT stop mid-flow asking confirmation for each item. Instead:
+- Call all find_* tools to get real IDs and prices
+- Call create_order once with all real data
+- After the order is created, show a clear summary for the user to review
+
+## STRICT RULES:
+- NEVER use placeholder IDs like "product_id_" — FORBIDDEN.
+- NEVER set unit_price to 0 — always use real price from find_product_by_name.
+- NEVER call create_order without real IDs from lookup tools.
+- If you cannot find something after 2 attempts, stop and tell the user clearly.
+
+## Kurdish vocabulary:
+- "نوێنەر" = sales rep
+- "کۆگا" = warehouse
+- "کڕیار" / "داروخانە" = client/pharmacy
+- "کاڵا" / "دەرمان" = product/medicine
+
+## Order flow (all in ONE turn):
+Step 1: find_client_by_name
+Step 2: find_product_by_name for each product
+Step 3: find_warehouse_by_name (if mentioned)
+Step 4: find_rep_by_name (if mentioned)
+Step 5: create_order with all real IDs and prices
+Step 6: Show summary — order number, client, each product+qty+price, warehouse, rep, total
+
+Format currency as: [amount] دینار`;
+
+
+// ── Main handler ───────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const { messages } = await req.json();
 
-    // Convert message history to Gemini format
-    const geminiHistory = messages.map((m: { role: string; content: string }) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
+    // ── Pre-load context from DB so AI can resolve names→IDs without tool calls ──
+    const [
+      { data: allProducts },
+      { data: allClients },
+      { data: allWarehouses },
+      { data: allReps },
+    ] = await Promise.all([
+      supabase.from("products").select("id, name, price, stock").order("name"),
+      supabase.from("clients").select("id, name, city").order("name"),
+      supabase.from("warehouses").select("id, name, city").eq("is_active", true).order("name"),
+      supabase.from("reps").select("id, name").order("name"),
+    ]);
 
-    // Add system prompt as first user turn (Gemini Flash approach)
-    const contents = [
-      { role: "user", parts: [{ text: SYSTEM_PROMPT }] },
-      { role: "model", parts: [{ text: "بەجێ. من ئامادەم بۆ یارمەتیدانت. چی پێویستتە؟" }] },
-      ...geminiHistory,
+    const dbContext = `
+## AVAILABLE DATA (use these exact IDs when creating orders):
+
+### Products (کاڵاکان):
+${(allProducts || []).map(p => `- ID: ${p.id} | Name: ${p.name} | Price: ${p.price} دینار`).join("\n")}
+
+### Clients / Pharmacies (کڕیارەکان / داروخانەکان):
+${(allClients || []).map(c => `- ID: ${c.id} | Name: ${c.name}${c.city ? ` | City: ${c.city}` : ""}`).join("\n")}
+
+### Warehouses (کۆگاکان):
+${(allWarehouses || []).map(w => `- ID: ${w.id} | Name: ${w.name}`).join("\n")}
+
+### Sales Reps (نوێنەرەکان):
+${(allReps || []).map(r => `- ID: ${r.id} | Name: ${r.name}`).join("\n")}
+
+Since you have all the IDs above, you do NOT need to call find_client_by_name, find_product_by_name, find_warehouse_by_name, or find_rep_by_name. Match names from the user's message to the lists above (use fuzzy/partial matching for Kurdish spelling variants), then call create_order directly with the correct IDs.`;
+
+    // Build OpenAI-format message history
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const groqMessages: any[] = [
+      { role: "system", content: SYSTEM_PROMPT + dbContext },
+      ...messages.map((m: { role: string; content: string }) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: m.content,
+      })),
     ];
 
-    // Try each model until one works (handles quota errors)
-    let response!: Response;
-    let activeModel = MODELS[0];
-    for (const model of MODELS) {
-      response = await fetch(geminiUrl(model), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents, tools }),
-      });
-      if (response.ok) { activeModel = model; break; }
-      const errText = await response.text();
-      // Only retry on quota errors
-      if (!errText.includes("429") && !errText.includes("quota") && !errText.includes("RESOURCE_EXHAUSTED")) {
-        return NextResponse.json({ error: errText }, { status: 500 });
-      }
-      console.warn(`Model ${model} quota exceeded, trying next...`);
-    }
-    if (!response.ok) {
-      const err = await response.text();
-      return NextResponse.json({ error: `All models quota exceeded. Try again later. (${err.slice(0, 200)})` }, { status: 429 });
-    }
-
-    let data = await response.json();
-
-    // ── Agentic function-calling loop ─────────────────────────────────────
-    let iterations = 0;
-    const MAX_ITERATIONS = 5;
     const toolResults: { name: string; result: unknown }[] = [];
+    let iterations = 0;
+    const MAX_ITERATIONS = 6;
 
     while (iterations < MAX_ITERATIONS) {
-      const candidate = data.candidates?.[0];
-      const parts = candidate?.content?.parts || [];
+      // Try each provider until one works
+      let response!: Response;
+      let lastErr = "";
+      for (const provider of PROVIDERS) {
+        response = await fetch(provider.url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${provider.key}`,
+          },
+          body: JSON.stringify({
+            model: provider.model,
+            messages: groqMessages,
+            tools,
+            tool_choice: "auto",
+            parallel_tool_calls: false,
+            max_tokens: 4096,
+          }),
+        });
+        if (response.ok) break;
+        lastErr = await response.text();
+        console.warn(`[${provider.model}] failed (${response.status}):`, lastErr.slice(0, 100));
+      }
 
-      // Check for function calls
-      const functionCalls = parts.filter((p: Record<string, unknown>) => p.functionCall);
+      if (!response.ok) {
+        // Try to extract a retry delay if rate limited
+        let retryMsg = "تکایە چەند خولەکێک چاوەڕێ بکە و دووبارە هەوڵ بدەرەوە.";
+        try {
+          const errJson = JSON.parse(lastErr);
+          const retryAfter = errJson?.error?.message?.match(/Please try again in ([\d.]+)s/)?.[1];
+          if (retryAfter) {
+            const secs = Math.ceil(parseFloat(retryAfter));
+            retryMsg = `تکایە ${secs} چرکە چاوەڕێ بکە و دووبارە هەوڵ بدەرەوە.`;
+          }
+        } catch { /* ignore */ }
+        return NextResponse.json({ error: `⏳ کوتای داواکاری پڕبوو. ${retryMsg}` }, { status: 429 });
+      }
 
-      if (functionCalls.length === 0) break; // No more tool calls — we have the final answer
+      const data = await response.json();
+      const msg = data.choices?.[0]?.message;
+      if (!msg) return NextResponse.json({ error: "Empty response from AI" }, { status: 500 });
 
-      // Execute all tool calls
-      const functionResponseParts = [];
-      for (const part of functionCalls) {
-        const { name, args } = part.functionCall as { name: string; args: Record<string, unknown> };
-        const result = await executeTool(name, args || {});
-        toolResults.push({ name, result });
-        functionResponseParts.push({
-          functionResponse: { name, response: { result } },
+      // No tool calls — this is the final answer
+      if (!msg.tool_calls || msg.tool_calls.length === 0) {
+        return NextResponse.json({ text: msg.content || "", toolResults });
+      }
+
+      // Push assistant message with tool calls into history
+      groqMessages.push({
+        role: "assistant",
+        content: msg.content || null,
+        tool_calls: msg.tool_calls,
+      });
+
+      // Execute each tool and push results
+      for (const tc of msg.tool_calls) {
+        const toolName = tc.function.name;
+        const toolArgs = JSON.parse(tc.function.arguments || "{}");
+        const result = await executeTool(toolName, toolArgs);
+        toolResults.push({ name: toolName, result });
+        groqMessages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(result),
         });
       }
 
-      // Add assistant's tool call turn + tool results turn
-      contents.push({ role: "model", parts });
-      contents.push({ role: "user", parts: functionResponseParts });
-
-      // Call Gemini again with results
-      response = await fetch(geminiUrl(activeModel), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents, tools }),
-      });
-
-      if (!response.ok) {
-        const err = await response.text();
-        return NextResponse.json({ error: err }, { status: 500 });
-      }
-
-      data = await response.json();
       iterations++;
     }
 
-    // Extract final text answer
-    const finalParts = data.candidates?.[0]?.content?.parts || [];
-    const text = finalParts.map((p: Record<string, unknown>) => p.text || "").join("").trim();
-
-    return NextResponse.json({ text, toolResults });
+    return NextResponse.json({ text: "تکایە دووبارە هەوڵ بدەرەوە.", toolResults });
   } catch (err) {
     console.error("AI route error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });

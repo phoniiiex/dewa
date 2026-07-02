@@ -352,6 +352,16 @@ interface DataStore {
 
 const DataContext = createContext<DataStore | null>(null);
 
+// ── Read cache synchronously BEFORE first render ───────────────────────────
+// Safe: typeof window guard means this returns null during SSR
+const _c: Record<string, unknown> | null = (() => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem('dewa_data_cache_v1');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+})();
+
 export function useData(): DataStore {
   const ctx = useContext(DataContext);
   if (!ctx) throw new Error("useData must be used within DataProvider");
@@ -359,20 +369,22 @@ export function useData(): DataStore {
 }
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [reps, setReps] = useState<Rep[]>([]);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [settings, setSettings] = useState<CompanySettings>(defaultSettings);
-  const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>([]);
-  const [sampleRequests, setSampleRequests] = useState<SampleRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Initialize from cache so first render already has real data (no 0→number flash)
+  const [products, setProducts] = useState<Product[]>((_c?.products as Product[]) ?? []);
+  const [clients, setClients] = useState<Client[]>((_c?.clients as Client[]) ?? []);
+  const [reps, setReps] = useState<Rep[]>((_c?.reps as Rep[]) ?? []);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>((_c?.warehouses as Warehouse[]) ?? []);
+  const [suppliers, setSuppliers] = useState<Supplier[]>((_c?.suppliers as Supplier[]) ?? []);
+  const [orders, setOrders] = useState<Order[]>((_c?.orders as Order[]) ?? []);
+  const [drivers, setDrivers] = useState<Driver[]>((_c?.drivers as Driver[]) ?? []);
+  const [transactions, setTransactions] = useState<Transaction[]>((_c?.transactions as Transaction[]) ?? []);
+  const [settings, setSettings] = useState<CompanySettings>((_c?.settings as CompanySettings) ?? defaultSettings);
+  const [priceTypes, setPriceTypes] = useState<PriceType[]>((_c?.priceTypes as PriceType[]) ?? []);
+  const [users, setUsers] = useState<User[]>((_c?.users as User[]) ?? []);
+  const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>((_c?.invoiceTemplates as InvoiceTemplate[]) ?? []);
+  const [sampleRequests, setSampleRequests] = useState<SampleRequest[]>((_c?.sampleRequests as SampleRequest[]) ?? []);
+  // loading = false immediately if cache exists — no flash, no shimmer needed
+  const [loading, setLoading] = useState(!_c);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error"; visible: boolean }>({ message: "", type: "success", visible: false });
 
   const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
@@ -399,19 +411,38 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         supabase.from("sample_requests").select("*").order("created_at", { ascending: false }),
       ]);
 
-      if (pRes.data) setProducts(pRes.data.map(toProduct));
-      if (cRes.data) setClients(cRes.data.map(toClient));
-      if (rRes.data) setReps(rRes.data.map(toRep));
-      if (wRes.data) setWarehouses(wRes.data.map(toWarehouse));
-      if (sRes.data) setSuppliers(sRes.data.map(toSupplier));
-      if (oRes.data) setOrders(oRes.data.map(toOrder));
-      if (drRes.data) setDrivers(drRes.data.map(toDriver));
-      if (tRes.data) setTransactions(tRes.data.map(toTransaction));
-      if (stRes.data) setSettings(toSettings(stRes.data));
-      if (prRes.data) setUsers(prRes.data.map(toUser));
-      if (itRes.data) setInvoiceTemplates(itRes.data.map(toTemplate));
-      if (ptRes.data) setPriceTypes(ptRes.data.map((r) => ({ id: r.id as string, name: r.name as string, createdAt: (r.created_at || "") as string })));
-      if (srRes.data) setSampleRequests(srRes.data.map(toSampleRequest));
+      const fresh = {
+        products: pRes.data?.map(toProduct) ?? [],
+        clients: cRes.data?.map(toClient) ?? [],
+        reps: rRes.data?.map(toRep) ?? [],
+        warehouses: wRes.data?.map(toWarehouse) ?? [],
+        suppliers: sRes.data?.map(toSupplier) ?? [],
+        orders: oRes.data?.map(toOrder) ?? [],
+        drivers: drRes.data?.map(toDriver) ?? [],
+        transactions: tRes.data?.map(toTransaction) ?? [],
+        settings: stRes.data ? toSettings(stRes.data) : defaultSettings,
+        users: prRes.data?.map(toUser) ?? [],
+        invoiceTemplates: itRes.data?.map(toTemplate) ?? [],
+        priceTypes: ptRes.data?.map((r) => ({ id: r.id as string, name: r.name as string, createdAt: (r.created_at || "") as string })) ?? [],
+        sampleRequests: srRes.data?.map(toSampleRequest) ?? [],
+      };
+
+      setProducts(fresh.products);
+      setClients(fresh.clients);
+      setReps(fresh.reps);
+      setWarehouses(fresh.warehouses);
+      setSuppliers(fresh.suppliers);
+      setOrders(fresh.orders);
+      setDrivers(fresh.drivers);
+      setTransactions(fresh.transactions);
+      setSettings(fresh.settings);
+      setUsers(fresh.users);
+      setInvoiceTemplates(fresh.invoiceTemplates);
+      setPriceTypes(fresh.priceTypes);
+      setSampleRequests(fresh.sampleRequests);
+
+      // Cache fresh data for next load
+      try { localStorage.setItem("dewa_data_cache_v1", JSON.stringify(fresh)); } catch { /* ignore quota errors */ }
     } catch (err) {
       console.error("Failed to fetch data:", err);
     } finally {
@@ -419,7 +450,83 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  useEffect(() => { refreshData(); }, [refreshData]);
+  useEffect(() => {
+    // _c module-level IIFE already seeded state with cache synchronously.
+    // Just fetch fresh data from Supabase in the background.
+    refreshData();
+  }, [refreshData]);
+
+  // ── Auto-sync cache whenever state changes ─────────────────────────────
+  // Covers ALL mutations automatically — no per-function cache updates needed.
+  useEffect(() => {
+    if (loading) return; // Don't overwrite cache with empty data during initial load
+    try {
+      localStorage.setItem("dewa_data_cache_v1", JSON.stringify({
+        products, clients, reps, warehouses, suppliers, orders,
+        drivers, transactions, settings, users, invoiceTemplates,
+        priceTypes, sampleRequests,
+      }));
+    } catch { /* ignore quota errors */ }
+  }, [products, clients, reps, warehouses, suppliers, orders, drivers,
+      transactions, settings, users, invoiceTemplates, priceTypes, sampleRequests, loading]);
+
+  // ── Supabase Realtime — live updates across users/sessions ────────────
+  useEffect(() => {
+    const channel = supabase
+      .channel("dewa-realtime")
+      // Orders: any change updates the orders slice
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" },
+        (payload) => setOrders(prev => {
+          if (prev.some(o => o.id === (payload.new as Record<string, string>).id)) return prev;
+          return [toOrder(payload.new as Record<string, unknown>), ...prev];
+        })
+      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders" },
+        (payload) => setOrders(prev =>
+          prev.map(o => o.id === (payload.new as Record<string, string>).id
+            ? toOrder(payload.new as Record<string, unknown>) : o)
+        )
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "orders" },
+        (payload) => setOrders(prev => prev.filter(o => o.id !== (payload.old as Record<string, string>).id))
+      )
+      // Products
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "products" },
+        (payload) => setProducts(prev => {
+          if (prev.some(p => p.id === (payload.new as Record<string, string>).id)) return prev;
+          return [toProduct(payload.new as Record<string, unknown>), ...prev];
+        })
+      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "products" },
+        (payload) => setProducts(prev =>
+          prev.map(p => p.id === (payload.new as Record<string, string>).id
+            ? toProduct(payload.new as Record<string, unknown>) : p)
+        )
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "products" },
+        (payload) => setProducts(prev => prev.filter(p => p.id !== (payload.old as Record<string, string>).id))
+      )
+      // Clients
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "clients" },
+        (payload) => setClients(prev => {
+          if (prev.some(c => c.id === (payload.new as Record<string, string>).id)) return prev;
+          return [toClient(payload.new as Record<string, unknown>), ...prev];
+        })
+      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "clients" },
+        (payload) => setClients(prev =>
+          prev.map(c => c.id === (payload.new as Record<string, string>).id
+            ? toClient(payload.new as Record<string, unknown>) : c)
+        )
+      )
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "clients" },
+        (payload) => setClients(prev => prev.filter(c => c.id !== (payload.old as Record<string, string>).id))
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // === CRUD with Supabase ===
   const addProduct = useCallback(async (p: Omit<Product, "id" | "createdAt">) => {

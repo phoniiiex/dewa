@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Package, Users, ShoppingCart, DollarSign, TrendingUp, Truck,
   AlertTriangle, Clock, UserCheck, GripVertical, Plus, X,
@@ -127,9 +127,21 @@ function WidgetHeader({ title, link, color = "#4263EB" }: { title: string; link?
   );
 }
 
+// ─── Shimmer skeleton ─────────────────────────────────────
+function Shimmer({ w = 80, h = 28 }: { w?: number; h?: number }) {
+  return (
+    <div style={{
+      width: w, height: h, borderRadius: 6, display: "inline-block",
+      background: "linear-gradient(90deg, #ebebeb 25%, #d6d6d6 50%, #ebebeb 75%)",
+      backgroundSize: "200% 100%",
+      animation: "shimmerSlide 1.4s ease-in-out infinite",
+    }} />
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────
 export default function DashboardPage() {
-  const { orders, products, clients, reps, transactions } = useData();
+  const { orders, products, clients, reps, transactions, loading } = useData();
 
   const [layout, setLayout] = useState<string[]>(DEFAULT_LAYOUT);
   const [isEditing, setIsEditing] = useState(false);
@@ -168,50 +180,60 @@ export default function DashboardPage() {
 
   const hiddenWidgets = WIDGET_DEFS.filter(d => !layout.includes(d.id));
 
-  // ─── Data derivations ───
-  const totalRevenue = orders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0);
-  const pendingOrders = orders.filter(o => o.status === "WAITING").length;
-  const totalIncome = transactions.filter(t => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0);
-  const activeDeliveries = orders.filter(o => o.status === "SENT").length;
-  const nearExpiryProducts = products.filter(p => {
-    if (!p.expiryDate) return false;
-    const diff = new Date(p.expiryDate).getTime() - Date.now();
-    return diff > 0 && diff < 90 * 24 * 60 * 60 * 1000;
-  });
-  const expiredProducts = products.filter(p => p.expiryDate && new Date(p.expiryDate).getTime() < Date.now());
-  const lowStockProducts = products.filter(p => p.stock > 0 && p.stock < 50);
+  // ─── Data derivations (memoized) ───
+  const {
+    totalRevenue, pendingOrders, totalIncome, totalExpense,
+    activeDeliveries, nearExpiryProducts, expiredProducts, lowStockProducts,
+    last7, recentOrders, statusBreakdown, repStats, clientStats,
+  } = useMemo(() => {
+    const paidOrders   = orders.filter(o => o.status === "PAID");
+    const waitingOrders = orders.filter(o => o.status === "WAITING");
+    const now = Date.now();
+    const near = products.filter(p => {
+      if (!p.expiryDate) return false;
+      const diff = new Date(p.expiryDate).getTime() - now;
+      return diff > 0 && diff < 90 * 24 * 60 * 60 * 1000;
+    });
+    const sparkline = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - (6 - i));
+      const ds = d.toISOString().split("T")[0];
+      return orders.filter(o => o.createdAt?.startsWith(ds)).length;
+    });
+    const breakdown = [
+      { label: "چاوەڕوان",    key: "WAITING",      color: "#D97706" },
+      { label: "لە پڕۆسەدا",  key: "IN_PROGRESS",  color: "#339AF0" },
+      { label: "ڕەتکراوە",   key: "NOT_ACCEPTED", color: "#FA5252" },
+      { label: "ئامادەیە",   key: "READY",        color: "#059669" },
+      { label: "نێردراوە",   key: "SENT",         color: "#7C3AED" },
+      { label: "گەیشتووە",  key: "DELIVERED",    color: "#0891B2" },
+      { label: "پارەدراوە", key: "PAID",         color: "#2B8A3E" },
+    ].map(s => ({ ...s, count: orders.filter(o => o.status === s.key).length }));
+    const rStats = reps.slice(0, 5).map(r => ({
+      name: r.name,
+      count: orders.filter(o => o.repId === r.id).length,
+      total: orders.filter(o => o.repId === r.id).reduce((s, o) => s + o.totalAmount, 0),
+    })).sort((a, b) => b.count - a.count);
+    const cStats = clients.slice(0, 5).map(c => ({
+      name: c.name, city: c.city,
+      count: orders.filter(o => o.clientId === c.id).length,
+    })).sort((a, b) => b.count - a.count);
+    return {
+      totalRevenue:      paidOrders.reduce((s, o) => s + o.totalAmount, 0),
+      pendingOrders:     waitingOrders.length,
+      totalIncome:       transactions.filter(t => t.type === "INCOME").reduce((s, t) => s + t.amount, 0),
+      totalExpense:      transactions.filter(t => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0),
+      activeDeliveries:  orders.filter(o => o.status === "SENT").length,
+      nearExpiryProducts: near,
+      expiredProducts:   products.filter(p => p.expiryDate && new Date(p.expiryDate).getTime() < now),
+      lowStockProducts:  products.filter(p => p.stock > 0 && p.stock < 50),
+      last7:             sparkline,
+      recentOrders:      [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5),
+      statusBreakdown:   breakdown,
+      repStats:          rStats,
+      clientStats:       cStats,
+    };
+  }, [orders, products, clients, reps, transactions]);
 
-  // Last 7 days order counts for sparkline
-  const last7 = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i));
-    const ds = d.toISOString().split("T")[0];
-    return orders.filter(o => o.createdAt?.startsWith(ds)).length;
-  });
-
-  const recentOrders = [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
-
-  const statusBreakdown = [
-    { label: "چاوەڕوان",    key: "WAITING",      color: "#D97706" },
-    { label: "لە پڕۆسەدا",  key: "IN_PROGRESS",  color: "#339AF0" },
-    { label: "ڕەتکراوە",   key: "NOT_ACCEPTED", color: "#FA5252" },
-    { label: "ئامادەیە",   key: "READY",        color: "#059669" },
-    { label: "نێردراوە",   key: "SENT",         color: "#7C3AED" },
-    { label: "گەیشتووە",  key: "DELIVERED",    color: "#0891B2" },
-    { label: "پارەدراوە", key: "PAID",         color: "#2B8A3E" },
-  ].map(s => ({ ...s, count: orders.filter(o => o.status === s.key).length }));
-
-  const repStats = reps.slice(0, 5).map(r => ({
-    name: r.name,
-    count: orders.filter(o => o.repId === r.id).length,
-    total: orders.filter(o => o.repId === r.id).reduce((s, o) => s + o.totalAmount, 0),
-  })).sort((a, b) => b.count - a.count);
-
-  const clientStats = clients.slice(0, 5).map(c => ({
-    name: c.name,
-    city: c.city,
-    count: orders.filter(o => o.clientId === c.id).length,
-  })).sort((a, b) => b.count - a.count);
 
   const statusClasses: Record<string, string> = { WAITING: "pending", IN_PROGRESS: "processing", NOT_ACCEPTED: "cancelled", READY: "shipped", SENT: "shipped", DELIVERED: "delivered", PAID: "paid" };
   const statusLabels: Record<string, string> = { WAITING: "چاوەڕوان", IN_PROGRESS: "لە پڕۆسەدا", NOT_ACCEPTED: "ڕەتکراوە", READY: "ئامادەیە", SENT: "نێردراوە", DELIVERED: "گەیشتووە", PAID: "پارەدراوە" };
@@ -227,7 +249,9 @@ export default function DashboardPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#6C757D", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>کۆی داهات</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: "#1A1A2E", lineHeight: 1.1 }}>{formatIQD(totalRevenue)}</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: "#1A1A2E", lineHeight: 1.1 }}>
+                {loading ? <Shimmer w={120} h={26} /> : formatIQD(totalRevenue)}
+              </div>
               <div style={{ fontSize: 11, color: "#40C057", fontWeight: 600, marginTop: 5, display: "flex", alignItems: "center", gap: 3 }}>
                 <ArrowUpRight size={11} /> داهاتی پارەدراو
               </div>
@@ -245,8 +269,10 @@ export default function DashboardPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#6C757D", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>داواکارییەکان</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: "#1A1A2E", lineHeight: 1.1 }}>{orders.length}</div>
-              {pendingOrders > 0 && (
+              <div style={{ fontSize: 22, fontWeight: 900, color: "#1A1A2E", lineHeight: 1.1 }}>
+                {loading ? <Shimmer w={50} h={26} /> : orders.length}
+              </div>
+              {!loading && pendingOrders > 0 && (
                 <div style={{ fontSize: 11, color: "#FD7E14", fontWeight: 600, marginTop: 5 }}>{pendingOrders} چاوەڕوان</div>
               )}
             </div>
@@ -263,8 +289,10 @@ export default function DashboardPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#6C757D", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>بەرهەمەکان</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: "#1A1A2E", lineHeight: 1.1 }}>{products.length}</div>
-              {nearExpiryProducts.length > 0 && (
+              <div style={{ fontSize: 22, fontWeight: 900, color: "#1A1A2E", lineHeight: 1.1 }}>
+                {loading ? <Shimmer w={50} h={26} /> : products.length}
+              </div>
+              {!loading && nearExpiryProducts.length > 0 && (
                 <div style={{ fontSize: 11, color: "#FA5252", fontWeight: 600, marginTop: 5 }}>{nearExpiryProducts.length} نزیکی بەسەرچوون</div>
               )}
             </div>
@@ -281,8 +309,12 @@ export default function DashboardPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#6C757D", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>کڕیارەکان</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: "#1A1A2E", lineHeight: 1.1 }}>{clients.length}</div>
-              <div style={{ fontSize: 11, color: "#6C757D", fontWeight: 600, marginTop: 5 }}>{clients.filter(c => c.isActive).length} چالاک</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: "#1A1A2E", lineHeight: 1.1 }}>
+                {loading ? <Shimmer w={50} h={26} /> : clients.length}
+              </div>
+              <div style={{ fontSize: 11, color: "#6C757D", fontWeight: 600, marginTop: 5 }}>
+                {loading ? <Shimmer w={60} h={14} /> : `${clients.filter(c => c.isActive).length} چالاک`}
+              </div>
             </div>
             <div style={{ width: 40, height: 40, borderRadius: 12, background: "#FEF3EB", display: "flex", alignItems: "center", justifyContent: "center", color: "#F47B35" }}>
               <Users size={20} />
@@ -499,13 +531,8 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* Customize button only — welcome header is in TopBar */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 24 }}>
-        <button onClick={() => { setIsEditing(!isEditing); if (isEditing) setShowCatalog(false); }}
-          style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 18px", borderRadius: 10, border: isEditing ? "none" : "1.5px solid var(--color-border)", background: isEditing ? "linear-gradient(135deg, #4263EB, #7C5CFC)" : "var(--color-surface)", color: isEditing ? "white" : "var(--color-text-primary)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: isEditing ? "0 4px 14px rgba(66,99,235,0.3)" : "none", transition: "all 0.15s" }}>
-          {isEditing ? <><CheckCircle size={15} /> تەواوکردن</> : <><Settings2 size={15} /> تەرخانکردن</>}
-        </button>
-      </div>
+
+
 
       {/* Edit Mode Toolbar */}
       {isEditing && (

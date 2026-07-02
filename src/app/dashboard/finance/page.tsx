@@ -1,5 +1,5 @@
 "use client";
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useMemo } from "react";
 import { Plus, DollarSign, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCircle, Search } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
@@ -26,9 +26,16 @@ export default function FinancePage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ type: "INCOME" as TransactionType, description: "", amount: "", method: "CASH" as PaymentMethod, relatedOrderId: null as string | null });
 
-  const totalIncome = transactions.filter(t => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0);
-  const netProfit = totalIncome - totalExpense;
+  const { totalIncome, totalExpense, netProfit, filtered } = useMemo(() => {
+    const income  = transactions.filter(t => t.type === "INCOME").reduce((s, t) => s + t.amount, 0);
+    const expense = transactions.filter(t => t.type === "EXPENSE").reduce((s, t) => s + t.amount, 0);
+    const filt = transactions.filter(t => {
+      const matchSearch = t.description.includes(searchTerm);
+      const matchType = typeFilter === "هەموو" || typeLabels[t.type] === typeFilter;
+      return matchSearch && matchType;
+    });
+    return { totalIncome: income, totalExpense: expense, netProfit: income - expense, filtered: filt };
+  }, [transactions, searchTerm, typeFilter]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -37,11 +44,6 @@ export default function FinancePage() {
     setForm({ type: "INCOME", description: "", amount: "", method: "CASH", relatedOrderId: null });
   };
 
-  const filtered = transactions.filter(t => {
-    const matchSearch = t.description.includes(searchTerm);
-    const matchType = typeFilter === "هەموو" || typeLabels[t.type] === typeFilter;
-    return matchSearch && matchType;
-  });
 
   return (
     <>

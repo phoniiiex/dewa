@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Search, Plus, Package, Edit3, Trash2, Eye, X,
   Grid3X3, List, AlertTriangle, ImageIcon, MoreVertical, ChevronDown, ChevronUp,
@@ -185,13 +185,12 @@ export default function ProductsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Dynamic categories from actual products
-  const allCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean)));
+  const allCategories = useMemo(() =>
+    Array.from(new Set(products.map(p => p.category).filter(Boolean))),
+  [products]);
 
   // openEdit: just store the product; the wizard seeds itself from initialProduct
-  const openEdit = (p: Product) => {
-    setEditingProduct(p);
-    setEditModalOpen(true);
-  };
+  const openEdit = (p: Product) => { setEditingProduct(p); setEditModalOpen(true); };
 
   const handleWizardSubmit = (data: WizardFormData) => {
     const firstPrice = data.prices.find(p => p.amount);
@@ -200,11 +199,9 @@ export default function ProductsPage() {
       price: firstPrice ? Number(firstPrice.amount) : 0,
       prices: data.prices.filter(p => p.amount).map(p => ({ typeId: p.typeId, typeName: p.typeName, amount: Number(p.amount) })),
       stock: Number(data.stock), lowStock: Number(data.lowStock) || 10,
-      unitType: data.unitType,
-      origin: data.origin, supplier: data.supplier,
+      unitType: data.unitType, origin: data.origin, supplier: data.supplier,
       issueDate: data.issueDate, expiryDate: data.expiryDate,
-      batchNumber: data.batchNumber, isSample: data.isSample,
-      isActive: true, imageUrl: data.imageUrl,
+      batchNumber: data.batchNumber, isSample: data.isSample, isActive: true, imageUrl: data.imageUrl,
     });
   };
 
@@ -216,21 +213,25 @@ export default function ProductsPage() {
       price: firstPrice ? Number(firstPrice.amount) : 0,
       prices: data.prices.filter(p => p.amount).map(p => ({ typeId: p.typeId, typeName: p.typeName, amount: Number(p.amount) })),
       stock: Number(data.stock), lowStock: Number(data.lowStock) || 10,
-      unitType: data.unitType,
-      origin: data.origin, supplier: data.supplier,
+      unitType: data.unitType, origin: data.origin, supplier: data.supplier,
       issueDate: data.issueDate, expiryDate: data.expiryDate,
-      batchNumber: data.batchNumber, isSample: data.isSample,
-      isActive: editingProduct.isActive,
-      imageUrl: data.imageUrl,
+      batchNumber: data.batchNumber, isSample: data.isSample, isActive: editingProduct.isActive, imageUrl: data.imageUrl,
     });
     setEditModalOpen(false);
   };
 
-  const filtered = products.filter((p) => {
+  const filtered = useMemo(() => products.filter((p) => {
     const matchSearch = p.name.includes(searchTerm) || p.sku.toLowerCase().includes(searchTerm.toLowerCase()) || (p.company || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchCategory = categoryFilter === "هەموو" || p.category === categoryFilter;
     return matchSearch && matchCategory;
-  });
+  }), [products, searchTerm, categoryFilter]);
+
+  const kpiData = useMemo(() => ({
+    totalStock: products.reduce((s, p) => s + p.stock, 0),
+    nearExpiry:  products.filter(p => isNearExpiry(p.expiryDate)).length,
+    expired:     products.filter(p => isExpired(p.expiryDate)).length,
+  }), [products]);
+
 
   return (
     <>
@@ -251,10 +252,10 @@ export default function ProductsPage() {
         {loading ? (
           <>{[0,1,2,3].map(i => <SkeletonKPI key={i} />)}</>
         ) : [
-          { title: "کۆی بەرهەم", value: String(products.length) },
-          { title: "کۆی کۆگا", value: products.reduce((s, p) => s + p.stock, 0).toLocaleString() },
-          { title: "نزیکی بەسەرچوون", value: String(products.filter(p => isNearExpiry(p.expiryDate)).length), color: "#FD7E14" },
-          { title: "بەسەرچووە", value: String(products.filter(p => isExpired(p.expiryDate)).length), color: "#FA5252" },
+          { title: "کۆی بەرهەم",       value: String(products.length) },
+          { title: "کۆی کۆگا",          value: kpiData.totalStock.toLocaleString() },
+          { title: "نزیکی بەسەرچوون", value: String(kpiData.nearExpiry), color: "#FD7E14" },
+          { title: "بەسەرچووە",         value: String(kpiData.expired),   color: "#FA5252" },
         ].map((k, i) => (
           <div className="kpi-card" key={i}><div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: k.color }}>{k.value}</div></div>
         ))}

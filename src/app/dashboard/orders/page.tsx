@@ -1,5 +1,5 @@
 "use client";
-import { useState, FormEvent, useRef } from "react";
+import { useState, FormEvent, useRef, useMemo } from "react";
 
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
@@ -64,6 +64,8 @@ export default function OrdersPage() {
   // ── Filters ─────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm]   = useState("");
   const [statusFilter, setStatusFilter] = useState("هەموو");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 25;
 
   // ── Modal visibility ─────────────────────────────────────────────────
   const [newOrderOpen, setNewOrderOpen]       = useState(false);
@@ -270,13 +272,16 @@ export default function OrdersPage() {
     setPayModalOrder(null);
   };
 
-  // ── Filtered list ─────────────────────────────────────────────────────
-  const filtered = orders.filter(o => {
+  // ── Filtered + paginated list ─────────────────────────────────────────
+  const filtered = useMemo(() => orders.filter(o => {
     if (isRep && myRep && o.repId !== myRep.id && o.repName !== myRep.name) return false;
     const matchSearch = o.orderNumber.includes(searchTerm) || o.clientName.includes(searchTerm) || o.repName.includes(searchTerm);
     const matchStatus = statusFilter === "هەموو" || STATUS[o.status]?.label === statusFilter;
     return matchSearch && matchStatus;
-  });
+  }), [orders, isRep, myRep, searchTerm, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const kpi = {
     total:   filtered.length,
@@ -326,11 +331,11 @@ export default function OrdersPage() {
       <div style={{ ...card, marginBottom: 20, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
           <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
-          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="گەڕان بە ژمارە یان کڕیار..." style={{ ...inputStyle, paddingLeft: 38, width: "100%", boxSizing: "border-box" }} />
+          <input value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setPage(1); }} placeholder="گەڕان بە ژمارە یان کڕیار..." style={{ ...inputStyle, paddingLeft: 38, width: "100%", boxSizing: "border-box" }} />
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {STATUS_TABS.map(t => (
-            <button key={t} onClick={() => setStatusFilter(t)} style={{ padding: "6px 14px", borderRadius: 99, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: statusFilter === t ? "#4263EB" : "#DEE2E6", background: statusFilter === t ? "#EDF2FF" : "#fff", color: statusFilter === t ? "#4263EB" : "#495057", transition: "all .15s" }}>
+            <button key={t} onClick={() => { setStatusFilter(t); setPage(1); }} style={{ padding: "6px 14px", borderRadius: 99, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: statusFilter === t ? "#4263EB" : "#DEE2E6", background: statusFilter === t ? "#EDF2FF" : "#fff", color: statusFilter === t ? "#4263EB" : "#495057", transition: "all .15s" }}>
               {t}
             </button>
           ))}
@@ -349,9 +354,9 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? <SkeletonTableRows cols={7} /> : filtered.length === 0 ? (
+              {loading ? <SkeletonTableRows cols={7} /> : paged.length === 0 ? (
                 <tr><td colSpan={7} style={{ padding: 48, textAlign: "center", color: "#ADB5BD" }}>هیچ داواکارییەک نەدۆزرایەوە</td></tr>
-              ) : filtered.map(o => (
+              ) : paged.map(o => (
                 <tr key={o.id} style={{ borderBottom: "1px solid #F8F9FA", transition: "background .1s" }}
                   onMouseEnter={e => (e.currentTarget.style.background = "#FAFAFA")}
                   onMouseLeave={e => (e.currentTarget.style.background = "")}>
@@ -394,6 +399,27 @@ export default function OrdersPage() {
           </table>
         </div>
       </div>
+
+      {/* ── Pagination ── */}
+      {!loading && totalPages > 1 && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, fontSize: 13, color: "#6C757D" }}>
+          <span>{filtered.length} داواکاری — لاپەڕە {page} لە {totalPages}</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #DEE2E6", background: page === 1 ? "#F8F9FA" : "white", cursor: page === 1 ? "default" : "pointer", fontWeight: 600, color: page === 1 ? "#ADB5BD" : "#495057" }}>→</button>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              const pg = page <= 3 ? i + 1 : page + i - 2;
+              if (pg < 1 || pg > totalPages) return null;
+              return (
+                <button key={pg} onClick={() => setPage(pg)}
+                  style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid", borderColor: page === pg ? "#4263EB" : "#DEE2E6", background: page === pg ? "#EDF2FF" : "white", cursor: "pointer", fontWeight: 600, color: page === pg ? "#4263EB" : "#495057" }}>{pg}</button>
+              );
+            })}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #DEE2E6", background: page === totalPages ? "#F8F9FA" : "white", cursor: page === totalPages ? "default" : "pointer", fontWeight: 600, color: page === totalPages ? "#ADB5BD" : "#495057" }}>←</button>
+          </div>
+        </div>
+      )}
 
       {/* ════════════════════════════════════════════════════════════════
           NEW ORDER MODAL

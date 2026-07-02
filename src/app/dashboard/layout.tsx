@@ -5,6 +5,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import Toast from "@/components/ui/Toast";
 import AiPanel from "@/components/ai/AiPanel";
+import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import { DataProvider } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import "@/styles/dashboard.css";
@@ -130,30 +131,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 
   return (
-    <DataProvider>
-      <LayoutContext.Provider value={{
-        sidebarCollapsed,
-        toggleSidebar: () => setSidebarCollapsed(p => !p),
-        searchOpen, setSearchOpen,
-        notifOpen, setNotifOpen,
-        aiOpen, setAiOpen,
-        logout,
-        currentUser,
-        setCurrentUser,
-        updateCurrentUserProfile,
-        darkMode,
-        toggleDarkMode,
-        sidebarPosition,
-        setSidebarPosition,
-      }}>
-        <div className={`app-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-          <Sidebar />
-          <TopBar />
-          <main className="main-content">{children}</main>
-          <Toast />
-          <AiPanel open={aiOpen} onClose={() => setAiOpen(false)} />
-        </div>
-      </LayoutContext.Provider>
-    </DataProvider>
+    <ErrorBoundary>
+      <DataProvider>
+        <LayoutContext.Provider value={{
+          sidebarCollapsed,
+          toggleSidebar: () => setSidebarCollapsed(p => !p),
+          searchOpen, setSearchOpen,
+          notifOpen, setNotifOpen,
+          aiOpen, setAiOpen,
+          logout,
+          currentUser,
+          setCurrentUser,
+          updateCurrentUserProfile,
+          darkMode,
+          toggleDarkMode,
+          sidebarPosition,
+          setSidebarPosition,
+        }}>
+          <div className={`app-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+            <Sidebar />
+            <TopBar />
+            <main className="main-content">{children}</main>
+            <Toast />
+            <AiPanel open={aiOpen} onClose={() => setAiOpen(false)} />
+          </div>
+        </LayoutContext.Provider>
+      </DataProvider>
+    </ErrorBoundary>
   );
 }
