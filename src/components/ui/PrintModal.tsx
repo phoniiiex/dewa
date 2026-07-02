@@ -27,7 +27,7 @@ interface Props {
 
 export default function PrintModal({ open, onClose, order }: Props) {
   const router = useRouter();
-  const { invoiceTemplates, clients, settings, orders } = useData();
+  const { invoiceTemplates, clients, settings } = useData();
   const [docTypeFilter, setDocTypeFilter] = useState<DocType>("invoice");
   const [selectedTemplate, setSelectedTemplate] = useState<InvoiceTemplate | null>(null);
   const [step, setStep] = useState<"pick" | "preview">("pick");
@@ -44,19 +44,10 @@ export default function PrintModal({ open, onClose, order }: Props) {
     setStep("preview");
   };
 
-  // Build QR data for the client portal
+  // Build QR data for the client portal — just a short URL with clientId
   const buildQrSvg = async (): Promise<string> => {
     if (!client || !order) return "";
-    const clientOrders = orders.filter(o => o.clientId === order.clientId);
-    const qrData = {
-      n: client.name, t: client.type, p: client.phone,
-      c: client.city, b: client.balance,
-      o: clientOrders.length,
-      ta: clientOrders.reduce((s, o) => s + o.totalAmount, 0),
-      pc: clientOrders.filter(o => o.status === "PAID").length,
-      co: settings.name, ce: settings.nameEn,
-    };
-    const url = `${window.location.origin}/client/${order.clientId}#d=${btoa(unescape(encodeURIComponent(JSON.stringify(qrData))))}`;
+    const url = `${window.location.origin}/client/${order.clientId}`;
     return await generateQRSvg(url, 140);
   };
 
