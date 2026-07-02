@@ -21,7 +21,7 @@ interface OrderData { orderNumber: string; status: string; totalAmount: number; 
 interface ApiData {
   client: { name: string; type: string; phone: string; city: string; balance: number };
   orders: OrderData[];
-  totalDebt: number;
+  totalUnpaidOrders: number;
   settings: { name: string; nameEn: string; phone: string } | null;
 }
 
@@ -59,9 +59,11 @@ export default function DebtPage() {
     </div>
   );
 
-  const { client, orders, totalDebt, settings } = data;
+  const { client, orders, totalUnpaidOrders, settings } = data;
   const typeLabel: Record<string, string> = { PHARMACY: "دەرمانخانە", HOSPITAL: "نەخۆشخانە", CLINIC: "کلینیک" };
   const hasDebt = client.balance > 0 || orders.length > 0;
+  const companyName = settings?.name || "";
+  const companyNameEn = settings?.nameEn || "";
 
   return (
     <div style={{ minHeight: "100vh", background: "#0F0F1A", fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif", direction: "rtl" }}>
@@ -82,10 +84,10 @@ export default function DebtPage() {
         <div className="fade-up" style={{ maxWidth: 560, margin: "0 auto", position: "relative" }}>
           {/* Company branding */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, background: "linear-gradient(135deg, #F47B35, #FF9A5C)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 900, fontSize: 18 }}>د</div>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: "linear-gradient(135deg, #F47B35, #FF9A5C)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 900, fontSize: 18 }}>{companyName.charAt(0) || "ت"}</div>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "white" }}>{settings?.name || "دەوا فارما"}</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{settings?.nameEn || "Dewa Pharma"}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "white" }}>{companyName}</div>
+              {companyNameEn && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{companyNameEn}</div>}
             </div>
           </div>
 
@@ -131,7 +133,7 @@ export default function DebtPage() {
           </div>
           <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 16, padding: "18px 16px", border: "1px solid rgba(255,255,255,0.06)" }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.35)", marginBottom: 6 }}>کۆی بڕی نەدراو</div>
-            <div style={{ fontSize: 24, fontWeight: 900, color: "#F47B35" }}>{formatIQD(totalDebt)}</div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: "#F47B35" }}>{formatIQD(totalUnpaidOrders)}</div>
           </div>
         </div>
 
@@ -202,7 +204,7 @@ export default function DebtPage() {
         <div className="fade-up fade-up-4" style={{ textAlign: "center", padding: "28px 0 32px" }}>
           {settings?.phone && <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 12, marginBottom: 4 }}>📞 {settings.phone}</div>}
           <div style={{ color: "rgba(255,255,255,0.12)", fontSize: 10 }}>
-            {settings?.name || "دەوا فارما"} · {new Date().getFullYear()}
+            {companyName} · {new Date().getFullYear()}
           </div>
         </div>
       </div>

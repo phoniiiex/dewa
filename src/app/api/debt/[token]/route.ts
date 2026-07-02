@@ -38,15 +38,14 @@ export async function GET(
       items: Array.isArray(o.items) ? o.items : [],
     }));
 
-    // Fetch company settings
-    const { data: settingsRows } = await supabase
-      .from("settings")
+    // Fetch company settings from company_settings table
+    const { data: settingsRow } = await supabase
+      .from("company_settings")
       .select("name, name_en, phone")
-      .limit(1);
-    const settings = settingsRows?.[0] || null;
+      .single();
 
-    // Total unpaid amount
-    const totalDebt = orders.reduce((s: number, o) => s + (Number(o.totalAmount) || 0), 0);
+    // Total unpaid from active orders
+    const totalUnpaidOrders = orders.reduce((s: number, o) => s + (Number(o.totalAmount) || 0), 0);
 
     return NextResponse.json({
       client: {
@@ -57,8 +56,8 @@ export async function GET(
         balance: client.balance,
       },
       orders,
-      totalDebt,
-      settings: settings ? { name: settings.name, nameEn: settings.name_en, phone: settings.phone } : null,
+      totalUnpaidOrders,
+      settings: settingsRow ? { name: settingsRow.name, nameEn: settingsRow.name_en, phone: settingsRow.phone } : null,
     });
   } catch {
     return NextResponse.json({ error: "server_error" }, { status: 500 });
