@@ -55,7 +55,7 @@ function actionBtn(color: string, bg: string): React.CSSProperties {
 
 export default function OrdersPage() {
   const { orders, clients, reps, warehouses, products, drivers, settings, addOrder, updateOrder, deleteOrder, showToast, loading } = useData();
-  const { currentUser, globalStatusFilter } = useLayout();
+  const { currentUser, globalStatusFilter, openNewOrder, setOpenNewOrder } = useLayout();
 
   const isRep     = currentUser?.role === "REP";
   const isManager = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
@@ -72,6 +72,14 @@ export default function OrdersPage() {
     setStatusFilter(globalStatusFilter);
     setPage(1);
   }, [globalStatusFilter]);
+
+  // Open new-order modal when triggered from TopBar
+  useEffect(() => {
+    if (openNewOrder) {
+      setNewOrderOpen(true);
+      setOpenNewOrder(false);
+    }
+  }, [openNewOrder, setOpenNewOrder]);
 
   // ── Modal visibility ─────────────────────────────────────────────────
   const [newOrderOpen, setNewOrderOpen]       = useState(false);

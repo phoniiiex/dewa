@@ -84,13 +84,16 @@ export default function AnalyticsPage() {
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
         {[
           { title: "کۆی داهات", value: formatIQD(totalRevenue), icon: <DollarSign size={16} />, color: "#40C057" },
-          { title: "داواکاری", value: String(orders.length), icon: <ShoppingCart size={16} />, color: "#4263EB" },
+          { title: "داواکاری", value: String(filteredOrders.length), icon: <ShoppingCart size={16} />, color: "#4263EB" },
           { title: "بەرهەم", value: String(products.length), icon: <Package size={16} />, color: "#7C5CFC" },
           { title: "کڕیار", value: String(clients.length), icon: <Users size={16} />, color: "#F47B35" },
         ].map((k, i) => (
           <div className="kpi-card" key={i}>
             <div className="kpi-card-title" style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>{k.icon} {k.title}</div>
             <div className="kpi-card-value" style={{ fontSize: "1.4rem", color: k.color }}>{k.value}</div>
+            <div style={{ fontSize: 10, color: "#ADB5BD", marginTop: 4, fontWeight: 600 }}>
+              {i < 2 ? (dateRange.from ? dateRange.label : "گشتی") : "گشتی"}
+            </div>
           </div>
         ))}
       </div>

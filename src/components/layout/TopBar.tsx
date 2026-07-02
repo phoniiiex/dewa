@@ -54,6 +54,7 @@ export default function TopBar() {
     currentUser, setAiOpen,
     dateRange, setDateRange,
     globalStatusFilter, setGlobalStatusFilter,
+    setOpenNewOrder,
   } = useLayout();
 
   const { orders, products } = useData();
@@ -357,7 +358,10 @@ export default function TopBar() {
             )}
           </div>
 
-          <button className="topbar-add-btn" id="topbar-add" onClick={() => router.push("/dashboard/orders")}>
+          <button className="topbar-add-btn" id="topbar-add" onClick={() => {
+            setOpenNewOrder(true);
+            router.push("/dashboard/orders");
+          }}>
             <Plus size={16} />
             <span>داواکاری نوێ</span>
           </button>

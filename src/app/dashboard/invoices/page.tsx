@@ -46,29 +46,46 @@ const DEFAULT_BLOCKS: InvoiceBlockConfig[] = [
   { id: "footer",    label: "پێپەڕە",             visible: true,  type: "builtin" },
 ];
 
-// ── SAMPLE ORDER for preview ──
-const PREVIEW_ORDER = {
+// ── FALLBACK (no real orders yet) ──
+const FALLBACK_ORDER = {
   orderNumber: "ORD-001",
   clientName: "دەرمانخانەی هەوار",
   repName: "ئەحمەد کەریم",
   warehouseName: "کۆگای سەنتەر",
   status: "PAID",
   createdAt: new Date().toISOString().split("T")[0],
-  totalBonusPct: 5,
-  warehouseBonusPct: 3,
-  repBonusPct: 2,
-  totalAmount: 1_250_000,
-  notes: "تێبینیەک بۆ داواکاری",
+  totalBonusPct: 5, warehouseBonusPct: 3, repBonusPct: 2,
+  totalAmount: 1_250_000, notes: "تێبینیەک بۆ داواکاری",
   items: [
     { productName: "پاراسیتامۆل ٥٠٠mg", quantity: 24, bonusQty: 2, unitPrice: 15000 },
     { productName: "ئامۆکسیسیلین ٢٥٠mg", quantity: 12, bonusQty: 1, unitPrice: 22000 },
-    { productName: "ئایبیوپروفێن ٢٠٠mg", quantity: 36, bonusQty: 3, unitPrice: 10000 },
   ],
 };
-const PREVIEW_CLIENT = { name: "دەرمانخانەی هەوار", phone: "0750 123 4567", city: "سلێمانی", type: "PHARMACY" };
+const FALLBACK_CLIENT = { name: "دەرمانخانەی هەوار", phone: "0750 123 4567", city: "سلێمانی", type: "PHARMACY" };
 
 export default function TemplatesPage() {
-  const { invoiceTemplates, addTemplate, deleteTemplate, settings, showToast } = useData();
+  const { invoiceTemplates, addTemplate, deleteTemplate, settings, showToast, orders, clients } = useData();
+
+  // Use most recent real order for preview, fall back to static dummy
+  const latestOrder = [...orders].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const previewOrder = latestOrder ? {
+    orderNumber:       latestOrder.orderNumber,
+    clientName:        latestOrder.clientName,
+    repName:           latestOrder.repName,
+    warehouseName:     latestOrder.warehouseName || "دەرباز بێ کۆگا",
+    status:            latestOrder.status,
+    createdAt:         latestOrder.createdAt?.split("T")[0] ?? "",
+    totalBonusPct:     latestOrder.items.reduce((s, i) => s + i.bonusPct, 0) / Math.max(latestOrder.items.length, 1),
+    warehouseBonusPct: 0,
+    repBonusPct:       0,
+    totalAmount:       latestOrder.totalAmount,
+    notes:             latestOrder.notes,
+    items:             latestOrder.items.map(i => ({ productName: i.productName, quantity: i.quantity, bonusQty: i.bonusQty, unitPrice: i.unitPrice })),
+  } : FALLBACK_ORDER;
+  const latestClient = latestOrder ? clients.find(c => c.id === latestOrder.clientId) : null;
+  const previewClient = latestClient ? {
+    name: latestClient.name, phone: latestClient.phone, city: latestClient.city, type: latestClient.type,
+  } : FALLBACK_CLIENT;
 
   // Left panel state
   const [filterType, setFilterType] = useState<DocType | "all">("all");
@@ -156,7 +173,7 @@ export default function TemplatesPage() {
 
   // ── Print preview of a template ──
   const previewPrint = (t: InvoiceTemplate) => {
-    const html = buildPreviewHTML(t, settings);
+    const html = buildPreviewHTML(t, settings, previewOrder, previewClient);
     const w = window.open("", "_blank");
     if (!w) return;
     w.document.write(html);
@@ -166,7 +183,7 @@ export default function TemplatesPage() {
   };
 
   const visibleBlocks = blocks.filter(b => b.visible);
-  const subtotal = PREVIEW_ORDER.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  const subtotal = previewOrder.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
   const discountAmt = subtotal * (customDiscount / 100);
   const finalTotal = subtotal - discountAmt;
 
@@ -373,7 +390,7 @@ export default function TemplatesPage() {
                 </button>
               </div>
               <div style={{ background: "white", borderRadius: 14, border: "1px solid #E9ECEF", padding: 40, minHeight: 500, fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif", direction: "rtl" }}>
-                {renderPreview({ blocks: visibleBlocks, showBonusCol, customNote, customTerms, customDiscount, discountAmt, finalTotal, subtotal, editorDocType, settings })}
+                {renderPreview({ blocks: visibleBlocks, showBonusCol, customNote, customTerms, customDiscount, discountAmt, finalTotal, subtotal, editorDocType, settings, previewOrder, previewClient })}
               </div>
             </div>
           </div>
@@ -384,10 +401,12 @@ export default function TemplatesPage() {
 }
 
 // ── Inline preview renderer ──
-function renderPreview({ blocks, showBonusCol, customNote, customTerms, customDiscount, discountAmt, finalTotal, subtotal, editorDocType, settings }: {
+function renderPreview({ blocks, showBonusCol, customNote, customTerms, customDiscount, discountAmt, finalTotal, subtotal, editorDocType, settings, previewOrder, previewClient }: {
   blocks: InvoiceBlockConfig[]; showBonusCol: boolean; customNote: string; customTerms: string;
   customDiscount: number; discountAmt: number; finalTotal: number; subtotal: number;
   editorDocType: string; settings: { name: string; nameEn: string; phone: string; email: string; address: string; logo?: string };
+  previewOrder: { orderNumber: string; clientName: string; repName: string; warehouseName: string; totalAmount: number; notes?: string | null; items: { productName: string; quantity: number; bonusQty: number; unitPrice: number }[] };
+  previewClient: { name: string; phone: string; city: string; type: string };
 }) {
   const docLabel = DOC_LABEL[editorDocType as InvoiceTemplate["docType"]] || "ڕێکەوت";
   return (
@@ -412,7 +431,11 @@ function renderPreview({ blocks, showBonusCol, customNote, customTerms, customDi
         );
         if (block.id === "parties") return (
           <div key="parties" style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-            {[{ label: "کڕیار", val: "دەرمانخانەی هەوار", sub: "0750 123 4567 — سلێمانی" }, { label: "نوێنەر", val: "ئەحمەد کەریم", sub: "" }, { label: "کۆگا", val: "کۆگای سەنتەر", sub: "" }].map(p => (
+            {[
+              { label: "کڕیار", val: previewClient.name, sub: `${previewClient.phone} — ${previewClient.city}` },
+              { label: "نوێنەر", val: previewOrder.repName, sub: "" },
+              { label: "کۆگا", val: previewOrder.warehouseName, sub: "" },
+            ].map(p => (
               <div key={p.label} style={{ flex: 1, background: "#F8F9FA", borderRadius: 8, padding: 12, border: "1px solid #E9ECEF" }}>
                 <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.5px", color: "#ADB5BD", fontWeight: 700, marginBottom: 4 }}>{p.label}</div>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>{p.val}</div>
@@ -428,7 +451,7 @@ function renderPreview({ blocks, showBonusCol, customNote, customTerms, customDi
                 <th key={h} style={{ padding: "10px 12px", textAlign: "right", fontSize: 10, fontWeight: 700, color: "white" }}>{h}</th>
               ))}
             </tr></thead>
-            <tbody>{PREVIEW_ORDER.items.map((item, i) => (
+            <tbody>{previewOrder.items.map((item, i) => (
               <tr key={i} style={{ background: i % 2 === 1 ? "#FAFBFC" : "white", borderBottom: "1px solid #F1F3F5" }}>
                 <td style={{ padding: "9px 12px", fontSize: 12, color: "#ADB5BD" }}>{i + 1}</td>
                 <td style={{ padding: "9px 12px", fontSize: 12, fontWeight: 600 }}>{item.productName}</td>
@@ -462,18 +485,23 @@ function renderPreview({ blocks, showBonusCol, customNote, customTerms, customDi
 }
 
 // ── Build print HTML for a saved template ──
-function buildPreviewHTML(t: InvoiceTemplate, settings: { name: string; nameEn: string; phone: string; email: string; address: string }) {
+function buildPreviewHTML(
+  t: InvoiceTemplate,
+  settings: { name: string; nameEn: string; phone: string; email: string; address: string },
+  pOrder = FALLBACK_ORDER,
+  pClient = FALLBACK_CLIENT,
+) {
   const docLabel = DOC_LABEL[t.docType] || "ڕێکەوت";
-  const subtotal = PREVIEW_ORDER.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  const subtotal = pOrder.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
   const disc = subtotal * (t.defaultDiscount / 100);
   const total = subtotal - disc;
   const parts: string[] = [];
 
   for (const b of t.blocks.filter(b => b.visible)) {
     if (b.id === "header") parts.push(`<div class="inv-header"><div class="inv-logo-wrap"><div class="inv-logo-fallback">د</div><div><div class="inv-company-name">${settings.name}</div><div class="inv-company-name-en">${settings.nameEn}</div><div class="inv-company-contact">${settings.phone} | ${settings.email}</div></div></div><div class="inv-title-block"><div class="inv-title">${docLabel}</div><div class="inv-meta"><strong>ژمارە:</strong> ORD-XXX</div><div class="inv-meta"><strong>بەروار:</strong> ${new Date().toISOString().split("T")[0]}</div></div></div>`);
-    else if (b.id === "parties") parts.push(`<div class="inv-parties"><div class="inv-party"><div class="inv-party-label">کڕیار</div><div class="inv-party-name">دەرمانخانەی هەوار</div><div class="inv-party-detail">0750 123 4567 — سلێمانی</div></div><div class="inv-party"><div class="inv-party-label">نوێنەر</div><div class="inv-party-name">ئەحمەد کەریم</div></div></div>`);
+    else if (b.id === "parties") parts.push(`<div class="inv-parties"><div class="inv-party"><div class="inv-party-label">کڕیار</div><div class="inv-party-name">${pClient.name}</div><div class="inv-party-detail">${pClient.phone} — ${pClient.city}</div></div><div class="inv-party"><div class="inv-party-label">نوێنەر</div><div class="inv-party-name">${pOrder.repName}</div></div></div>`);
     else if (b.id === "items") {
-      const rows = PREVIEW_ORDER.items.map((it, i) => `<tr><td style="color:#ADB5BD">${i + 1}</td><td style="font-weight:600">${it.productName}</td><td>${it.quantity}</td>${t.showBonusCol ? `<td style="color:#40C057;font-weight:700">+${it.bonusQty}</td>` : ""}<td>${formatIQD(it.unitPrice)}</td><td style="font-weight:800">${formatIQD(it.quantity * it.unitPrice)}</td></tr>`).join("");
+      const rows = pOrder.items.map((it, i) => `<tr><td style="color:#ADB5BD">${i + 1}</td><td style="font-weight:600">${it.productName}</td><td>${it.quantity}</td>${t.showBonusCol ? `<td style="color:#40C057;font-weight:700">+${it.bonusQty}</td>` : ""}<td>${formatIQD(it.unitPrice)}</td><td style="font-weight:800">${formatIQD(it.quantity * it.unitPrice)}</td></tr>`).join("");
       parts.push(`<table class="inv-table"><thead><tr><th>#</th><th>بەرهەم</th><th>بڕ</th>${t.showBonusCol ? "<th>بۆنەس</th>" : ""}<th>نرخی یەکە</th><th>کۆ</th></tr></thead><tbody>${rows}</tbody></table>`);
     }
     else if (b.id === "summary") parts.push(`<div class="inv-summary"><div class="inv-summary-box"><div class="inv-summary-row"><span>کۆی نرخ</span><span>${formatIQD(subtotal)}</span></div>${t.defaultDiscount > 0 ? `<div class="inv-summary-row"><span>داشکاندن (${t.defaultDiscount}٪)</span><span style="color:#FA5252">-${formatIQD(disc)}</span></div>` : ""}<div class="inv-summary-row inv-summary-total"><span class="inv-summary-label">کۆی گشتی</span><span class="inv-summary-value">${formatIQD(total)}</span></div></div></div>`);

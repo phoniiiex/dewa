@@ -35,6 +35,8 @@ interface LayoutContextType {
   setDateRange: (r: DateRange) => void;
   globalStatusFilter: string;
   setGlobalStatusFilter: (s: string) => void;
+  openNewOrder: boolean;
+  setOpenNewOrder: (v: boolean) => void;
 }
 
 const LayoutContext = createContext<LayoutContextType | null>(null);
@@ -56,6 +58,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarPosition, setSidebarPositionState] = useState<SidebarPosition>("right");
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null, label: "هەموو ماوەکان" });
   const [globalStatusFilter, setGlobalStatusFilter] = useState("هەموو");
+  const [openNewOrder, setOpenNewOrder] = useState(false);
 
   // Load appearance preferences from localStorage
   useEffect(() => {
@@ -157,6 +160,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           setSidebarPosition,
           dateRange, setDateRange,
           globalStatusFilter, setGlobalStatusFilter,
+          openNewOrder, setOpenNewOrder,
         }}>
           <div className={`app-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
             <Sidebar />
