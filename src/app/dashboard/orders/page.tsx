@@ -109,21 +109,20 @@ export default function OrdersPage() {
 
 
   // ── New order form ────────────────────────────────────────────────────
-  const [form, setForm] = useState({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "", repBonusPct: "" });
-  // Each item: productId, quantity, manualBonusPct (only for direct orders)
-  const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string; manualBonusPct: string }[]>([{ productId: "", quantity: "", manualBonusPct: "" }]);
+  const [form, setForm] = useState({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
+  // Each item: productId, quantity, manualBonusPct (direct bonus), repBonusPct (rep bonus per product)
+  const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string; manualBonusPct: string; repBonusPct: string }[]>([{ productId: "", quantity: "", manualBonusPct: "", repBonusPct: "" }]);
   // Edit mode
   const [editOrder, setEditOrder] = useState<Order | null>(null);
 
   const resetForm = () => {
-    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "", repBonusPct: "" });
-    setOrderItems([{ productId: "", quantity: "", manualBonusPct: "" }]);
+    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
+    setOrderItems([{ productId: "", quantity: "", manualBonusPct: "", repBonusPct: "" }]);
     setEditOrder(null);
   };
 
   const isDirect = !form.warehouseId;
   const selectedWarehouse = warehouses.find(w => w.id === form.warehouseId);
-  const repBonusPctNum = parseFloat(form.repBonusPct) || 0;
 
   // Bonus calculation — warehouse order: use warehouse rules; direct order: use manual %
   const getItemBonusPct = (productId: string, manualPct: string): { pct: number; isCustom: boolean } => {
@@ -136,13 +135,21 @@ export default function OrdersPage() {
     return rule ? { pct: rule.percent, isCustom: true } : { pct: selectedWarehouse.bonusPct, isCustom: false };
   };
 
-  const liveBonusItems = orderItems.filter(i => i.productId && i.quantity).map((i, idx) => {
+  const liveBonusItems = orderItems.filter(i => i.productId && i.quantity).map((i) => {
     const prod = products.find(p => p.id === i.productId);
     const qty = Number(i.quantity);
-    const { pct, isCustom } = getItemBonusPct(i.productId, orderItems[idx].manualBonusPct);
+    if (isDirect) {
+      // Direct: only manual bonus, no warehouse or rep split
+      const directPct = parseFloat(i.manualBonusPct) || 0;
+      const directBonus = Math.round(qty * directPct / 100);
+      return { name: prod?.name || "", qty, pct: directPct, isCustom: false, bonusQty: directBonus, warehouseBonusQty: 0, repBonusQty: 0, repPct: 0 };
+    }
+    // Warehouse: warehouse bonus from rules + per-item rep bonus
+    const { pct, isCustom } = getItemBonusPct(i.productId, i.manualBonusPct);
     const warehouseBonusQty = Math.round(qty * pct / 100);
-    const repBonusQty = isDirect ? 0 : Math.round(qty * repBonusPctNum / 100);
-    return { name: prod?.name || "", qty, pct, isCustom, bonusQty: warehouseBonusQty + repBonusQty, warehouseBonusQty, repBonusQty, repPct: repBonusPctNum };
+    const itemRepPct = parseFloat(i.repBonusPct) || 0;
+    const repBonusQty = Math.round(qty * itemRepPct / 100);
+    return { name: prod?.name || "", qty, pct, isCustom, bonusQty: warehouseBonusQty + repBonusQty, warehouseBonusQty, repBonusQty, repPct: itemRepPct };
   });
 
   const handleSubmit = async (e: FormEvent) => {
@@ -156,9 +163,15 @@ export default function OrdersPage() {
     const items: OrderItem[] = orderItems.filter(i => i.productId && i.quantity).map((i) => {
       const prod = products.find(p => p.id === i.productId);
       const qty  = Number(i.quantity);
+      if (isDirect) {
+        const directPct = parseFloat(i.manualBonusPct) || 0;
+        const directBonus = Math.round(qty * directPct / 100);
+        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: directBonus, unitPrice: prod?.price || 0, bonusPct: directPct, warehouseBonusQty: 0, repBonusQty: 0 };
+      }
       const { pct } = getItemBonusPct(i.productId, i.manualBonusPct);
       const warehouseBonusQty = Math.round(qty * pct / 100);
-      const repBQ = isDirect ? 0 : Math.round(qty * repBonusPctNum / 100);
+      const itemRepPct = parseFloat(i.repBonusPct) || 0;
+      const repBQ = Math.round(qty * itemRepPct / 100);
       return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: warehouseBonusQty + repBQ, unitPrice: prod?.price || 0, bonusPct: pct, warehouseBonusQty, repBonusQty: repBQ };
     });
     if (items.length === 0) { showToast("تکایە بەرهەمێک زیادبکە", "error"); return; }
@@ -213,10 +226,9 @@ export default function OrdersPage() {
       clientId: o.clientId, clientName: o.clientName,
       repId: o.repId, warehouseId: o.warehouseId || "",
       notes: o.notes.startsWith("[EDIT_REQUEST]:") ? "" : o.notes,
-      repBonusPct: "",
     });
     setOrderItems(o.items.map(i => ({
-      productId: i.productId, quantity: String(i.quantity), manualBonusPct: String(i.bonusPct || ""),
+      productId: i.productId, quantity: String(i.quantity), manualBonusPct: String(i.bonusPct || ""), repBonusPct: "",
     })));
     setNewOrderOpen(true);
   };
@@ -548,19 +560,11 @@ export default function OrdersPage() {
             </FormField>
           </FormGrid>
 
-          {/* Warehouse bonus info banner + rep bonus input */}
+          {/* Warehouse bonus info banner (no global rep input anymore) */}
           {selectedWarehouse && (
-            <div style={{ marginBottom: 12, padding: "12px 14px", background: "#EDE9FE", borderRadius: 10, fontSize: 13, color: "#7C3AED" }}>
-              <div style={{ marginBottom: 8 }}>
-                🏪 <strong>{selectedWarehouse.name}</strong> — بۆنەسی کۆگا: <strong>{selectedWarehouse.bonusPct}%</strong>
-                {selectedWarehouse.bonusRules.length > 0 && <span> · {selectedWarehouse.bonusRules.length} ڕێگەی تایبەت</span>}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.5)", padding: "8px 10px", borderRadius: 8 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: "#495057", whiteSpace: "nowrap" }}>👤 بۆنەسی نوێنەر %</label>
-                <input type="number" min={0} max={100} style={{ ...inputStyle, width: 90, textAlign: "center" }} placeholder="0"
-                  value={form.repBonusPct} onChange={e => setForm({ ...form, repBonusPct: e.target.value })} />
-                {repBonusPctNum > 0 && <span style={{ fontSize: 11, color: "#059669", fontWeight: 700 }}>نوێنەر {repBonusPctNum}% وەردەگرێت</span>}
-              </div>
+            <div style={{ marginBottom: 12, padding: "10px 14px", background: "#EDE9FE", borderRadius: 10, fontSize: 13, color: "#7C3AED" }}>
+              🏪 <strong>{selectedWarehouse.name}</strong> — بۆنەسی کۆگا: <strong>{selectedWarehouse.bonusPct}%</strong>
+              {selectedWarehouse.bonusRules.length > 0 && <span> · {selectedWarehouse.bonusRules.length} ڕێگەی تایبەت</span>}
             </div>
           )}
           {isDirect && (
@@ -573,55 +577,39 @@ export default function OrdersPage() {
           <div style={{ marginTop: 4 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <span style={{ fontWeight: 600, fontSize: 14 }}>بەرهەمەکان</span>
-              <button type="button" onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", manualBonusPct: "" }])}
+              <button type="button" onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", manualBonusPct: "", repBonusPct: "" }])}
                 style={{ background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ زیادکردن</button>
             </div>
             {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: isDirect ? "1fr 120px 110px auto" : "1fr 120px auto", gap: 8, marginBottom: 4 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 110px auto", gap: 8, marginBottom: 4 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#6C757D" }}>بەرهەم</div>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#6C757D" }}>ژمارە</div>
-              {isDirect && <div style={{ fontSize: 12, fontWeight: 600, color: "#D97706" }}>بۆنەس %</div>}
+              <div style={{ fontSize: 12, fontWeight: 600, color: isDirect ? "#D97706" : "#059669" }}>{isDirect ? "بۆنەس %" : "👤 نوێنەر %"}</div>
               <div />
             </div>
-            {orderItems.map((item, idx) => {
-              const { pct, isCustom } = getItemBonusPct(item.productId, item.manualBonusPct);
-              const bonusQty = item.quantity && item.productId ? Math.round(Number(item.quantity) * pct / 100) : 0;
-              return (
-                <div key={idx} style={{ display: "grid", gridTemplateColumns: isDirect ? "1fr 120px 110px auto" : "1fr 120px auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                  <select style={selectStyle} value={item.productId} onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: e.target.value } : x))}>
-                    <option value="">بەرهەم هەڵبژێرە...</option>
-                    {products.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <div style={{ position: "relative" }}>
-                    <input type="number" min={1} style={inputStyle} placeholder="ژمارە" value={item.quantity}
-                      onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
-                    {!isDirect && bonusQty > 0 && (
-                      <span style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: isCustom ? "#D1FAE5" : "#EDE9FE", color: isCustom ? "#059669" : "#7C3AED", fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 6px", pointerEvents: "none" }}>
-                        +{bonusQty}{isCustom ? "★" : ""}
-                      </span>
-                    )}
-                  </div>
-                  {isDirect && (
-                    <div style={{ position: "relative" }}>
-                      <input type="number" min={0} max={100} style={{ ...inputStyle, paddingRight: 28 }} placeholder="0" value={item.manualBonusPct}
-                        onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, manualBonusPct: e.target.value } : x))} />
-                      <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#ADB5BD", pointerEvents: "none" }}>%</span>
-                      {bonusQty > 0 && (
-                        <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", background: "#FEF3C7", color: "#D97706", fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 4px", pointerEvents: "none" }}>
-                          +{bonusQty}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {orderItems.length > 1 && (
-                    <button type="button" onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}
-                      style={{ background: "#FEE2E2", color: "#DC2626", border: "none", borderRadius: 8, width: 34, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <X size={14} />
-                    </button>
-                  )}
+            {orderItems.map((item, idx) => (
+              <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 120px 110px auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                <select style={selectStyle} value={item.productId} onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: e.target.value } : x))}>
+                  <option value="">بەرهەم هەڵبژێرە...</option>
+                  {products.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <input type="number" min={1} style={inputStyle} placeholder="ژمارە" value={item.quantity}
+                  onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
+                {/* Bonus % input: direct = manualBonusPct, warehouse = repBonusPct */}
+                <div style={{ position: "relative" }}>
+                  <input type="number" min={0} max={100} style={{ ...inputStyle, paddingRight: 28 }} placeholder="0"
+                    value={isDirect ? item.manualBonusPct : item.repBonusPct}
+                    onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, [isDirect ? "manualBonusPct" : "repBonusPct"]: e.target.value } : x))} />
+                  <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#ADB5BD", pointerEvents: "none" }}>%</span>
                 </div>
-              );
-            })}
+                {orderItems.length > 1 && (
+                  <button type="button" onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}
+                    style={{ background: "#FEE2E2", color: "#DC2626", border: "none", borderRadius: 8, width: 34, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
 
           {/* Bonus preview — warehouse vs rep breakdown */}
