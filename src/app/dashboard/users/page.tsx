@@ -133,9 +133,6 @@ export default function UsersPage() {
       reader.readAsDataURL(file);
     });
 
-  // ── Deactivate ──
-  const [deactivateId, setDeactivateId] = useState<string | null>(null);
-
   useEffect(() => { loadUsers(); loadReps(); }, []);
 
   const loadUsers = async () => {
@@ -238,14 +235,22 @@ export default function UsersPage() {
     setEditLoading(false); setEditUser(null); await loadUsers();
   };
 
-  // ── Deactivate ──
-  const handleDeactivate = async () => {
-    if (!deactivateId) return;
-    await fetch("/api/auth/list-users", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: deactivateId, is_active: false }),
+  // ── Hard Delete ──
+  const [deleteId,    setDeleteId]    = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    setDeleteLoading(true);
+    const res = await fetch("/api/auth/delete-user", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: deleteId }),
     });
-    setDeactivateId(null); await loadUsers();
+    const d = await res.json();
+    setDeleteLoading(false);
+    if (d.error) { alert("هەڵە: " + d.error); return; }
+    setDeleteId(null);
+    await loadUsers();
   };
 
   const activeCount = users.filter(u => u.is_active).length;
@@ -381,12 +386,10 @@ export default function UsersPage() {
                         style={{ padding: "5px 10px", borderRadius: 6, background: "#EDF2FF", color: "#4263EB", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 3 }}>
                         <Edit3 size={11} /> دەستکاری
                       </button>
-                      {u.is_active && (
-                        <button onClick={() => setDeactivateId(u.id)}
-                          style={{ padding: "5px 8px", borderRadius: 6, background: "#FFE3E3", color: "#FA5252", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                          <Trash2 size={11} />
-                        </button>
-                      )}
+                      <button onClick={() => setDeleteId(u.id)}
+                        style={{ padding: "5px 8px", borderRadius: 6, background: "#FFE3E3", color: "#FA5252", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 600 }}>
+                        <Trash2 size={11} /> سڕینەوە
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -644,7 +647,13 @@ export default function UsersPage() {
         )}
       </Modal>
 
-      <ConfirmDialog open={!!deactivateId} onClose={() => setDeactivateId(null)} onConfirm={handleDeactivate} title="ناچالاككردنی بەکارهێنەر" message="ئایا دڵنیایت لە ناچالاككردنی ئەم بەکارهێنەرە؟" />
+      <ConfirmDialog
+        open={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDelete}
+        title="سڕینەوەی بەکارهێنەر"
+        message={`ئایا دڵنیایت لە سڕینەوەی بەکارهێنەرەکە؟\nئەمە کارە هەمیشەییە و ناگەڕدڕاوەتەکەی. داتای ئەو بەکارهێنەرەش بە تەواو دروستکراوە دەمێنێت.`}
+      />
     </>
   );
 }
