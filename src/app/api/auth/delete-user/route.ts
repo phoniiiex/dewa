@@ -1,32 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+}
+
+// DELETE → disable account (ban from logging in + mark inactive)
+// Data stays intact: orders, clients etc. still show the user's name.
 export async function DELETE(req: NextRequest) {
   try {
     const { id } = await req.json();
     if (!id) return NextResponse.json({ error: "Missing user id" }, { status: 400 });
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const admin = adminClient();
 
-    if (!serviceRoleKey) {
-      return NextResponse.json({ error: "Server configuration error: missing service role key" }, { status: 500 });
-    }
-
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
+    // Ban in Supabase Auth — user can no longer sign in
+    const { error: banErr } = await admin.auth.admin.updateUserById(id, {
+      ban_duration: "876000h", // ~100 years = effectively permanent
     });
+    if (banErr) return NextResponse.json({ error: banErr.message }, { status: 400 });
 
-    // 1. Delete profile row
-    await admin.from("profiles").delete().eq("id", id);
-
-    // 2. Delete from Supabase Auth (hard delete)
-    const { error } = await admin.auth.admin.deleteUser(id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    // Mark is_active = false in profiles
+    await admin.from("profiles").upsert({ id, is_active: false });
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Unknown" }, { status: 500 });
+  }
+}
+
+// PUT → reactivate (unban + mark active again)
+export async function PUT(req: NextRequest) {
+  try {
+    const { id } = await req.json();
+    if (!id) return NextResponse.json({ error: "Missing user id" }, { status: 400 });
+
+    const admin = adminClient();
+
+    const { error: unbanErr } = await admin.auth.admin.updateUserById(id, {
+      ban_duration: "none",
+    });
+    if (unbanErr) return NextResponse.json({ error: unbanErr.message }, { status: 400 });
+
+    await admin.from("profiles").upsert({ id, is_active: true });
+
+    return NextResponse.json({ ok: true });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Unknown" }, { status: 500 });
   }
 }
