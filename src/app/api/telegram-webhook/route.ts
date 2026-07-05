@@ -102,13 +102,17 @@ async function processUpdate(body: Record<string, unknown>) {
     const chatId   = String((editedMsg.chat as Record<string, unknown>)?.id ?? (editedMsg.from as Record<string, unknown>)?.id ?? "");
     const location = editedMsg.location as { latitude: number; longitude: number; accuracy?: number; live_period?: number };
     if (chatId) {
-      const { data: tgUser } = await db.from("telegram_users").select("role, linked_name").eq("chat_id", chatId).maybeSingle();
+      const { data: tgUser } = await db.from("telegram_users").select("role, linked_name, linked_id").eq("chat_id", chatId).maybeSingle();
       if (tgUser?.role === "REP") {
+        // Fetch profile pic from reps table
+        const { data: repRow } = await db.from("reps").select("profile_pic").eq("id", tgUser.linked_id || "").maybeSingle();
         await db.from("rep_locations").upsert({
           chat_id: chatId, rep_name: tgUser.linked_name || "نوێنەر",
           latitude: location.latitude, longitude: location.longitude,
           accuracy: location.accuracy ?? null, live_period: location.live_period ?? null,
-          is_live: true, updated_at: new Date().toISOString(),
+          is_live: true,
+          profile_pic_url: repRow?.profile_pic || "",
+          updated_at: new Date().toISOString(),
         }, { onConflict: "chat_id" });
       }
     }

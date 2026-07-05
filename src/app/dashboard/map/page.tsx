@@ -21,6 +21,7 @@ interface RepLocation {
   accuracy: number | null;
   live_period: number | null;
   is_live: boolean;
+  profile_pic_url: string;
   updated_at: string;
 }
 

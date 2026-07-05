@@ -75,7 +75,10 @@ export interface Rep {
   id: string;
   name: string;
   phone: string;
+  email: string;
   city: string;
+  profilePic: string;        // URL to profile photo (shown on map)
+  telegramChatId: string;    // linked to telegram_users
   isActive: boolean;
   createdAt: string;
 }

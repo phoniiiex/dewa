@@ -73,16 +73,29 @@ function fromClient(c: Partial<Client>): Record<string, unknown> {
 }
 
 function toRep(r: Record<string, unknown>): Rep {
-  return { id: r.id as string, name: r.name as string, phone: (r.phone || "") as string, city: (r.city || "") as string, isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
+  return {
+    id:             r.id as string,
+    name:           r.name as string,
+    phone:          (r.phone || "") as string,
+    email:          (r.email || "") as string,
+    city:           (r.city || "") as string,
+    profilePic:     (r.profile_pic || "") as string,
+    telegramChatId: (r.telegram_chat_id || "") as string,
+    isActive:       r.is_active !== false,
+    createdAt:      (r.created_at || "") as string,
+  };
 }
 function fromRep(r: Partial<Rep>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
-  if (r.id !== undefined) m.id = r.id;
-  if (r.name !== undefined) m.name = r.name;
-  if (r.phone !== undefined) m.phone = r.phone;
-  if (r.city !== undefined) m.city = r.city;
-  if (r.isActive !== undefined) m.is_active = r.isActive;
-  if (r.createdAt !== undefined) m.created_at = r.createdAt;
+  if (r.id             !== undefined) m.id               = r.id;
+  if (r.name           !== undefined) m.name             = r.name;
+  if (r.phone          !== undefined) m.phone            = r.phone;
+  if (r.email          !== undefined) m.email            = r.email;
+  if (r.city           !== undefined) m.city             = r.city;
+  if (r.profilePic     !== undefined) m.profile_pic      = r.profilePic;
+  if (r.telegramChatId !== undefined) m.telegram_chat_id = r.telegramChatId;
+  if (r.isActive       !== undefined) m.is_active        = r.isActive;
+  if (r.createdAt      !== undefined) m.created_at       = r.createdAt;
   return m;
 }
 

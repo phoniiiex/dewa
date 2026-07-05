@@ -23,16 +23,16 @@ export default function RepsPage() {
   const [editing, setEditing] = useState<Rep | null>(null);
   const [detailRep, setDetailRep] = useState<Rep | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", phone: "", city: cities[0], isActive: true });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true });
 
-  const resetForm = () => setForm({ name: "", phone: "", city: cities[0], isActive: true });
-  const openAdd = () => { resetForm(); setEditing(null); setModalOpen(true); };
-  const openEdit = (r: Rep) => { setEditing(r); setForm({ name: r.name, phone: r.phone, city: r.city, isActive: r.isActive }); setModalOpen(true); };
+  const resetForm = () => setForm({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true });
+  const openAdd  = () => { resetForm(); setEditing(null); setModalOpen(true); };
+  const openEdit = (r: Rep) => { setEditing(r); setForm({ name: r.name, phone: r.phone, email: r.email || "", city: r.city, profilePic: r.profilePic || "", isActive: r.isActive }); setModalOpen(true); };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (editing) updateRep(editing.id, form);
-    else addRep(form);
+    else addRep({ ...form, telegramChatId: "" });
     setModalOpen(false);
   };
 
@@ -92,7 +92,13 @@ export default function RepsPage() {
           <div key={r.id} style={{ background: "white", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF", transition: "transform 0.15s", cursor: "pointer" }} onClick={() => setDetailRep(r)}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #4263EB, #7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 16, fontWeight: 700 }}>{r.name.charAt(0)}</div>
+                {/* Avatar: photo or gradient initials */}
+                <div style={{ width: 48, height: 48, borderRadius: "50%", overflow: "hidden", border: "2px solid #E9ECEF", flexShrink: 0, background: "linear-gradient(135deg, #4263EB, #7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {r.profilePic
+                    ? <img src={r.profilePic} alt={r.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    : <span style={{ color: "white", fontSize: 18, fontWeight: 800 }}>{r.name.charAt(0)}</span>
+                  }
+                </div>
                 <div>
                   <h3 style={{ fontSize: 15, fontWeight: 700 }}>{r.name}</h3>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6C757D", marginTop: 2 }}><MapPin size={12} />{r.city}</div>
@@ -117,10 +123,21 @@ export default function RepsPage() {
       {/* Add/Edit Modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "دەستکاری نوێنەر" : "نوێنەری نوێ"} width={480}>
         <form onSubmit={handleSubmit}>
+          {/* Photo preview */}
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+            <div style={{ width: 72, height: 72, borderRadius: "50%", overflow: "hidden", border: "3px solid #E9ECEF", background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {form.profilePic
+                ? <img src={form.profilePic} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => (e.target as HTMLImageElement).style.display = "none"} />
+                : <span style={{ color: "white", fontSize: 28, fontWeight: 800 }}>{form.name.charAt(0) || "?"}</span>
+              }
+            </div>
+          </div>
           <FormGrid cols={1}>
             <FormField label="ناوی نوێنەر" required><input style={inputStyle} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
+            <FormField label="ئیمەیڵ"><input style={inputStyle} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="rep@example.com" dir="ltr" /></FormField>
             <FormField label="تەلەفۆن" required><input style={inputStyle} required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0770 XXX XXXX" /></FormField>
             <FormField label="شار"><select style={selectStyle} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })}>{cities.map(c => <option key={c} value={c}>{c}</option>)}</select></FormField>
+            <FormField label="لینکی وێنەی پرۆفایل (URL)"><input style={inputStyle} value={form.profilePic} onChange={(e) => setForm({ ...form, profilePic: e.target.value })} placeholder="https://..." dir="ltr" /></FormField>
           </FormGrid>
           <div style={{ marginTop: 16 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
