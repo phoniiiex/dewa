@@ -148,6 +148,24 @@ export default function DashboardPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [showCatalog, setShowCatalog] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string; role: string; avatar_url: string; last_seen: string }[]>([]);
+
+  // Poll for online users every 60s
+  useEffect(() => {
+    const fetchOnline = async () => {
+      try {
+        const res = await fetch("/api/auth/list-users");
+        const { users } = await res.json();
+        const threeMinsAgo = Date.now() - 3 * 60 * 1000;
+        setOnlineUsers((users || []).filter((u: { last_seen: string }) =>
+          u.last_seen && new Date(u.last_seen).getTime() > threeMinsAgo
+        ));
+      } catch { /* ignore */ }
+    };
+    fetchOnline();
+    const interval = setInterval(fetchOnline, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Load saved layout
   useEffect(() => {
@@ -563,6 +581,32 @@ export default function DashboardPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Online Users Strip */}
+      {onlineUsers.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", background: "white", borderRadius: 12, border: "1px solid #E9ECEF", marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: "#2F9E44" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#2F9E44", animation: "pulse 2s infinite" }} />
+            ئێستا ئۆنلاینن
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {onlineUsers.map(u => {
+              const initials = u.name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2) || "؟";
+              return (
+                <div key={u.id} title={u.name} style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 8px", background: "#EBFBEE", borderRadius: 20, fontSize: 11, fontWeight: 600, color: "#2B8A3E" }}>
+                  {u.avatar_url ? (
+                    <img src={u.avatar_url} alt={u.name} style={{ width: 18, height: 18, borderRadius: "50%", objectFit: "cover" }} />
+                  ) : (
+                    <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#40C057", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 9, fontWeight: 800 }}>{initials}</div>
+                  )}
+                  {u.name}
+                </div>
+              );
+            })}
+          </div>
+          <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
         </div>
       )}
 

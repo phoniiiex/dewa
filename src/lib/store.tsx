@@ -232,7 +232,7 @@ function fromSettings(s: Partial<CompanySettings>): Record<string, unknown> {
 }
 
 function toUser(r: Record<string, unknown>): User {
-  return { id: r.id as string, name: (r.name || "") as string, email: (r.email || "") as string, password: "", role: (r.role || "REP") as User["role"], phone: (r.phone || "") as string, city: (r.city || "") as string, isActive: r.is_active !== false, createdAt: (r.created_at ? new Date(r.created_at as string).toISOString().split("T")[0] : "") as string };
+  return { id: r.id as string, name: (r.name || "") as string, email: (r.email || "") as string, password: "", role: (r.role || "REP") as User["role"], phone: (r.phone || "") as string, city: (r.city || "") as string, isActive: r.is_active !== false, lastSeen: (r.last_seen || "") as string, createdAt: (r.created_at ? new Date(r.created_at as string).toISOString().split("T")[0] : "") as string };
 }
 
 function toTemplate(r: Record<string, unknown>): InvoiceTemplate {
@@ -284,7 +284,28 @@ function fromSampleRequest(s: Partial<SampleRequest>): Record<string, unknown> {
   return m;
 }
 
-// ===== HELPERS =====
+// ===== ACTIVITY LOGGER =====
+// currentActor is set by the layout heartbeat whenever a user is logged in
+let _actorId = "";
+let _actorName = "";
+let _actorRole = "";
+export function setCurrentActor(id: string, name: string, role: string) {
+  _actorId = id; _actorName = name; _actorRole = role;
+}
+export async function logActivity(
+  action: string, entityType: string,
+  entityId: string, entityName: string,
+  meta: Record<string, unknown> = {}
+): Promise<void> {
+  if (!_actorId) return; // not logged in, skip
+  await supabase.from("activity_logs").insert({
+    user_id: _actorId, user_name: _actorName, user_role: _actorRole,
+    action, entity_type: entityType, entity_id: entityId,
+    entity_name: entityName, meta,
+  });
+}
+
+
 function genId() {
   return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
@@ -568,7 +589,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const nc: Client = { ...c, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
     setClients((prev) => [nc, ...prev]);
     const { error } = await supabase.from("clients").insert(fromClient(nc));
-    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("کڕیار زیادکرا");
+    if (error) { showToast("هەڵە: " + error.message, "error"); return nc; }
+    showToast("کڕیار زیادکرا");
+    logActivity("CREATE_CLIENT", "CLIENT", nc.id, nc.name, { type: nc.type, city: nc.city });
     return nc;
   }, [showToast]);
 
@@ -648,7 +671,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const no: Order = { ...o, id: genId(), orderNumber: getNextOrderNumber(orders), createdAt: new Date().toISOString() };
     setOrders((prev) => [no, ...prev]);
     const { error } = await supabase.from("orders").insert(fromOrder(no));
-    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داواکاری زیادکرا");
+    if (error) { showToast("هەڵە: " + error.message, "error"); return no; }
+    showToast("داواکاری زیادکرا");
+    logActivity("CREATE_ORDER", "ORDER", no.id, no.orderNumber, { clientName: no.clientName, repName: no.repName, totalAmount: no.totalAmount });
     return no;
   }, [orders, showToast]);
 
@@ -656,6 +681,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setOrders((prev) => prev.map((x) => (x.id === id ? { ...x, ...o } : x)));
     const { error } = await supabase.from("orders").update(fromOrder(o)).eq("id", id);
     if (error) { showToast("هەڵە: " + error.message, "error"); return; }
+
+    // Log status changes
+    if (o.status) {
+      const actionMap: Record<string, string> = {
+        WAITING: "ORDER_STATUS_WAITING", IN_PROGRESS: "ORDER_STATUS_IN_PROGRESS",
+        READY: "ORDER_STATUS_READY", SENT: "ORDER_STATUS_SENT",
+        DELIVERED: "ORDER_STATUS_DELIVERED", PAID: "ORDER_STATUS_PAID",
+        NOT_ACCEPTED: "ORDER_STATUS_REJECTED",
+      };
+      const action = actionMap[o.status] || "UPDATE_ORDER";
+      logActivity(action, "ORDER", id, id, { status: o.status });
+    } else {
+      logActivity("EDIT_ORDER", "ORDER", id, id, {});
+    }
 
     // Decrement stock when order is marked DELIVERED
     if (o.status === "DELIVERED") {

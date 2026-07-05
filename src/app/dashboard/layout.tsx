@@ -7,6 +7,7 @@ import Toast from "@/components/ui/Toast";
 import AiPanel from "@/components/ai/AiPanel";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import { DataProvider } from "@/lib/store";
+import { setCurrentActor } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import "@/styles/dashboard.css";
 
@@ -103,7 +104,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           avatarUrl: (profile as Record<string, string>)?.avatar_url || "",
           phone: (profile as Record<string, string>)?.phone || "",
         });
+        // Set actor for activity logging
+        setCurrentActor(
+          session.user.id,
+          (profile as Record<string, string>)?.name || session.user.user_metadata?.name || "",
+          (profile as Record<string, string>)?.role || "REP"
+        );
+        // Heartbeat: update last_seen every 60s
+        const updateLastSeen = () =>
+          supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("id", session.user.id);
+        updateLastSeen();
+        const hbInterval = setInterval(updateLastSeen, 60_000);
         setAuthed(true);
+        return () => clearInterval(hbInterval);
       }
     });
 

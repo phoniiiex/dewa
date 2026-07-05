@@ -18,6 +18,7 @@ export interface User {
   phone: string;
   city: string;
   isActive: boolean;
+  lastSeen: string; // ISO timestamp, empty string if never
   createdAt: string;
 }
 
@@ -226,5 +227,18 @@ export interface SampleRequest {
   sentAt: string;
   arrivedAt: string;
   declinedReason: string;
+  createdAt: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  action: string;       // CREATE_ORDER, APPROVE_ORDER, etc.
+  entityType: string;   // ORDER, CLIENT, PRODUCT, etc.
+  entityId: string;
+  entityName: string;
+  meta: Record<string, unknown>;
   createdAt: string;
 }

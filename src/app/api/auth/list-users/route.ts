@@ -37,6 +37,7 @@ export async function GET() {
         created_at: u.created_at,
         has_profile: !!profile,
         avatar_url: (profile?.avatar_url as string) || "",
+        last_seen: (profile?.last_seen as string) || "",
       };
     });
 

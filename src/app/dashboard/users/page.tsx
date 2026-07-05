@@ -31,7 +31,12 @@ interface AuthUser {
   id: string; email: string; name: string; role: string;
   phone: string; city: string; is_active: boolean;
   permissions: string[]; created_at: string; has_profile: boolean;
-  avatar_url: string;
+  avatar_url: string; last_seen: string;
+}
+
+function isOnline(lastSeen: string): boolean {
+  if (!lastSeen) return false;
+  return (Date.now() - new Date(lastSeen).getTime()) < 3 * 60 * 1000; // 3 minutes
 }
 
 const roleStyle: Record<string, { label: string; bg: string; color: string }> = {
@@ -267,13 +272,22 @@ export default function UsersPage() {
                 <tr key={u.id}>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {u.avatar_url ? (
-                        <img src={u.avatar_url} alt={u.name} style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "2px solid #EDF2FF" }} />
-                      ) : (
-                        <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg, #4263EB, #7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-                          {initials}
-                        </div>
-                      )}
+                      <div style={{ position: "relative", flexShrink: 0 }}>
+                        {u.avatar_url ? (
+                          <img src={u.avatar_url} alt={u.name} style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", border: "2px solid #EDF2FF" }} />
+                        ) : (
+                          <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg, #4263EB, #7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 13, fontWeight: 700 }}>
+                            {initials}
+                          </div>
+                        )}
+                        {/* Online status dot */}
+                        <div style={{
+                          position: "absolute", bottom: 1, right: 1,
+                          width: 10, height: 10, borderRadius: "50%",
+                          background: isOnline(u.last_seen) ? "#2F9E44" : "#CED4DA",
+                          border: "2px solid white",
+                        }} title={isOnline(u.last_seen) ? "آنلاین" : "آفلاین"} />
+                      </div>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>{u.name}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
