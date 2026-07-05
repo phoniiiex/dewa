@@ -9,7 +9,7 @@ import {
   LayoutDashboard, BarChart3, Package, ShoppingCart, Truck, Users, Building2,
   Factory, Gift, UserCog, Wallet, Settings, HelpCircle, ChevronLeft, ChevronRight,
   BadgeCheck, FileText, Bot, Camera, LogOut, Shield, FlaskConical,
-  Edit3, Save, X, Phone, Mail, User, Activity, Stethoscope,
+  Edit3, Save, X, Phone, Mail, User, Activity, Stethoscope, Map,
 } from "lucide-react";
 
 interface NavItem { label: string; href: string; icon: React.ReactNode; badge?: number; managerOnly?: boolean; }
@@ -187,6 +187,7 @@ export default function Sidebar() {
         { label: "گواستنەوە",       href: "/dashboard/logistics",  icon: <Truck size={18} /> },
         { label: "شوفێرەکان",      href: "/dashboard/drivers",    icon: <BadgeCheck size={18} />, managerOnly: true },
         { label: "پزیشکەکان",      href: "/dashboard/doctors",    icon: <Stethoscope size={18} /> },
+        { label: "نەخشەی زیندوو",   href: "/dashboard/map",        icon: <Map size={18} /> },
         { label: "بۆت",            href: "/dashboard/telegram",   icon: <Bot size={18} />,       managerOnly: true },
       ],
     },

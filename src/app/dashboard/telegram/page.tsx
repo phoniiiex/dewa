@@ -1,21 +1,92 @@
 "use client";
-import { useState, FormEvent } from "react";
-import { Bot, Send, Settings2, CheckCircle, RefreshCw, Bell, BellOff, UserCheck } from "lucide-react";
+import { useState, useEffect, FormEvent } from "react";
+import { Bot, Send, Settings2, CheckCircle, RefreshCw, Bell, BellOff, UserCheck, Users, MapPin } from "lucide-react";
 import { useData } from "@/lib/store";
 import { FormField, inputStyle } from "@/components/ui/FormField";
 import { testTelegramBot, sendTelegramMessage, getTelegramUpdates } from "@/lib/telegram";
+import { supabase } from "@/lib/supabase";
 
 type TelegramUser = { chatId: string; firstName: string; lastName: string; username: string };
+type TgRole = "DRIVER" | "REP" | "MANAGEMENT" | "ADMIN" | "UNASSIGNED";
+type SavedTgUser = { chat_id: string; first_name: string; last_name: string; username: string; role: TgRole; linked_id: string; linked_name: string; };
+
+// ── UserRoleCard ─────────────────────────────────────────────────────────────
+function UserRoleCard({
+  chatId, firstName, lastName, username, fullName,
+  initialRole, initialLinkedId, initialLinkedName,
+  drivers, reps, saving, onSave,
+}: {
+  chatId: string; firstName: string; lastName: string; username: string; fullName: string;
+  initialRole: TgRole; initialLinkedId: string; initialLinkedName: string;
+  drivers: { id: string; name: string }[];
+  reps:    { id: string; name: string }[];
+  saving: boolean;
+  onSave: (chatId: string, role: TgRole, linkedId: string, linkedName: string, firstName: string, lastName: string, username: string) => void;
+}) {
+  const [role, setRole]         = useState<TgRole>(initialRole);
+  const [linkedId, setLinkedId] = useState(initialLinkedId);
+
+  const roleLabel: Record<TgRole, string> = {
+    DRIVER: "شوفێر", REP: "نوێنەری پزیشکی", MANAGEMENT: "بەڕێوەبەر", ADMIN: "ئەدمین", UNASSIGNED: "— هەڵنەبژێردراو —",
+  };
+  const roleBg: Record<TgRole, string> = {
+    DRIVER: "#EDE9FE", REP: "#D3F9D8", MANAGEMENT: "#EDF2FF", ADMIN: "#FFE3E3", UNASSIGNED: "#F1F3F5",
+  };
+  const roleColor: Record<TgRole, string> = {
+    DRIVER: "#7C3AED", REP: "#2B8A3E", MANAGEMENT: "#4263EB", ADMIN: "#C92A2A", UNASSIGNED: "#6C757D",
+  };
+
+  const linkOptions = role === "DRIVER" ? drivers : role === "REP" ? reps : [];
+  const linkedName  = linkOptions.find(o => o.id === linkedId)?.name || "";
+
+  return (
+    <div style={{ padding: "14px 16px", background: "#F8F9FA", borderRadius: 12, border: "1px solid #E9ECEF" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#1A1A2E" }}>{fullName}</div>
+          <div style={{ fontSize: 11, color: "#ADB5BD" }}>{username ? `@${username} · ` : ""}Chat ID: {chatId}</div>
+        </div>
+        <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, fontWeight: 700, background: roleBg[role], color: roleColor[role] }}>{roleLabel[role]}</span>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <select value={role} onChange={e => { setRole(e.target.value as TgRole); setLinkedId(""); }}
+          style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid #DEE2E6", fontSize: 13, fontFamily: "inherit", cursor: "pointer", background: "white" }}>
+          <option value="UNASSIGNED">— هەڵنەبژێردراو —</option>
+          <option value="DRIVER">🚗 شوفێر</option>
+          <option value="REP">🩺 نوێنەری پزیشکی</option>
+          <option value="MANAGEMENT">🏢 بەڕێوەبەر</option>
+          <option value="ADMIN">🔑 ئەدمین</option>
+        </select>
+        {linkOptions.length > 0 && (
+          <select value={linkedId} onChange={e => setLinkedId(e.target.value)}
+            style={{ flex: 1, minWidth: 140, padding: "7px 12px", borderRadius: 8, border: "1px solid #DEE2E6", fontSize: 13, fontFamily: "inherit", cursor: "pointer", background: "white" }}>
+            <option value="">— پەیوەندیدار —</option>
+            {linkOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        )}
+        <button onClick={() => onSave(chatId, role, linkedId, linkedName, firstName, lastName, username)}
+          disabled={saving}
+          style={{ padding: "7px 16px", background: "#4263EB", color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, opacity: saving ? 0.6 : 1 }}>
+          {saving ? "..." : "پاشەکەوتکردن"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function TelegramPage() {
-  const { drivers, settings, updateSettings, showToast } = useData();
+  const { drivers, reps, settings, updateSettings, showToast } = useData();
 
   const [tokenInput, setTokenInput]   = useState(settings.telegramBotToken || "");
   const [testing, setTesting]         = useState(false);
   const [testResult, setTestResult]   = useState<string | null>(null);
-  const [selectedTab, setSelectedTab] = useState<"setup" | "notify" | "send">("setup");
+  const [selectedTab, setSelectedTab] = useState<"setup" | "users" | "notify" | "send">("setup");
   const [webhookStatus, setWebhookStatus] = useState<string | null>(null);
   const [settingWebhook, setSettingWebhook] = useState(false);
+
+  // Users/Role tab
+  const [savedUsers, setSavedUsers]   = useState<SavedTgUser[]>([]);
+  const [savingRole, setSavingRole]   = useState<string | null>(null);
 
   // Notify users tab
   const [scanning, setScanning]           = useState(false);
@@ -129,7 +200,36 @@ export default function TelegramPage() {
     else showToast("هەڵە لە ناردنی نامە", "error");
   };
 
+  // Load saved telegram users from DB
+  const loadSavedUsers = async () => {
+    const { data } = await supabase.from("telegram_users").select("*").order("updated_at", { ascending: false });
+    setSavedUsers((data || []) as SavedTgUser[]);
+  };
+  useEffect(() => { loadSavedUsers(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSaveRole = async (
+    chatId: string, role: TgRole,
+    linkedId: string, linkedName: string,
+    firstName: string, lastName: string, username: string
+  ) => {
+    setSavingRole(chatId);
+    await supabase.from("telegram_users").upsert({
+      chat_id: chatId, first_name: firstName, last_name: lastName,
+      username, role, linked_id: linkedId, linked_name: linkedName,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "chat_id" });
+    if (role === "REP"    && linkedId) await supabase.from("reps").update({ telegram_chat_id: chatId }).eq("id", linkedId);
+    if (role === "DRIVER" && linkedId) await supabase.from("drivers").update({ telegram_chat_id: chatId }).eq("id", linkedId);
+    if ((role === "ADMIN" || role === "MANAGEMENT") && !notifyChatIds.includes(chatId)) {
+      await updateSettings({ telegramNotifyChatIds: [...notifyChatIds.filter(Boolean), chatId].slice(0, 2) });
+    }
+    await loadSavedUsers();
+    showToast("ڕۆڵ پاشەکەوتکرا ✅");
+    setSavingRole(null);
+  };
+
   const card: React.CSSProperties = { background: "#fff", borderRadius: 14, padding: "20px 24px", border: "1px solid #F1F3F5", boxShadow: "0 1px 4px rgba(0,0,0,.05)" };
+
 
   // Get display name for a chatId from detected users or drivers
   const getDisplayName = (chatId: string) => {
@@ -158,6 +258,7 @@ export default function TelegramPage() {
       <div style={{ display: "flex", gap: 4, marginBottom: 24, background: "#F1F3F5", borderRadius: 10, padding: 4, width: "fit-content" }}>
         {([
           { key: "setup",  label: "ڕێکخستن",       icon: <Settings2 size={14} /> },
+          { key: "users",  label: "بەکارهێنەران",     icon: <Users size={14} /> },
           { key: "notify", label: "ئاگادارکردنەوە", icon: <Bell size={14} /> },
           { key: "send",   label: "ناردنی نامە",    icon: <Send size={14} /> },
         ] as const).map(tab => (
@@ -242,6 +343,91 @@ export default function TelegramPage() {
                   <div style={{ fontWeight: 700, color: s.color }}>{s.value}</div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Users/Role Assignment Tab ────────────────────────────────── */}
+      {selectedTab === "users" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={card}>
+            <h3 style={{ fontWeight: 700, marginBottom: 6, display: "flex", alignItems: "center", gap: 8 }}><Users size={16} /> دیاریکردنی ڕۆڵی بەکارهێنەرانی بۆت</h3>
+            <p style={{ fontSize: 13, color: "#6C757D", marginBottom: 16 }}>
+              سەرەتا بۆتەکە بکەشە دواتر ڕۆڵی هەر کەسێک دیاری بکە: شوفێر، نوێنەر پزیشکی، بەڕێوەبەری، یان ئەدمین.
+            </p>
+            <button onClick={async () => {
+              if (!settings.telegramBotToken) return;
+              setScanning(true); setScanError(""); setDetectedUsers([]);
+              const users = await getTelegramUpdates(settings.telegramBotToken);
+              setScanning(false);
+              if (users.length === 0) setScanError("هیچ کەسێک پەیامی نەنێردووە بۆ بۆتەکە. تکایە هەر کەسێک یەک پەیام بنێرێت.");
+              else setDetectedUsers(users);
+            }} disabled={scanning || !settings.telegramBotToken}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 18px", background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, opacity: scanning ? 0.6 : 1, marginBottom: 16 }}>
+              <RefreshCw size={14} style={{ animation: scanning ? "spin 1s linear infinite" : "none" }} />
+              {scanning ? "گەڕان..." : "🔍 کەشفکردنی بەکارهێنەران"}
+            </button>
+            {scanError && <div style={{ padding: "10px 14px", background: "#FEF3C7", borderRadius: 10, fontSize: 13, color: "#D97706", marginBottom: 12 }}>{scanError}</div>}
+            {detectedUsers.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {detectedUsers.map(u => {
+                  const saved = savedUsers.find(s => s.chat_id === u.chatId);
+                  const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ") || `@${u.username}` || u.chatId;
+                  return (
+                    <UserRoleCard
+                      key={u.chatId}
+                      chatId={u.chatId} firstName={u.firstName} lastName={u.lastName} username={u.username}
+                      fullName={fullName}
+                      initialRole={(saved?.role ?? "UNASSIGNED") as TgRole}
+                      initialLinkedId={saved?.linked_id ?? ""}
+                      initialLinkedName={saved?.linked_name ?? ""}
+                      drivers={drivers} reps={reps}
+                      saving={savingRole === u.chatId}
+                      onSave={handleSaveRole}
+                    />
+                  );
+                })}
+              </div>
+            )}
+            {savedUsers.length > 0 && detectedUsers.length === 0 && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#6C757D", marginBottom: 10 }}>تۆمارکراوە ({savedUsers.length}):</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {savedUsers.map(u => {
+                    const fullName = [u.first_name, u.last_name].filter(Boolean).join(" ") || `@${u.username}` || u.chat_id;
+                    const roleColors: Record<TgRole, { bg: string; color: string }> = {
+                      DRIVER:     { bg: "#EDE9FE", color: "#7C3AED" },
+                      REP:        { bg: "#D3F9D8", color: "#2B8A3E" },
+                      ADMIN:      { bg: "#FFE3E3", color: "#C92A2A" },
+                      MANAGEMENT: { bg: "#EDF2FF", color: "#4263EB" },
+                      UNASSIGNED: { bg: "#F1F3F5", color: "#6C757D" },
+                    };
+                    const rc = roleColors[u.role];
+                    return (
+                      <div key={u.chat_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#F8F9FA", borderRadius: 10, border: "1px solid #E9ECEF" }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 13 }}>{fullName}</div>
+                          <div style={{ fontSize: 11, color: "#ADB5BD" }}>Chat ID: {u.chat_id}{u.linked_name ? ` · ${u.linked_name}` : ""}</div>
+                        </div>
+                        <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, fontWeight: 700, background: rc.bg, color: rc.color }}>{u.role}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          <div style={{ ...card, background: "#F8FAFF" }}>
+            <h4 style={{ fontWeight: 700, marginBottom: 8, color: "#4263EB", display: "flex", alignItems: "center", gap: 6 }}><MapPin size={14} /> چۆن نوێنەر شوێنی زیندوو بهێنەوە؟</h4>
+            <ol style={{ fontSize: 13, color: "#495057", lineHeight: 2.2, paddingRight: 20, margin: 0 }}>
+              <li>بۆتەکە بکەشە لە تێلێگرام</li>
+              <li>کرتە بکەن لە 📎 → <b>Location</b></li>
+              <li>هەڵبژێرن <b>Share Live Location</b></li>
+              <li>کاتی هاوبەشکردن دیاری بکەن (8 کاتژمێر پێشنیاردەکرێت)</li>
+            </ol>
+            <div style={{ marginTop: 10, padding: "8px 12px", background: "#D3F9D8", borderRadius: 8, fontSize: 12, color: "#2B8A3E", fontWeight: 600 }}>
+              ✅ شوێنەکە بە ئۆتۆماتیکی لەسەر نەخشەی داشبۆرد دەردەکەوێت
             </div>
           </div>
         </div>
