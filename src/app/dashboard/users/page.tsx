@@ -3,11 +3,14 @@ import { useState, useEffect, FormEvent, useRef } from "react";
 import {
   Users, Plus, Link2, Copy, Check, Trash2, Edit3,
   Mail, Phone, MapPin, RefreshCw, Shield, AlertCircle, Lock, Key, Camera,
+  UserCheck,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { FormField, FormGrid, inputStyle, selectStyle } from "@/components/ui/FormField";
 import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
+import { supabase } from "@/lib/supabase";
+import type { Rep } from "@/lib/types";
 
 const ALL_PERMISSIONS = [
   { key: "dashboard", label: "پێشانگا", group: "سەرەکی" },
@@ -82,9 +85,16 @@ function PermissionGrid({ permissions, onChange }: { permissions: string[]; onCh
 }
 
 export default function UsersPage() {
+  const [tab, setTab] = useState<"auth" | "reps">("auth");
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Reps tab
+  const [reps, setReps] = useState<Rep[]>([]);
+  const [repsLoading, setRepsLoading] = useState(false);
+  // map of email → auth user id for reps that already have accounts
+  const repAuthMap = new Map(users.filter(u => u.role === "REP").map(u => [u.email, u.id]));
 
   // ── Unified Add User Modal ──
   const [addOpen, setAddOpen] = useState(false);
@@ -126,7 +136,7 @@ export default function UsersPage() {
   // ── Deactivate ──
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => { loadUsers(); loadReps(); }, []);
 
   const loadUsers = async () => {
     setLoading(true); setError("");
@@ -139,8 +149,34 @@ export default function UsersPage() {
     finally { setLoading(false); }
   };
 
+  const loadReps = async () => {
+    setRepsLoading(true);
+    const { data } = await supabase.from("reps").select("*").order("name");
+    setReps((data || []).map((r: Record<string, unknown>) => ({
+      id:             r.id as string,
+      name:           r.name as string,
+      phone:          (r.phone || "") as string,
+      email:          (r.email || "") as string,
+      city:           (r.city || "") as string,
+      profilePic:     (r.profile_pic || "") as string,
+      telegramChatId: (r.telegram_chat_id || "") as string,
+      isActive:       r.is_active !== false,
+      createdAt:      (r.created_at || "") as string,
+    })));
+    setRepsLoading(false);
+  };
+
   const openAdd = () => {
     setAddForm({ name: "", email: "", password: "", role: "REP", phone: "", city: "", permissions: [] });
+    setAddMode("direct");
+    setInviteUrl("");
+    setCopied(false);
+    setAddOpen(true);
+  };
+
+  // Pre-fill from a rep record (for the "Create Account" button)
+  const openAddFromRep = (r: Rep) => {
+    setAddForm({ name: r.name, email: r.email || "", password: "", role: "REP", phone: r.phone, city: r.city, permissions: [] });
     setAddMode("direct");
     setInviteUrl("");
     setCopied(false);
@@ -213,7 +249,17 @@ export default function UsersPage() {
   };
 
   const activeCount = users.filter(u => u.is_active).length;
-  const adminCount = users.filter(u => u.role === "ADMIN").length;
+  const adminCount  = users.filter(u => u.role === "ADMIN").length;
+  const repsWithoutAccount = reps.filter(r => !r.email || !repAuthMap.has(r.email));
+
+  const tabBtn = (active: boolean): React.CSSProperties => ({
+    display: "flex", alignItems: "center", gap: 6, padding: "9px 18px",
+    borderRadius: 9, border: "none", cursor: "pointer", fontWeight: 700,
+    fontSize: 13, fontFamily: "inherit", transition: "all .15s",
+    background: active ? "white" : "transparent",
+    color: active ? "#4263EB" : "#6C757D",
+    boxShadow: active ? "0 1px 4px rgba(0,0,0,0.1)" : "none",
+  });
 
   return (
     <>
@@ -224,7 +270,7 @@ export default function UsersPage() {
           <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>بەکارهێنەران</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی هەموو بەکارهێنەران و مۆڵەتەکان</p></div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={loadUsers} style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#6C757D" }}>
+          <button onClick={() => { loadUsers(); loadReps(); }} style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#6C757D" }}>
             <RefreshCw size={13} /> نوێکردنەوە
           </button>
           <button onClick={openAdd}
@@ -243,9 +289,18 @@ export default function UsersPage() {
             <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>کۆی بەکارهێنەران</div><div className="kpi-card-value" style={{ fontSize: "1.4rem" }}>{users.length}</div></div>
             <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>چالاک</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#40C057" }}>{activeCount}</div></div>
             <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>ئەدمین</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#C92A2A" }}>{adminCount}</div></div>
-            <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>بێ پرۆفایل</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#F08C00" }}>{users.filter(u => !u.has_profile).length}</div></div>
+            <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>نوێنەران</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#2B8A3E" }}>{reps.length} <span style={{ fontSize: "0.8rem", color: "#E67700" }}>({repsWithoutAccount.length} بێ ئەکاونت)</span></div></div>
           </>
         )}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, background: "#F1F3F5", borderRadius: 12, padding: 4, width: "fit-content", marginBottom: 20 }}>
+        <button style={tabBtn(tab === "auth")} onClick={() => setTab("auth")}><Shield size={14} /> بەکارهێنەرانی سیستەم ({users.length})</button>
+        <button style={tabBtn(tab === "reps")} onClick={() => setTab("reps")}>
+          <UserCheck size={14} /> نوێنەرانی پزیشکی ({reps.length})
+          {repsWithoutAccount.length > 0 && <span style={{ background: "#E67700", color: "white", borderRadius: 10, padding: "1px 6px", fontSize: 10 }}>{repsWithoutAccount.length}</span>}
+        </button>
       </div>
 
       {error && (
@@ -254,7 +309,8 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* Table */}
+      {/* ── AUTH USERS TAB ── */}
+      {tab === "auth" && (
       <div className="data-table-wrapper">
         <table className="data-table">
           <thead>
@@ -280,7 +336,6 @@ export default function UsersPage() {
                             {initials}
                           </div>
                         )}
-                        {/* Online status dot */}
                         <div style={{
                           position: "absolute", bottom: 1, right: 1,
                           width: 10, height: 10, borderRadius: "50%",
@@ -346,6 +401,75 @@ export default function UsersPage() {
           </div>
         </div>
       </div>
+      )}
+
+      {/* ── REPS TAB ── */}
+      {tab === "reps" && (
+        <div className="data-table-wrapper">
+          {repsWithoutAccount.length > 0 && (
+            <div style={{ padding: "12px 16px", background: "#FFF9DB", borderBottom: "1px solid #FFE066", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E67700" }}>
+              <AlertCircle size={15} /> {repsWithoutAccount.length} نوێنەر ئەکاونتی نییە — کلیک لەسەر «دروستکردنی ئەکاونت» بکە
+            </div>
+          )}
+          <table className="data-table">
+            <thead>
+              <tr><th>نوێنەر</th><th>ئیمەیل / تەلەفۆن</th><th>شار</th><th>بارودۆخ</th><th>ئەکاونت</th><th></th></tr>
+            </thead>
+            <tbody>
+              {repsLoading ? (
+                <SkeletonTableRows rows={5} cols={6} />
+              ) : reps.length === 0 ? (
+                <tr><td colSpan={6} style={{ textAlign: "center", padding: 40, color: "#ADB5BD" }}>هیچ نوێنەرێک نییە — لە پەڕەی نوێنەران زیادیان بکە</td></tr>
+              ) : reps.map(r => {
+                const hasAccount = !!(r.email && repAuthMap.has(r.email));
+                return (
+                  <tr key={r.id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {r.profilePic
+                            ? <img src={r.profilePic} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            : <span style={{ color: "white", fontSize: 14, fontWeight: 800 }}>{r.name.charAt(0)}</span>
+                          }
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</div>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: 12, color: "#6C757D" }}>
+                      {r.email && <div style={{ direction: "ltr", display: "flex", alignItems: "center", gap: 4 }}><Mail size={10} />{r.email}</div>}
+                      {r.phone && <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Phone size={10} />{r.phone}</div>}
+                    </td>
+                    <td style={{ fontSize: 13 }}><MapPin size={11} style={{ verticalAlign: "middle", marginLeft: 3 }} />{r.city}</td>
+                    <td>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: r.isActive ? "#2B8A3E" : "#ADB5BD" }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: r.isActive ? "#40C057" : "#DEE2E6", display: "inline-block" }} />
+                        {r.isActive ? "چالاک" : "ناچالاک"}
+                      </span>
+                    </td>
+                    <td>
+                      {hasAccount
+                        ? <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "#D3F9D8", color: "#2B8A3E" }}>✅ ئەکاونتی هەیە</span>
+                        : <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "#FFF3BF", color: "#E67700" }}>⚠️ بێ ئەکاونت</span>
+                      }
+                    </td>
+                    <td>
+                      {!hasAccount && (
+                        <button onClick={() => openAddFromRep(r)}
+                          style={{ padding: "5px 12px", borderRadius: 6, background: "#4263EB", color: "white", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}>
+                          <Key size={11} /> دروستکردنی ئەکاونت
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div style={{ padding: "12px 16px", borderTop: "1px solid #F1F3F5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="pagination-info">{reps.length} نوێنەر · {reps.filter(r=>r.email && repAuthMap.has(r.email)).length} ئەکاونتیان هەیە</span>
+          </div>
+        </div>
+      )}
 
       {/* ══════════ UNIFIED ADD USER MODAL ══════════ */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="زیادکردنی بەکارهێنەری نوێ" width={580}>
