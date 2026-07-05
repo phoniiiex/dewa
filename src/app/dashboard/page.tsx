@@ -26,6 +26,7 @@ const WIDGET_DEFS: WidgetDef[] = [
   { id: "stock-alerts",  label: "ئاگاداری کۆگا",          icon: <Boxes size={14} />,        defaultSize: "md" },
   { id: "rep-perf",      label: "ئەنجامی نوێنەران",       icon: <UserCheck size={14} />,    defaultSize: "md" },
   { id: "top-clients",   label: "باشترین کڕیارەکان",      icon: <TrendingUp size={14} />,   defaultSize: "md" },
+  { id: "user-status",   label: "بەکارهێنەران ئۆنلاین/ئۆفلاین", icon: <UserCheck size={14} />,  defaultSize: "md" },
   { id: "quick-nav",     label: "بەستەری خێرا",           icon: <Activity size={14} />,     defaultSize: "sm" },
 ];
 
@@ -34,9 +35,10 @@ const DEFAULT_LAYOUT = [
   "recent-orders",
   "alerts", "financial",
   "order-status", "stock-alerts",
-  "rep-perf", "top-clients", "quick-nav",
+  "rep-perf", "top-clients",
+  "user-status", "quick-nav",
 ];
-const STORAGE_KEY = "dewa_dashboard_layout_v3";
+const STORAGE_KEY = "dewa_dashboard_layout_v4";
 
 const colSpan: Record<WidgetSize, number> = { sm: 1, md: 2, lg: 4 };
 
@@ -149,21 +151,22 @@ export default function DashboardPage() {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [showCatalog, setShowCatalog] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<{ id: string; name: string; role: string; avatar_url: string; last_seen: string }[]>([]);
+  const [allUsers, setAllUsers]       = useState<{ id: string; name: string; role: string; avatar_url: string; last_seen: string }[]>([]);
 
-  // Poll for online users every 60s
+  // Poll for user status every 60s
   useEffect(() => {
-    const fetchOnline = async () => {
+    const fetchUsers = async () => {
       try {
         const res = await fetch("/api/auth/list-users");
         const { users } = await res.json();
         const threeMinsAgo = Date.now() - 3 * 60 * 1000;
-        setOnlineUsers((users || []).filter((u: { last_seen: string }) =>
-          u.last_seen && new Date(u.last_seen).getTime() > threeMinsAgo
-        ));
+        const list = (users || []) as { id: string; name: string; role: string; avatar_url: string; last_seen: string }[];
+        setAllUsers(list);
+        setOnlineUsers(list.filter(u => u.last_seen && new Date(u.last_seen).getTime() > threeMinsAgo));
       } catch { /* ignore */ }
     };
-    fetchOnline();
-    const interval = setInterval(fetchOnline, 60_000);
+    fetchUsers();
+    const interval = setInterval(fetchUsers, 60_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -552,6 +555,80 @@ export default function DashboardPage() {
           </div>
         </div>
       );
+
+      case "user-status": {
+        const threeMinsAgo = Date.now() - 3 * 60 * 1000;
+        const online  = allUsers.filter(u => u.last_seen && new Date(u.last_seen).getTime() > threeMinsAgo);
+        const offline = allUsers.filter(u => !u.last_seen || new Date(u.last_seen).getTime() <= threeMinsAgo);
+        const roleLabel: Record<string, string> = { ADMIN: "ئەدمین", MANAGER: "بەڕێوبەر", REP: "نوێنەر" };
+        const roleColor: Record<string, { bg: string; color: string }> = {
+          ADMIN:   { bg: "#FFE3E3", color: "#C92A2A" },
+          MANAGER: { bg: "#EDF2FF", color: "#4263EB" },
+          REP:     { bg: "#D3F9D8", color: "#2B8A3E" },
+        };
+        function timeAgoShort(iso: string) {
+          const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+          if (diff < 60) return "چەند ثانیە";
+          if (diff < 3600) return `${Math.floor(diff / 60)} خولەک`;
+          if (diff < 86400) return `${Math.floor(diff / 3600)} کاتژمێر`;
+          return `${Math.floor(diff / 86400)} ڕۆژ`;
+        }
+        function UserRow({ u, online: isOnline }: { u: typeof allUsers[0]; online: boolean }) {
+          const initials = u.name?.split(" ").map(w => w[0]).join("").slice(0, 2) || "؟";
+          const rc = roleColor[u.role] || roleColor.REP;
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #F1F3F5" }}>
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                {u.avatar_url ? (
+                  <img src={u.avatar_url} alt={u.name} style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover" }} />
+                ) : (
+                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg, #4263EB, #7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 12, fontWeight: 700 }}>{initials}</div>
+                )}
+                <div style={{ position: "absolute", bottom: 0, right: 0, width: 9, height: 9, borderRadius: "50%", background: isOnline ? "#2F9E44" : "#CED4DA", border: "2px solid white" }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#1A1A2E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{u.name}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
+                  <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, fontWeight: 600, background: rc.bg, color: rc.color }}>{roleLabel[u.role] || u.role}</span>
+                  {u.last_seen && !isOnline && <span style={{ fontSize: 10, color: "#ADB5BD" }}>{timeAgoShort(u.last_seen)} پێش</span>}
+                  {isOnline && <span style={{ fontSize: 10, color: "#2F9E44", fontWeight: 600 }}>● ئۆنلاین</span>}
+                  {!u.last_seen && <span style={{ fontSize: 10, color: "#CED4DA" }}>هەرگیز نەهاتووە</span>}
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div style={iS}>
+            <WidgetHeader title="بەکارهێنەران" link="/dashboard/users" />
+            {allUsers.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 24, color: "#ADB5BD", fontSize: 12 }}>چاوەڕوان بکە...</div>
+            ) : (
+              <div style={{ overflow: "auto", maxHeight: 280 }}>
+                {online.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: "#2F9E44", letterSpacing: 0.5, marginBottom: 4, display: "flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#2F9E44" }} />
+                      ئۆنلاین ({online.length})
+                    </div>
+                    {online.map(u => <UserRow key={u.id} u={u} online={true} />)}
+                    {offline.length > 0 && <div style={{ height: 1, background: "#F1F3F5", margin: "10px 0 6px" }} />}
+                  </>
+                )}
+                {offline.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: "#ADB5BD", letterSpacing: 0.5, marginBottom: 4, display: "flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#CED4DA" }} />
+                      ئۆفلاین ({offline.length})
+                    </div>
+                    {offline.map(u => <UserRow key={u.id} u={u} online={false} />)}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }
 
       default: return <div style={{ padding: 20, fontSize: 12, color: "#ADB5BD" }}>{id}</div>;
     }
