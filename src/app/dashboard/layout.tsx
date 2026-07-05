@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
@@ -60,6 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null, label: "هەموو ماوەکان" });
   const [globalStatusFilter, setGlobalStatusFilter] = useState("هەموو");
   const [openNewOrder, setOpenNewOrder] = useState(false);
+  const hbIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load appearance preferences from localStorage
   useEffect(() => {
@@ -110,13 +111,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           (profile as Record<string, string>)?.name || session.user.user_metadata?.name || "",
           (profile as Record<string, string>)?.role || "REP"
         );
-        // Heartbeat: update last_seen every 60s
+        // Heartbeat: update last_seen via admin API (bypasses RLS)
+        const accessToken = session.access_token;
         const updateLastSeen = () =>
-          supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("id", session.user.id);
+          fetch("/api/auth/heartbeat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accessToken }),
+          });
         updateLastSeen();
         const hbInterval = setInterval(updateLastSeen, 60_000);
+        hbIntervalRef.current = hbInterval;
         setAuthed(true);
-        return () => clearInterval(hbInterval);
       }
     });
 
@@ -124,7 +130,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (!session) router.replace("/");
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (hbIntervalRef.current) clearInterval(hbIntervalRef.current);
+    };
   }, [router]);
 
   const logout = async () => {
