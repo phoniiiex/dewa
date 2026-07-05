@@ -1,17 +1,13 @@
 // /api/telegram-webhook/route.ts
 //
-// Message routing by role (stored in telegram_users table):
-//   DRIVER    → messages forwarded to notify-admins (voice, location, etc.)
-//   REP       → live location upserted into rep_locations table
-//   ADMIN /
-//   MANAGEMENT → treated as notify user; pending voice forwards fulfilled
-//   UNASSIGNED → ignored (or logged)
+// Update types handled:
+//   message            → driver/rep/admin routing + auto-register sender
+//   edited_message     → live location updates from REPs
+//   my_chat_member     → user unblocked bot (register them)
+//   /start command     → explicit registration + reply with Chat ID
 //
-// Live location flow for REPs:
-//   1. Rep shares live location in Telegram
-//   2. Telegram sends message.location (with live_period set)
-//   3. As rep moves, Telegram sends edited_message.location updates
-//   4. Webhook upserts rep_locations on every update
+// User registration flow:
+//   Any of the above → upsert telegram_users (update name/username, preserve role)
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -28,210 +24,200 @@ async function tgPost(token: string, method: string, body: Record<string, unknow
   return res.json();
 }
 
+// Register or update a user's name/username — NEVER overwrites role
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function registerUser(db: any, chatId: string, from: { first_name?: string; last_name?: string; username?: string } | null | undefined) {
+  if (!chatId || !from) return;
+  // Insert new row (ignoreDuplicates keeps existing roles intact)
+  await db.from("telegram_users").upsert({
+    chat_id:     chatId,
+    first_name:  from.first_name  || "",
+    last_name:   from.last_name   || "",
+    username:    from.username    || "",
+    role:        "UNASSIGNED",
+    linked_id:   "",
+    linked_name: "",
+    updated_at:  new Date().toISOString(),
+  }, { onConflict: "chat_id", ignoreDuplicates: true });
+
+  // Update name/username for already-existing rows (never touches role)
+  await db.from("telegram_users").update({
+    first_name:  from.first_name  || "",
+    last_name:   from.last_name   || "",
+    username:    from.username    || "",
+    updated_at:  new Date().toISOString(),
+  }).eq("chat_id", chatId);
+}
+
+
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
+  // Always respond immediately to avoid Telegram timeouts
+  const bodyText = await req.text();
+  let body: Record<string, unknown>;
+  try { body = JSON.parse(bodyText); } catch { return NextResponse.json({ ok: true }); }
 
-    // Handle both regular messages and live-location edits
-    const message      = body.message ?? body.channel_post;
-    const editedMsg    = body.edited_message;
+  // Process async (don't block the response)
+  processUpdate(body).catch(err => console.error("[webhook]", err));
 
-    // ── Handle live location update (edited_message) ──────────────────────
-    if (editedMsg?.location) {
-      const db       = createClient(supabaseUrl, supabaseKey);
-      const chatId   = String(editedMsg.chat?.id ?? editedMsg.from?.id ?? "");
-      const location = editedMsg.location as { latitude: number; longitude: number; accuracy?: number; live_period?: number };
+  return NextResponse.json({ ok: true });
+}
 
-      if (chatId) {
-        const { data: tgUser } = await db
-          .from("telegram_users")
-          .select("role, linked_name")
-          .eq("chat_id", chatId)
-          .maybeSingle();
+async function processUpdate(body: Record<string, unknown>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = createClient(supabaseUrl, supabaseKey) as any;
 
-        if (tgUser?.role === "REP") {
-          await db.from("rep_locations").upsert({
-            chat_id:     chatId,
-            rep_name:    tgUser.linked_name || "نوێنەر",
-            latitude:    location.latitude,
-            longitude:   location.longitude,
-            accuracy:    location.accuracy ?? null,
-            live_period: location.live_period ?? null,
-            is_live:     true,
-            updated_at:  new Date().toISOString(),
-          }, { onConflict: "chat_id" });
-        }
+  // Load bot token
+  const { data: settingsRow } = await db
+    .from("company_settings")
+    .select("telegram_bot_token, telegram_notify_chat_ids")
+    .eq("id", 1)
+    .single();
+
+  const token     = (settingsRow?.telegram_bot_token as string) || "";
+  const notifyIds = (settingsRow?.telegram_notify_chat_ids ?? []) as string[];
+
+  // ── my_chat_member: user unblocked/restarted bot ────────────────────────
+  const memberUpdate = body.my_chat_member as Record<string, unknown> | undefined;
+  if (memberUpdate) {
+    const from   = memberUpdate.from as Record<string, string> | undefined;
+    const chatId = String((memberUpdate.chat as Record<string, unknown>)?.id ?? from?.id ?? "");
+    if (chatId && from) {
+      await registerUser(db, chatId, from);
+      // Send welcome if they just re-enabled the bot
+      const newStatus = (memberUpdate.new_chat_member as Record<string, string>)?.status;
+      if (token && (newStatus === "member" || newStatus === "creator")) {
+        await tgPost(token, "sendMessage", {
+          chat_id: chatId,
+          text: `👋 خۆشی دیدنت!\n\nبۆتی تەوژمی دەریا. Chat ID ت:\n<code>${chatId}</code>\n\nئەدمینەکە ڕۆڵت دیاری دەکات.`,
+          parse_mode: "HTML",
+        });
       }
-      return NextResponse.json({ ok: true });
     }
+    return;
+  }
 
-    if (!message) return NextResponse.json({ ok: true });
+  // ── edited_message: live location update from REP ───────────────────────
+  const editedMsg = body.edited_message as Record<string, unknown> | undefined;
+  if (editedMsg?.location) {
+    const chatId   = String((editedMsg.chat as Record<string, unknown>)?.id ?? (editedMsg.from as Record<string, unknown>)?.id ?? "");
+    const location = editedMsg.location as { latitude: number; longitude: number; accuracy?: number; live_period?: number };
+    if (chatId) {
+      const { data: tgUser } = await db.from("telegram_users").select("role, linked_name").eq("chat_id", chatId).maybeSingle();
+      if (tgUser?.role === "REP") {
+        await db.from("rep_locations").upsert({
+          chat_id: chatId, rep_name: tgUser.linked_name || "نوێنەر",
+          latitude: location.latitude, longitude: location.longitude,
+          accuracy: location.accuracy ?? null, live_period: location.live_period ?? null,
+          is_live: true, updated_at: new Date().toISOString(),
+        }, { onConflict: "chat_id" });
+      }
+    }
+    return;
+  }
 
-    const from       = message.from;
-    const fromChatId = String(message.chat?.id ?? from?.id ?? "");
-    const messageId  = message.message_id as number;
+  // ── Regular message ──────────────────────────────────────────────────────
+  const message = (body.message ?? body.channel_post) as Record<string, unknown> | undefined;
+  if (!message) return;
 
-    if (!fromChatId || !messageId) return NextResponse.json({ ok: true });
+  const from       = message.from as Record<string, string | boolean> | undefined;
+  const fromChatId = String((message.chat as Record<string, unknown>)?.id ?? from?.id ?? "");
+  const messageId  = message.message_id as number;
+  const text       = (message.text as string) || "";
 
-    const db = createClient(supabaseUrl, supabaseKey);
+  if (!fromChatId || from?.is_bot) return;
 
-    // ── Auto-register every sender in telegram_users ──────────────────────
-    // This runs before any other logic so the bot page can see all users.
-    const senderName = [from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || "";
-    await db.from("telegram_users").upsert({
-      chat_id:    fromChatId,
-      first_name: from?.first_name || "",
-      last_name:  from?.last_name  || "",
-      username:   from?.username   || "",
-      // Only set role/linked fields if row doesn't exist yet (upsert preserves existing role)
-    }, {
-      onConflict:        "chat_id",
-      ignoreDuplicates:  true,   // don't overwrite role once assigned
+  // Always register the sender
+  await registerUser(db, fromChatId, from as { first_name?: string; last_name?: string; username?: string });
+
+  if (!token) return;
+
+  // ── /start command: send welcome with Chat ID ─────────────────────────
+  if (text === "/start" || text.startsWith("/start ")) {
+    const name = [from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || "بەکارهێنەر";
+    await tgPost(token, "sendMessage", {
+      chat_id: fromChatId,
+      text: `👋 سڵاو ${name}!\n\n✅ تۆمارکرایتی لە سیستەمی تەوژمی دەریا.\n\nChat ID ت:\n<code>${fromChatId}</code>\n\nئەدمینەکە زوو ڕۆڵت دیاری دەکات.`,
+      parse_mode: "HTML",
     });
+    return;
+  }
 
-    // Load settings
-    const { data: settingsRow } = await db
-      .from("company_settings")
-      .select("telegram_bot_token, telegram_notify_chat_ids")
-      .eq("id", 1)
-      .single();
+  // ── /myid command ─────────────────────────────────────────────────────
+  if (text === "/myid") {
+    await tgPost(token, "sendMessage", {
+      chat_id: fromChatId,
+      text: `🪪 Chat ID ت:\n<code>${fromChatId}</code>`,
+      parse_mode: "HTML",
+    });
+    return;
+  }
 
-    if (!settingsRow?.telegram_bot_token) return NextResponse.json({ ok: true });
+  // ── Lookup role ───────────────────────────────────────────────────────
+  const { data: tgUser } = await db
+    .from("telegram_users")
+    .select("role, linked_name, linked_id")
+    .eq("chat_id", fromChatId)
+    .maybeSingle();
 
-    const token     = settingsRow.telegram_bot_token as string;
-    const notifyIds = (settingsRow.telegram_notify_chat_ids ?? []) as string[];
+  const role = tgUser?.role ?? (notifyIds.includes(fromChatId) ? "ADMIN" : "UNASSIGNED");
 
-    // ── Lookup role from telegram_users table ─────────────────────────────
-    const { data: tgUser } = await db
-      .from("telegram_users")
-      .select("role, linked_name, linked_id")
-      .eq("chat_id", fromChatId)
-      .maybeSingle();
+  // ── REP: live location share ──────────────────────────────────────────
+  if (role === "REP" && message.location) {
+    const location = message.location as { latitude: number; longitude: number; accuracy?: number; live_period?: number };
+    await db.from("rep_locations").upsert({
+      chat_id: fromChatId, rep_name: tgUser?.linked_name || "نوێنەر",
+      latitude: location.latitude, longitude: location.longitude,
+      accuracy: location.accuracy ?? null, live_period: location.live_period ?? null,
+      is_live: !!(location.live_period), updated_at: new Date().toISOString(),
+    }, { onConflict: "chat_id" });
+    await tgPost(token, "sendMessage", {
+      chat_id: fromChatId,
+      text: location.live_period
+        ? "✅ شوێنی زیندووت وەرگیرا. داشبۆردەکە نوێدەبێتەوە بە ئۆتۆماتیکی."
+        : "📍 شوێنەکەت تۆمارکرا.",
+    });
+    return;
+  }
 
-    const role = tgUser?.role ?? (notifyIds.includes(fromChatId) ? "ADMIN" : "UNASSIGNED");
+  // ── ADMIN / MANAGEMENT: fulfill pending voice forwards ────────────────
+  const isNotifyUser = role === "ADMIN" || role === "MANAGEMENT" || notifyIds.includes(fromChatId);
+  if (isNotifyUser) {
+    const { data: pending } = await db
+      .from("pending_voice_forwards")
+      .select("*").eq("fulfilled", false)
+      .order("created_at", { ascending: true }).limit(1).maybeSingle();
 
-    // ── REP: initial live location share ────────────────────────────────
-    if (role === "REP" && message.location) {
-      const location = message.location as { latitude: number; longitude: number; accuracy?: number; live_period?: number };
-      await db.from("rep_locations").upsert({
-        chat_id:     fromChatId,
-        rep_name:    tgUser?.linked_name || "نوێنەر",
-        latitude:    location.latitude,
-        longitude:   location.longitude,
-        accuracy:    location.accuracy ?? null,
-        live_period: location.live_period ?? null,
-        is_live:     !!(location.live_period),
-        updated_at:  new Date().toISOString(),
-      }, { onConflict: "chat_id" });
-
-      // Acknowledge to rep
-      const isLive = !!(location.live_period);
-      await tgPost(token, "sendMessage", {
-        chat_id: fromChatId,
-        text: isLive
-          ? `✅ شوێنی ژیانت وەرگیرا. داشبۆردەکە نوێدەبێتەوە بە شێوەیەکی ئۆتۆماتیکی.`
-          : `📍 شوێنەکەت تۆمارکرا.`,
-      });
-      return NextResponse.json({ ok: true });
+    if (pending) {
+      await tgPost(token, "sendMessage", { chat_id: pending.driver_chat_id, text: `📦 نامەی ئەوازی تایبەتت هەیە بۆ <b>${pending.order_number}</b>`, parse_mode: "HTML" });
+      await tgPost(token, "forwardMessage", { chat_id: pending.driver_chat_id, from_chat_id: fromChatId, message_id: messageId });
+      await db.from("pending_voice_forwards").update({ fulfilled: true }).eq("id", pending.id);
+      await tgPost(token, "sendMessage", { chat_id: fromChatId, text: `✅ نامەکەت نێردرا بۆ شوفێر ${pending.driver_name} — ${pending.order_number}` });
+      return;
     }
+  }
 
-    // ── ADMIN / MANAGEMENT: check for pending voice forwards ─────────────
-    const isNotifyUser = role === "ADMIN" || role === "MANAGEMENT" || notifyIds.includes(fromChatId);
+  // ── DRIVER: forward to notify admins ─────────────────────────────────
+  if (role === "DRIVER" && notifyIds.length > 0) {
+    const msgType = message.voice ? "🎙️ ئەواز" : message.audio ? "🎵 دەنگ" : message.photo ? "📷 وێنە" : message.video ? "🎥 ڤیدیۆ" : message.document ? "📎 فایل" : message.location ? "📍 شوێن" : "💬 نامە";
+    const driverName = tgUser?.linked_name || (from?.first_name as string) || "شوفێر";
+    await Promise.all(notifyIds.map(async (notifyId) => {
+      await tgPost(token, "sendMessage", { chat_id: notifyId, text: `🚗 شوفێر: <b>${driverName}</b>\n${msgType} نێردراوە ⬇️`, parse_mode: "HTML" });
+      await tgPost(token, "forwardMessage", { chat_id: notifyId, from_chat_id: fromChatId, message_id: messageId });
+    }));
+    return;
+  }
 
-    if (isNotifyUser) {
-      const { data: pending } = await db
-        .from("pending_voice_forwards")
-        .select("*")
-        .eq("fulfilled", false)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (pending) {
-        await tgPost(token, "sendMessage", {
-          chat_id: pending.driver_chat_id,
-          text: `📦 نامەی ئەوازی تایبەتت هەیە بۆ داواکاری <b>${pending.order_number}</b>`,
-          parse_mode: "HTML",
-        });
-        await tgPost(token, "forwardMessage", {
-          chat_id:      pending.driver_chat_id,
-          from_chat_id: fromChatId,
-          message_id:   messageId,
-        });
-        await db.from("pending_voice_forwards").update({ fulfilled: true }).eq("id", pending.id);
-        await tgPost(token, "sendMessage", {
-          chat_id: fromChatId,
-          text: `✅ نامەکەت نێردرا بۆ شوفێر ${pending.driver_name} — ${pending.order_number}`,
-        });
-        return NextResponse.json({ ok: true });
-      }
-    }
-
-    // ── DRIVER: forward message to notify admins ──────────────────────────
-    if (role === "DRIVER") {
-      if (notifyIds.length > 0) {
-        const msgType = message.voice    ? "🎙️ ئەواز"
-                      : message.audio    ? "🎵 دەنگ"
-                      : message.photo    ? "📷 وێنە"
-                      : message.video    ? "🎥 ڤیدیۆ"
-                      : message.document ? "📎 فایل"
-                      : message.location ? "📍 شوێن"
-                      : "💬 نامە";
-
-        const driverName = tgUser?.linked_name || from?.first_name || "شوفێر";
-        await Promise.all(notifyIds.map(async (notifyId) => {
-          await tgPost(token, "sendMessage", {
-            chat_id: notifyId,
-            text: `🚗 شوفێر: <b>${driverName}</b>\n${msgType} نێردراوە ⬇️`,
-            parse_mode: "HTML",
-          });
-          await tgPost(token, "forwardMessage", {
-            chat_id:      notifyId,
-            from_chat_id: fromChatId,
-            message_id:   messageId,
-          });
-        }));
-      }
-      return NextResponse.json({ ok: true });
-    }
-
-    // ── Fallback: try legacy driver lookup by chat_id in drivers table ────
-    const { data: driverRow } = await db
-      .from("drivers")
-      .select("name, phone")
-      .eq("telegram_chat_id", fromChatId)
-      .maybeSingle();
-
-    if (driverRow && notifyIds.length > 0) {
-      const msgType = message.voice    ? "🎙️ ئەواز"
-                    : message.audio    ? "🎵 دەنگ"
-                    : message.photo    ? "📷 وێنە"
-                    : message.video    ? "🎥 ڤیدیۆ"
-                    : message.document ? "📎 فایل"
-                    : message.location ? "📍 شوێن"
-                    : "💬 نامە";
-
-      await Promise.all(notifyIds.map(async (notifyId) => {
-        await tgPost(token, "sendMessage", {
-          chat_id: notifyId,
-          text: `🚗 شوفێر: <b>${driverRow.name}</b> (${driverRow.phone})\n${msgType} نێردراوە ⬇️`,
-          parse_mode: "HTML",
-        });
-        await tgPost(token, "forwardMessage", {
-          chat_id:      notifyId,
-          from_chat_id: fromChatId,
-          message_id:   messageId,
-        });
-      }));
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("[telegram-webhook]", err);
-    return NextResponse.json({ ok: false }, { status: 500 });
+  // ── Legacy: driver lookup by old telegram_chat_id field ──────────────
+  const { data: driverRow } = await db.from("drivers").select("name, phone").eq("telegram_chat_id", fromChatId).maybeSingle();
+  if (driverRow && notifyIds.length > 0) {
+    const msgType = message.voice ? "🎙️ ئەواز" : message.audio ? "🎵 دەنگ" : "💬 نامە";
+    await Promise.all(notifyIds.map(async (notifyId) => {
+      await tgPost(token, "sendMessage", { chat_id: notifyId, text: `🚗 شوفێر: <b>${driverRow.name}</b> (${driverRow.phone})\n${msgType} نێردراوە ⬇️`, parse_mode: "HTML" });
+      await tgPost(token, "forwardMessage", { chat_id: notifyId, from_chat_id: fromChatId, message_id: messageId });
+    }));
   }
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, info: "Dewa Telegram Webhook" });
+  return NextResponse.json({ ok: true, info: "Dewa Telegram Webhook — active" });
 }

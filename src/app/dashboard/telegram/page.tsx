@@ -154,6 +154,64 @@ function UserRow({
 // Hack to access useData inside UserRow without hooks (pass ref)
 let useDataRef: ReturnType<typeof useData>;
 
+// ── ManualAddUser ─────────────────────────────────────────────────────────────
+function ManualAddUser({ onAdded, showToast }: { onAdded: () => void; showToast: (m: string, t?: "success" | "error") => void }) {
+  const [open, setOpen]         = useState(false);
+  const [chatId, setChatId]     = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [saving, setSaving]     = useState(false);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatId.trim()) return;
+    setSaving(true);
+    const { error } = await supabase.from("telegram_users").upsert({
+      chat_id:    chatId.trim(),
+      first_name: firstName.trim() || "کەسی نەناسراو",
+      last_name:  "",
+      username:   "",
+      role:       "UNASSIGNED",
+      linked_id:  "",
+      linked_name: "",
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "chat_id" });
+    setSaving(false);
+    if (error) { showToast("هەڵە: " + error.message, "error"); return; }
+    showToast("زیادکرا ✅");
+    setChatId(""); setFirstName(""); setOpen(false);
+    onAdded();
+  };
+
+  if (!open) return (
+    <button onClick={() => setOpen(true)}
+      style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 16px", background: "white", border: "1px dashed #CED4DA", borderRadius: 12, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#6C757D", fontFamily: "inherit" }}>
+      ✏️ دەستی زیادکردنی بەکارهێنەر بە Chat ID
+    </button>
+  );
+
+  return (
+    <form onSubmit={handleAdd} style={{ background: "white", borderRadius: 14, border: "1px solid #4263EB", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontWeight: 700, fontSize: 13, color: "#4263EB" }}>✏️ دەستی زیادکردن</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <input value={chatId} onChange={e => setChatId(e.target.value)} placeholder="Chat ID (ژمارە)" dir="ltr" required
+          style={{ flex: 1, minWidth: 140, padding: "8px 12px", borderRadius: 8, border: "1px solid #DEE2E6", fontSize: 13, fontFamily: "inherit" }} />
+        <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="ناو (ئارەزوومەندانە)"
+          style={{ flex: 2, minWidth: 160, padding: "8px 12px", borderRadius: 8, border: "1px solid #DEE2E6", fontSize: 13, fontFamily: "inherit" }} />
+        <button type="submit" disabled={saving || !chatId}
+          style={{ padding: "8px 16px", background: "#4263EB", color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}>
+          {saving ? "..." : "زیادکردن"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)}
+          style={{ padding: "8px 12px", background: "#F1F3F5", color: "#6C757D", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>
+          داخستن
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: "#ADB5BD" }}>Chat ID دۆزینەوە: ئەو کەسەی /myid بنێرێت بۆ بۆتەکە، Chat ID ی ئاشکرا دەکرێت.</div>
+    </form>
+  );
+}
+
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function TelegramPage() {
   const data = useData();
@@ -357,14 +415,30 @@ export default function TelegramPage() {
       {/* ── Users Tab ────────────────────────────────────────────────────── */}
       {tab === "users" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* How to get users */}
-          <div style={{ padding: "12px 16px", background: "#EDF2FF", borderRadius: 12, fontSize: 13, color: "#4263EB", display: "flex", gap: 10, alignItems: "flex-start" }}>
-            <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-            <div>
-              <b>چۆن بەکارهێنەر تۆمار بکرێت؟</b> — هەر کەسێک پەیامێک بنێرێت بۆ بۆتەکە بە ئۆتۆماتیکی لێرەدا دەردەکەوێت.
-              پێویستە Webhook ڕێکخستبێت. هیچ کلیکێکی تر پێویست نییە.
+          {/* How to register */}
+          <div style={{ background: "white", borderRadius: 14, border: "1px solid #E9ECEF", overflow: "hidden" }}>
+            <div style={{ padding: "14px 18px", background: "#4263EB", color: "white" }}>
+              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 2 }}>🤖 چۆن بەکارهێنەر تۆمار بکرێت؟</div>
+              <div style={{ fontSize: 12, opacity: 0.85 }}>سێ ڕێگا هەن — ئاسانترین بکەرە</div>
+            </div>
+            <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ padding: "10px 14px", background: "#EBFBEE", borderRadius: 10, border: "1px solid #A9E34B" }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#2B8A3E", marginBottom: 4 }}>✅ ڕێگای ١ — بەهێزترین (پێشنیار)</div>
+                <div style={{ fontSize: 12, color: "#495057" }}>بڵێ بۆتەکە بکەن لە تێلێگرام و <b>/start</b> بنێرن — بۆت بە ئۆتۆماتیکی تۆمارشان دەکات و Chat ID ی ئەوان ئاشکرا دەکات.</div>
+              </div>
+              <div style={{ padding: "10px 14px", background: "#FFF9DB", borderRadius: 10, border: "1px solid #FFE066" }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#E67700", marginBottom: 4 }}>🆔 ڕێگای ٢ — Chat ID ی خۆی</div>
+                <div style={{ fontSize: 12, color: "#495057" }}>هەر پەیامێک بنێرن بۆ بۆتەکە. بۆ زانینی Chat ID ی خۆیان <b>/myid</b> بنێرن — بۆت ئەوی ئاشکرا دەکات.</div>
+              </div>
+              <div style={{ padding: "10px 14px", background: "#F3F0FF", borderRadius: 10, border: "1px solid #BDA9FF" }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#7C3AED", marginBottom: 4 }}>✏️ ڕێگای ٣ — دەستی زیادکردن</div>
+                <div style={{ fontSize: 12, color: "#495057" }}>Chat ID ی کەسەکە بزانە و خۆت دەستی زیادی بکە لە خوارەوە.</div>
+              </div>
             </div>
           </div>
+
+          {/* Manual add form */}
+          <ManualAddUser onAdded={loadUsers} showToast={showToast} />
 
           {/* Filters + Refresh */}
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
