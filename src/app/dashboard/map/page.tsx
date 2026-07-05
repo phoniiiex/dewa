@@ -105,7 +105,11 @@ export default function MapPage() {
                     <div key={l.chat_id} onClick={() => setSelectedId(l.chat_id === selectedId ? null : l.chat_id)}
                       style={{ background: "white", borderRadius: 12, border: selectedId === l.chat_id ? "2px solid #4263EB" : "1px solid #E9ECEF", padding: "10px 12px", cursor: "pointer", transition: "all .15s" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ position: "relative", width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                        <div style={{ position: "relative", width: 36, height: 36, borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 13, fontWeight: 800 }}>
+                          {l.profile_pic_url
+                            ? <img src={l.profile_pic_url} alt={l.rep_name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            : null
+                          }
                           {l.rep_name.charAt(0)}
                           <div style={{ position: "absolute", bottom: 0, right: 0, width: 8, height: 8, borderRadius: "50%", background: "#2F9E44", border: "2px solid white" }} />
                         </div>
@@ -127,7 +131,11 @@ export default function MapPage() {
                   {offline.map(l => (
                     <div key={l.chat_id} style={{ background: "#F8F9FA", borderRadius: 12, border: "1px solid #E9ECEF", padding: "10px 12px", opacity: 0.7 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ position: "relative", width: 32, height: 32, borderRadius: "50%", background: "#CED4DA", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                        <div style={{ position: "relative", width: 36, height: 36, borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "#CED4DA", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 13, fontWeight: 800 }}>
+                          {l.profile_pic_url
+                            ? <img src={l.profile_pic_url} alt={l.rep_name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0, filter: "grayscale(40%)" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            : null
+                          }
                           {l.rep_name.charAt(0)}
                           <div style={{ position: "absolute", bottom: 0, right: 0, width: 8, height: 8, borderRadius: "50%", background: "#CED4DA", border: "2px solid white" }} />
                         </div>
