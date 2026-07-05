@@ -75,6 +75,20 @@ export async function POST(req: NextRequest) {
 
     const db = createClient(supabaseUrl, supabaseKey);
 
+    // ── Auto-register every sender in telegram_users ──────────────────────
+    // This runs before any other logic so the bot page can see all users.
+    const senderName = [from?.first_name, from?.last_name].filter(Boolean).join(" ") || from?.username || "";
+    await db.from("telegram_users").upsert({
+      chat_id:    fromChatId,
+      first_name: from?.first_name || "",
+      last_name:  from?.last_name  || "",
+      username:   from?.username   || "",
+      // Only set role/linked fields if row doesn't exist yet (upsert preserves existing role)
+    }, {
+      onConflict:        "chat_id",
+      ignoreDuplicates:  true,   // don't overwrite role once assigned
+    });
+
     // Load settings
     const { data: settingsRow } = await db
       .from("company_settings")
