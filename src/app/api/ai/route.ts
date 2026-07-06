@@ -471,7 +471,10 @@ async function callGemini(systemPrompt: string, msgs: any[]): Promise<{ ok: bool
       contents: toGeminiContents(msgs),
       tools: toGeminiTools(tools),
       toolConfig: { functionCallingConfig: { mode: "AUTO" } },
-      generationConfig: { maxOutputTokens: 4096 },
+      generationConfig: {
+        maxOutputTokens: 4096,
+        thinkingConfig: { thinkingBudget: 0 }, // disable thinking to avoid thought_signature multi-turn issue
+      },
     };
     const res = await fetch(GEMINI_URL, {
       method: "POST",
