@@ -1,108 +1,92 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// ── AI Providers ─────────────────────────────────────────────────────────
 const GEMINI_KEY = process.env.GEMINI_API_KEY!;
-const GROQ_KEY   = process.env.GROQ_API_KEY!;
+const GEMINI_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
-// Native Gemini endpoint (uses X-goog-api-key, NOT Authorization: Bearer)
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
-
-// Groq fallback — OpenAI-compatible
-const GROQ_PROVIDERS = [
-  { url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ_KEY, model: "llama-3.3-70b-versatile" },
-  { url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ_KEY, model: "meta-llama/llama-4-scout-17b-16e-instruct" },
-  { url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ_KEY, model: "llama-3.1-8b-instant" },
-];
-
-// ── Supabase ───────────────────────────────────────────────────────────────
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// ── Tool definitions (OpenAI format) ──────────────────────────────────────
-const tools = [
+// ── Gemini function declarations ───────────────────────────────────────────
+const functionDeclarations = [
   {
-    type: "function",
-    function: {
-      name: "list_orders",
-      description: "List recent orders from the system. Can filter by status or client name.",
-      parameters: {
-        type: "object",
-        properties: {
-          limit: { type: "integer", description: "Max number of orders to return (default 10)" },
-          status: { type: "string", description: "Filter by status: WAITING, IN_PROGRESS, READY, SENT, DELIVERED, PAID, NOT_ACCEPTED" },
-          client_name: { type: "string", description: "Filter by client name (partial match)" },
-        },
+    name: "get_dashboard_stats",
+    description: "Get today's sales stats: total orders, revenue, delivered count, waiting count.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    name: "list_orders",
+    description: "List recent orders, optionally filtered by status or client name.",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: { type: "integer", description: "Max results (default 10)" },
+        status: { type: "string", description: "WAITING | IN_PROGRESS | READY | SENT | DELIVERED | PAID | NOT_ACCEPTED" },
+        client_name: { type: "string", description: "Partial client name to filter by" },
       },
     },
   },
   {
-    type: "function",
-    function: {
-      name: "get_dashboard_stats",
-      description: "Get today's dashboard statistics: revenue, order count, delivered count.",
-      parameters: { type: "object", properties: {} },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_products",
-      description: "List products from the system. Can filter by name or low stock.",
-      parameters: {
-        type: "object",
-        properties: {
-          limit: { type: "integer", description: "Max number of products to return (default 10)" },
-          search: { type: "string", description: "Search by product name" },
-          low_stock: { type: "boolean", description: "If true, return only low-stock products" },
-        },
+    name: "list_products",
+    description: "List products, optionally filtered by name or low-stock flag.",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: { type: "integer" },
+        search: { type: "string", description: "Product name to search" },
+        low_stock: { type: "boolean", description: "If true, return only low-stock products" },
       },
     },
   },
   {
-    type: "function",
-    function: {
-      name: "list_clients",
-      description: "List clients from the system.",
-      parameters: {
-        type: "object",
-        properties: {
-          limit: { type: "integer", description: "Max number of clients to return (default 10)" },
-          search: { type: "string", description: "Search by client name or city" },
-        },
+    name: "list_clients",
+    description: "List clients / pharmacies, optionally filtered by name or city.",
+    parameters: {
+      type: "object",
+      properties: {
+        limit: { type: "integer" },
+        search: { type: "string" },
       },
     },
   },
   {
-    type: "function",
-    function: {
-      name: "create_order",
-      description: "Create a new order in the system.",
-      parameters: {
-        type: "object",
-        required: ["client_id", "client_name", "items"],
-        properties: {
-          client_id: { type: "string", description: "The client's ID" },
-          client_name: { type: "string", description: "The client's display name" },
-          rep_id: { type: "string", description: "The sales rep's ID (optional)" },
-          rep_name: { type: "string", description: "The sales rep's name (optional)" },
-          warehouse_id: { type: "string", description: "The warehouse ID (optional)" },
-          warehouse_name: { type: "string", description: "The warehouse display name (optional)" },
-          notes: { type: "string", description: "Order notes" },
+    name: "list_warehouses",
+    description: "List all active warehouses.",
+    parameters: {
+      type: "object",
+      properties: { search: { type: "string" } },
+    },
+  },
+  {
+    name: "create_order",
+    description:
+      "Create a single order. Use real IDs and prices from the preloaded data. Never use 0 as unit_price.",
+    parameters: {
+      type: "object",
+      required: ["client_id", "client_name", "items"],
+      properties: {
+        client_id:      { type: "string" },
+        client_name:    { type: "string" },
+        rep_id:         { type: "string" },
+        rep_name:       { type: "string" },
+        warehouse_id:   { type: "string" },
+        warehouse_name: { type: "string" },
+        notes:          { type: "string" },
+        items: {
+          type: "array",
+          description: "Line items",
           items: {
-            type: "array",
-            description: "Order line items.",
-            items: {
-              type: "object",
-              properties: {
-                product_id:   { type: "string",  description: "Product ID" },
-                product_name: { type: "string",  description: "Product name" },
-                quantity:     { type: "integer", description: "Quantity" },
-                unit_price:   { type: "number",  description: "Unit price in IQD — never 0" },
-              },
-              required: ["product_id", "product_name", "quantity", "unit_price"],
+            type: "object",
+            required: ["product_id", "product_name", "quantity", "unit_price"],
+            properties: {
+              product_id:   { type: "string" },
+              product_name: { type: "string" },
+              quantity:     { type: "integer" },
+              unit_price:   { type: "number", description: "Price in IQD — never 0" },
             },
           },
         },
@@ -110,226 +94,176 @@ const tools = [
     },
   },
   {
-    type: "function",
-    function: {
-      name: "update_order_status",
-      description: "Update the status of an existing order.",
-      parameters: {
-        type: "object",
-        required: ["order_id", "new_status"],
-        properties: {
-          order_id: { type: "string", description: "The order's ID" },
-          new_status: { type: "string", description: "New status: WAITING, IN_PROGRESS, READY, SENT, DELIVERED, PAID, NOT_ACCEPTED" },
+    name: "create_bulk_orders",
+    description:
+      "Create MULTIPLE orders at once. Ideal for bulk entry where many clients get orders in one request.",
+    parameters: {
+      type: "object",
+      required: ["orders"],
+      properties: {
+        orders: {
+          type: "array",
+          description: "Array of orders to create",
+          items: {
+            type: "object",
+            required: ["client_id", "client_name", "items"],
+            properties: {
+              client_id:      { type: "string" },
+              client_name:    { type: "string" },
+              rep_id:         { type: "string" },
+              rep_name:       { type: "string" },
+              warehouse_id:   { type: "string" },
+              warehouse_name: { type: "string" },
+              notes:          { type: "string" },
+              items: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["product_id", "product_name", "quantity", "unit_price"],
+                  properties: {
+                    product_id:   { type: "string" },
+                    product_name: { type: "string" },
+                    quantity:     { type: "integer" },
+                    unit_price:   { type: "number" },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
   },
   {
-    type: "function",
-    function: {
-      name: "find_client_by_name",
-      description: "Find a client by their name to get their ID.",
-      parameters: {
-        type: "object",
-        required: ["name"],
-        properties: {
-          name: { type: "string", description: "Client name to search for" },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "find_product_by_name",
-      description: "Find a product by name to get its ID and price.",
-      parameters: {
-        type: "object",
-        required: ["name"],
-        properties: {
-          name: { type: "string", description: "Product name to search for" },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_warehouses",
-      description: "List all available warehouses (کۆگاکان) in the system.",
-      parameters: {
-        type: "object",
-        properties: {
-          search: { type: "string", description: "Optional: search by warehouse name or city" },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "find_warehouse_by_name",
-      description: "Find a warehouse (کۆگا) by name to get its ID. Use this before creating an order that involves a warehouse.",
-      parameters: {
-        type: "object",
-        required: ["name"],
-        properties: {
-          name: { type: "string", description: "Warehouse name or partial name to search for" },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "find_rep_by_name",
-      description: "Find a sales representative (نوێنەر) by name to get their ID. Use this when the user mentions a rep/representative name.",
-      parameters: {
-        type: "object",
-        required: ["name"],
-        properties: {
-          name: { type: "string", description: "Rep name or partial name to search for" },
-        },
+    name: "update_order_status",
+    description: "Update the status of an existing order.",
+    parameters: {
+      type: "object",
+      required: ["order_id", "new_status"],
+      properties: {
+        order_id:   { type: "string" },
+        new_status: { type: "string", description: "WAITING | IN_PROGRESS | READY | SENT | DELIVERED | PAID | NOT_ACCEPTED" },
       },
     },
   },
 ];
 
-// ── Kurdish character normalization ───────────────────────────────────────
-// Handles variant Unicode chars so searches work regardless of keyboard/font
-function kNorm(s: string): string {
-  return s
-    .replace(/ڵ/g, 'ل')         // Kurdish ll → Arabic l
-    .replace(/ڕ/g, 'ر')         // Kurdish rr → Arabic r
-    .replace(/ێ/g, 'ی')         // Kurdish ê → Arabic y
-    .replace(/ك/g, 'ک')         // Arabic kaf → Farsi/Kurdish kaf
-    .replace(/ى/g, 'ی')         // Arabic alef maqsura → ya
-    .replace(/ة/g, 'ه')         // ta marbuta → ha
-    .replace(/[أإآ]/g, 'ا')     // hamza variants → alef
-    .trim();
+// ── Tool executor ───────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createOneOrder(args: Record<string, any>): Promise<unknown> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = (args.items as Record<string, any>[]) || [];
+  const items = raw.map(i => ({
+    product_id:   String(i.product_id   ?? i.productId   ?? ""),
+    product_name: String(i.product_name ?? i.productName ?? ""),
+    quantity:     Number(i.quantity  ?? 1),
+    unit_price:   Number(i.unit_price ?? i.unitPrice ?? 0),
+  }));
+
+  const zeroItem = items.find(i => i.unit_price === 0);
+  if (zeroItem) return { error: `unit_price is 0 for "${zeroItem.product_name}" — use the real price` };
+
+  const totalAmount = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const orderNumber = "ORD-" + String(Date.now()).slice(-6);
+
+  const { data, error } = await supabase.from("orders").insert({
+    order_number:        orderNumber,
+    client_id:           args.client_id,
+    client_name:         args.client_name,
+    rep_id:              args.rep_id    || null,
+    rep_name:            args.rep_name  || null,
+    warehouse_id:        args.warehouse_id   || null,
+    warehouse_name:      args.warehouse_name || null,
+    status:              "WAITING",
+    total_amount:        totalAmount,
+    notes:               args.notes || "",
+    items:               items.map(i => ({
+      productId: i.product_id, productName: i.product_name,
+      quantity: i.quantity, unitPrice: i.unit_price, bonusQty: 0, bonusPct: 0,
+    })),
+    driver_id: null, driver_name: "", driver_phone: "",
+    signed_invoice_url: "", signed_receipt_url: "", rejection_reason: "",
+  }).select().single();
+
+  if (error) return { error: error.message };
+  return {
+    success:       true,
+    orderNumber,
+    id:            (data as Record<string, unknown>)?.id,
+    clientName:    args.client_name,
+    repName:       args.rep_name    || null,
+    warehouseName: args.warehouse_name || null,
+    totalAmount,
+    status:        "WAITING",
+    items:         items.map(i => ({
+      productName: i.product_name, quantity: i.quantity,
+      unitPrice: i.unit_price, total: i.quantity * i.unit_price,
+    })),
+  };
 }
 
-// ── Tool execution ─────────────────────────────────────────────────────────
 async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
-    case "list_orders": {
-      let query = supabase.from("orders").select("*").order("created_at", { ascending: false }).limit((args.limit as number) || 10);
-      if (args.status) query = query.eq("status", args.status);
-      if (args.client_name) query = query.ilike("client_name", `%${args.client_name}%`);
-      const { data, error } = await query;
-      if (error) return { error: error.message };
-      return data?.map((o: Record<string, unknown>) => ({
-        id: o.id,
-        orderNumber: o.order_number,
-        client: o.client_name,
-        status: o.status,
-        total: o.total_amount,
-        createdAt: o.created_at,
-      }));
-    }
-
     case "get_dashboard_stats": {
       const today = new Date().toISOString().slice(0, 10);
-      const { data: todayOrders } = await supabase.from("orders").select("total_amount, status").gte("created_at", today);
-      const totalRevenue = (todayOrders || []).reduce((s: number, o: Record<string, unknown>) => s + ((o.total_amount as number) || 0), 0);
-      const delivered = (todayOrders || []).filter((o: Record<string, unknown>) => o.status === "DELIVERED" || o.status === "PAID").length;
-      return { todayOrders: todayOrders?.length || 0, todayRevenue: totalRevenue, delivered };
+      const { data } = await supabase.from("orders").select("total_amount, status").gte("created_at", today);
+      const orders = data || [];
+      return {
+        totalOrders:  orders.length,
+        totalRevenue: orders.reduce((s, o) => s + ((o.total_amount as number) || 0), 0),
+        delivered:    orders.filter(o => o.status === "DELIVERED" || o.status === "PAID").length,
+        waiting:      orders.filter(o => o.status === "WAITING").length,
+      };
+    }
+
+    case "list_orders": {
+      let q = supabase.from("orders").select("*").order("created_at", { ascending: false }).limit((args.limit as number) || 10);
+      if (args.status)      q = q.eq("status", args.status);
+      if (args.client_name) q = q.ilike("client_name", `%${args.client_name}%`);
+      const { data, error } = await q;
+      if (error) return { error: error.message };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return data?.map((o: any) => ({ id: o.id, orderNumber: o.order_number, client: o.client_name, status: o.status, total: o.total_amount, items: o.items, createdAt: o.created_at }));
     }
 
     case "list_products": {
-      let query = supabase.from("products").select("*").eq("is_active", true).order("name").limit((args.limit as number) || 10);
-      if (args.search) query = query.ilike("name", `%${args.search}%`);
-      const { data, error } = await query;
+      let q = supabase.from("products").select("*").eq("is_active", true).order("name").limit((args.limit as number) || 20);
+      if (args.search) q = q.ilike("name", `%${args.search}%`);
+      const { data, error } = await q;
       if (error) return { error: error.message };
-      let products = data || [];
-      if (args.low_stock) products = products.filter((p: Record<string, unknown>) => (p.stock as number) <= (p.low_stock as number));
-      return products.map((p: Record<string, unknown>) => ({ id: p.id, name: p.name, price: p.price, stock: p.stock, category: p.category }));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let products: any[] = data || [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (args.low_stock) products = products.filter((p: any) => p.stock <= (p.low_stock_threshold ?? p.low_stock ?? 10));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return products.map((p: any) => ({ id: p.id, name: p.name, price: p.price, stock: p.stock, category: p.category }));
     }
 
     case "list_clients": {
-      let query = supabase.from("clients").select("*").eq("is_active", true).order("name").limit((args.limit as number) || 10);
-      if (args.search) query = query.or(`name.ilike.%${args.search}%,city.ilike.%${args.search}%`);
-      const { data, error } = await query;
+      let q = supabase.from("clients").select("*").eq("is_active", true).order("name").limit((args.limit as number) || 20);
+      if (args.search) q = q.or(`name.ilike.%${args.search}%,city.ilike.%${args.search}%`);
+      const { data, error } = await q;
       if (error) return { error: error.message };
-      return data?.map((c: Record<string, unknown>) => ({ id: c.id, name: c.name, city: c.city, type: c.type, balance: c.balance }));
-    }
-
-    case "find_client_by_name": {
-      const term = kNorm(String(args.name || ""));
-      const { data } = await supabase.from("clients").select("id, name, city").ilike("name", `%${term}%`).limit(5);
-      if (!data || data.length === 0) return { notFound: true, term };
-      return data;
-    }
-
-    case "find_product_by_name": {
-      const term = kNorm(String(args.name || ""));
-      const { data } = await supabase.from("products").select("id, name, price, stock").ilike("name", `%${term}%`).limit(5);
-      return data;
-    }
-
-    case "create_order": {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const items = (args.items as Record<string, any>[]) || [];
+      return data?.map((c: any) => ({ id: c.id, name: c.name, city: c.city, type: c.type }));
+    }
 
-      // Normalize: accept both snake_case and camelCase from the model
-      const normalizedItems = items.map(item => ({
-        product_id:   String(item.product_id   ?? item.productId   ?? ""),
-        product_name: String(item.product_name ?? item.productName ?? ""),
-        quantity:     Number(item.quantity  ?? 1),
-        unit_price:   Number(item.unit_price ?? item.unitPrice ?? 0),
-      }));
-
-      // Validate — refuse to create order with $0 prices
-      const zeroPrice = normalizedItems.find(i => i.unit_price === 0);
-      if (zeroPrice) return { error: `unit_price is 0 for "${zeroPrice.product_name}" — look up the product first with find_product_by_name` };
-
-      const totalAmount = normalizedItems.reduce((s, item) => s + (item.quantity * item.unit_price), 0);
-      const orderNumber = "ORD-" + String(Date.now()).slice(-6);
-
-      const { data, error } = await supabase.from("orders").insert({
-        order_number: orderNumber,
-        client_id: args.client_id,
-        client_name: args.client_name,
-        rep_id: args.rep_id || null,
-        rep_name: args.rep_name || null,
-        warehouse_id: args.warehouse_id || null,
-        warehouse_name: args.warehouse_name || null,
-        status: "WAITING",
-        total_amount: totalAmount,
-        notes: args.notes || "",
-        items: normalizedItems.map(item => ({
-          productId: item.product_id,
-          productName: item.product_name,
-          quantity: item.quantity,
-          unitPrice: item.unit_price,
-          bonusQty: 0,
-          bonusPct: 0,
-        })),
-        driver_id: null,
-        driver_name: "",
-        driver_phone: "",
-        signed_invoice_url: "",
-        signed_receipt_url: "",
-        rejection_reason: "",
-      }).select().single();
-
+    case "list_warehouses": {
+      let q = supabase.from("warehouses").select("id, name, city").eq("is_active", true).order("name");
+      if (args.search) q = q.or(`name.ilike.%${args.search}%,city.ilike.%${args.search}%`);
+      const { data, error } = await q;
       if (error) return { error: error.message };
-      return {
-        success: true,
-        orderNumber,
-        id: (data as Record<string, unknown>)?.id,
-        totalAmount,
-        clientName: args.client_name,
-        repName: args.rep_name || null,
-        warehouseName: args.warehouse_name || null,
-        status: "WAITING",
-        items: normalizedItems.map(i => ({
-          productName: i.product_name,
-          quantity: i.quantity,
-          unitPrice: i.unit_price,
-          total: i.quantity * i.unit_price,
-        })),
-      };
+      return data;
+    }
+
+    case "create_order":
+      return createOneOrder(args as Record<string, unknown>);
+
+    case "create_bulk_orders": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const orderArgs = (args.orders as Record<string, any>[]) || [];
+      const results = await Promise.all(orderArgs.map(o => createOneOrder(o)));
+      return { bulk: true, count: results.length, orders: results };
     }
 
     case "update_order_status": {
@@ -338,295 +272,138 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       return { success: true, message: `Order status updated to ${args.new_status}` };
     }
 
-    case "list_warehouses": {
-      let query = supabase.from("warehouses").select("id, name, city, address, is_active").eq("is_active", true).order("name");
-      if (args.search) query = query.or(`name.ilike.%${args.search}%,city.ilike.%${args.search}%`);
-      const { data, error } = await query;
-      if (error) return { error: error.message };
-      return data;
-    }
-
-    case "find_warehouse_by_name": {
-      const term = kNorm(String(args.name || ""));
-      const { data, error } = await supabase
-        .from("warehouses")
-        .select("id, name, city, address")
-        .ilike("name", `%${term}%`)
-        .eq("is_active", true)
-        .limit(5);
-      if (error) return { error: error.message };
-      if (!data || data.length === 0) return { notFound: true, term };
-      return data;
-    }
-
-    case "find_rep_by_name": {
-      const { data, error } = await supabase
-        .from("reps")
-        .select("id, name")
-        .ilike("name", `%${kNorm(String(args.name || ""))}%`)
-        .limit(5);
-      if (error) return { error: error.message };
-      return data;
-    }
-
     default:
       return { error: `Unknown tool: ${name}` };
   }
 }
 
-// ── System prompt ──────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are Dewa AI Assistant for the Dewa pharmaceutical management system (دەوا).
+// ── System prompt ───────────────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are Dewa AI — a smart assistant for the Dewa pharmaceutical distribution system (دەوا).
 
-RESPOND in Kurdish (Sorani) when user writes Kurdish, English when they write English.
+Language: Respond in the same language the user writes in (Kurdish Sorani, Arabic, or English).
 
-## SMART SEARCH BEHAVIOR:
+## IMPORTANT RULES:
+- You have ALL products, clients, warehouses, and reps preloaded below with their exact IDs.
+- Match names using fuzzy matching (Kurdish spelling variants, partial names).
+- NEVER set unit_price to 0. Always use the real price from the preloaded data.
+- NEVER fabricate IDs. Use only IDs from the preloaded lists.
+- For single order: use create_order
+- For multiple orders at once: use create_bulk_orders (ONE call for all of them)
+- After creating orders, summarize what was done.
 
-When searching for products, clients, warehouses, or reps:
+## Currency format: [amount] دینار`;
 
-1. FUZZY MATCHING: Kurdish spelling varies (e.g. user writes "پاراسیتامۆڵ" but DB has "پاراسیتامۆل 500مغ"). If the first search returns nothing, try a shorter version of the name (e.g. "پاراسیتا" instead of the full word). Always find the closest match.
-
-2. MULTIPLE RESULTS: If search returns more than one result, pick the BEST match (closest to what the user wrote) and mention which one you used in the final reply.
-
-3. ZERO RESULTS: If nothing is found even after a shorter search, call list_products (or list_clients / list_warehouses) to show all options, then ask the user to pick one.
-
-## ORDER CREATION — ONE SHOT:
-Complete ALL lookups first, then create the order in a single pass. DO NOT stop mid-flow asking confirmation for each item. Instead:
-- Call all find_* tools to get real IDs and prices
-- Call create_order once with all real data
-- After the order is created, show a clear summary for the user to review
-
-## STRICT RULES:
-- NEVER use placeholder IDs like "product_id_" — FORBIDDEN.
-- NEVER set unit_price to 0 — always use real price from find_product_by_name.
-- NEVER call create_order without real IDs from lookup tools.
-- If you cannot find something after 2 attempts, stop and tell the user clearly.
-
-## Kurdish vocabulary:
-- "نوێنەر" = sales rep
-- "کۆگا" = warehouse
-- "کڕیار" / "داروخانە" = client/pharmacy
-- "کاڵا" / "دەرمان" = product/medicine
-
-## Order flow (all in ONE turn):
-Step 1: find_client_by_name
-Step 2: find_product_by_name for each product
-Step 3: find_warehouse_by_name (if mentioned)
-Step 4: find_rep_by_name (if mentioned)
-Step 5: create_order with all real IDs and prices
-Step 6: Show summary — order number, client, each product+qty+price, warehouse, rep, total
-
-Format currency as: [amount] دینار`;
-
-
-// ── Convert OpenAI-format tools → Gemini function declarations ──────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toGeminiTools(openAiTools: any[]) {
-  return [{
-    functionDeclarations: openAiTools.map(t => ({
-      name: t.function.name,
-      description: t.function.description,
-      parameters: t.function.parameters,
-    })),
-  }];
-}
-
-// ── Convert OpenAI message history → Gemini contents ────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toGeminiContents(msgs: any[]) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const contents: any[] = [];
-  for (const m of msgs) {
-    if (m.role === "system") continue; // handled via systemInstruction
-    if (m.role === "user") {
-      contents.push({ role: "user", parts: [{ text: m.content || "" }] });
-    } else if (m.role === "assistant") {
-      if (m.tool_calls?.length) {
-        // Function call turn
-        contents.push({
-          role: "model",
-          parts: m.tool_calls.map((tc: { function: { name: string; arguments: string } }) => ({
-            functionCall: { name: tc.function.name, args: JSON.parse(tc.function.arguments || "{}") },
-          })),
-        });
-      } else {
-        contents.push({ role: "model", parts: [{ text: m.content || "" }] });
-      }
-    } else if (m.role === "tool") {
-      // Function response
-      contents.push({
-        role: "user",
-        parts: [{ functionResponse: { name: m.name || "tool", response: JSON.parse(m.content || "{}") } }],
-      });
-    }
-  }
-  return contents;
-}
-
-// ── Call native Gemini API ───────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function callGemini(systemPrompt: string, msgs: any[]): Promise<{ ok: boolean; data?: any; err?: string }> {
-  try {
-    const body = {
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: toGeminiContents(msgs),
-      tools: toGeminiTools(tools),
-      toolConfig: { functionCallingConfig: { mode: "AUTO" } },
-      generationConfig: {
-        maxOutputTokens: 4096,
-        thinkingConfig: { thinkingBudget: 0 }, // disable thinking to avoid thought_signature multi-turn issue
-      },
-    };
-    const res = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-goog-api-key": GEMINI_KEY },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      return { ok: false, err: txt };
-    }
-    return { ok: true, data: await res.json() };
-  } catch (e) {
-    return { ok: false, err: String(e) };
-  }
-}
-
-// ── Parse Gemini response → { text?, tool_calls? } ───────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseGeminiResponse(data: any): { text?: string; toolCalls?: { id: string; function: { name: string; arguments: string } }[] } {
-  const candidate = data.candidates?.[0];
-  if (!candidate) return { text: "" };
-  const parts = candidate.content?.parts || [];
-  const textParts = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join("");
-  const fnParts = parts.filter((p: { functionCall?: unknown }) => p.functionCall);
-  if (fnParts.length > 0) {
-    return {
-      toolCalls: fnParts.map((p: { functionCall: { name: string; args: unknown } }, i: number) => ({
-        id: `call_${i}`,
-        function: { name: p.functionCall.name, arguments: JSON.stringify(p.functionCall.args) },
-      })),
-    };
-  }
-  return { text: textParts };
-}
-
-// ── Call Groq (OpenAI-compatible) ────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function callGroq(msgs: any[]): Promise<{ ok: boolean; data?: any; err?: string }> {
-  for (const provider of GROQ_PROVIDERS) {
-    const res = await fetch(provider.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider.key}` },
-      body: JSON.stringify({ model: provider.model, messages: msgs, tools, tool_choice: "auto", parallel_tool_calls: false, max_tokens: 4096 }),
-    });
-    if (res.ok) return { ok: true, data: await res.json() };
-    console.warn(`[Groq ${provider.model}] failed (${res.status})`);
-  }
-  return { ok: false, err: "All Groq models failed" };
-}
-
-// ── Main handler ───────────────────────────────────────────────────────────
+// ── Main handler ────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json();
+    const { messages } = await req.json() as { messages: { role: string; content: string }[] };
 
-    // Pre-load context from DB
+    // Pre-load all reference data into the system prompt
     const [
-      { data: allProducts },
-      { data: allClients },
-      { data: allWarehouses },
-      { data: allReps },
+      { data: products },
+      { data: clients },
+      { data: warehouses },
+      { data: reps },
     ] = await Promise.all([
-      supabase.from("products").select("id, name, price, stock").order("name"),
-      supabase.from("clients").select("id, name, city").order("name"),
+      supabase.from("products").select("id, name, price, stock").eq("is_active", true).order("name"),
+      supabase.from("clients").select("id, name, city").eq("is_active", true).order("name"),
       supabase.from("warehouses").select("id, name, city").eq("is_active", true).order("name"),
       supabase.from("reps").select("id, name").order("name"),
     ]);
 
-    const dbContext = `
-## AVAILABLE DATA (use these exact IDs when creating orders):
+    const dataContext = `
+
+## PRELOADED DATA (use these exact IDs):
 
 ### Products (کاڵاکان):
-${(allProducts || []).map(p => `- ID: ${p.id} | Name: ${p.name} | Price: ${p.price} دینار`).join("\n")}
+${(products || []).map(p => `ID:${p.id} | ${p.name} | ${p.price}دینار | stock:${p.stock}`).join("\n")}
 
-### Clients / Pharmacies (کڕیارەکان / داروخانەکان):
-${(allClients || []).map(c => `- ID: ${c.id} | Name: ${c.name}${c.city ? ` | City: ${c.city}` : ""}`).join("\n")}
+### Clients (کڕیارەکان):
+${(clients || []).map(c => `ID:${c.id} | ${c.name}${c.city ? ` | ${c.city}` : ""}`).join("\n")}
 
 ### Warehouses (کۆگاکان):
-${(allWarehouses || []).map(w => `- ID: ${w.id} | Name: ${w.name}`).join("\n")}
+${(warehouses || []).map(w => `ID:${w.id} | ${w.name}`).join("\n")}
 
-### Sales Reps (نوێنەرەکان):
-${(allReps || []).map(r => `- ID: ${r.id} | Name: ${r.name}`).join("\n")}
+### Reps (نوێنەرەکان):
+${(reps || []).map(r => `ID:${r.id} | ${r.name}`).join("\n")}`;
 
-Since you have all the IDs above, you do NOT need to call find_client_by_name, find_product_by_name, find_warehouse_by_name, or find_rep_by_name. Match names from the user's message to the lists above (use fuzzy/partial matching for Kurdish spelling variants), then call create_order directly with the correct IDs.`;
+    const systemPrompt = SYSTEM_PROMPT + dataContext;
 
-    const systemPrompt = SYSTEM_PROMPT + dbContext;
-
-    // Build message history
+    // Build Gemini-native conversation history
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const msgHistory: any[] = [
-      { role: "system", content: systemPrompt },
-      ...messages.map((m: { role: string; content: string }) => ({
-        role: m.role === "assistant" ? "assistant" : "user",
-        content: m.content,
+    const geminiHistory: Array<{ role: "user" | "model"; parts: any[] }> = [
+      ...messages.slice(0, -1).map(m => ({
+        role: (m.role === "user" ? "user" : "model") as "user" | "model",
+        parts: [{ text: m.content }],
       })),
+      { role: "user" as const, parts: [{ text: messages[messages.length - 1].content }] },
     ];
 
     const toolResults: { name: string; result: unknown }[] = [];
-    let iterations = 0;
-    const MAX_ITERATIONS = 6;
 
-    while (iterations < MAX_ITERATIONS) {
-      // Call Gemini
-      const geminiResult = await callGemini(systemPrompt, msgHistory);
+    for (let iter = 0; iter < 8; iter++) {
+      const res = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-goog-api-key": GEMINI_KEY,
+        },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: geminiHistory,
+          tools: [{ functionDeclarations }],
+          toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+          generationConfig: {
+            maxOutputTokens: 4096,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        }),
+      });
 
-      // Surface the real error if Gemini fails
-      if (!geminiResult.ok) {
-        console.error("[Gemini] error:", geminiResult.err);
-        let errMsg = "هەڵە ڕووی دا لە پەیوەندی بە Gemini.";
-        try {
-          const parsed = JSON.parse(geminiResult.err || "");
-          const detail = parsed?.error?.message || parsed?.error?.status;
-          if (detail) errMsg = `Gemini: ${detail}`;
-        } catch { /* raw text */ if (geminiResult.err) errMsg = `Gemini: ${geminiResult.err.slice(0, 200)}`; }
-        return NextResponse.json({ error: errMsg }, { status: 500 });
+      if (!res.ok) {
+        const raw = await res.text();
+        let msg = raw;
+        try { msg = JSON.parse(raw)?.error?.message ?? raw; } catch { /* noop */ }
+        console.error("[Gemini] error:", msg);
+        return NextResponse.json({ error: `Gemini: ${msg}` }, { status: 500 });
       }
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw = geminiResult.data as any;
+      const data = await res.json() as any;
+      const candidate = data.candidates?.[0];
 
-      // Handle safety block or empty candidates
-      if (!raw.candidates || raw.candidates.length === 0) {
-        const reason = raw.promptFeedback?.blockReason || "UNKNOWN";
-        return NextResponse.json({ text: `بەشداری: Gemini داواکاریەکە بڕووشاند (${reason}).`, toolResults });
+      if (!candidate) {
+        const reason = data.promptFeedback?.blockReason ?? "NO_CANDIDATE";
+        return NextResponse.json({ error: `Gemini blocked: ${reason}` }, { status: 500 });
       }
 
-      const parsed = parseGeminiResponse(raw);
-      const { text, toolCalls } = parsed;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parts: any[] = candidate.content?.parts ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fnCalls = parts.filter((p: any) => p.functionCall);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const textParts = parts.filter((p: any) => p.text);
 
-      // No tool calls — final answer
-      if (!toolCalls || toolCalls.length === 0) {
-        return NextResponse.json({ text: text || "", toolResults });
+      if (fnCalls.length === 0) {
+        const text = textParts.map((p: { text: string }) => p.text).join("");
+        return NextResponse.json({ text, toolResults });
       }
 
-      // Push assistant tool call turn
-      msgHistory.push({ role: "assistant", content: null, tool_calls: toolCalls });
+      // Push model turn (with function calls)
+      geminiHistory.push({ role: "model", parts });
 
-      // Execute tools and push results
-      for (const tc of toolCalls) {
-        const toolName = tc.function.name;
-        const toolArgs = JSON.parse(tc.function.arguments || "{}");
-        const result = await executeTool(toolName, toolArgs);
-        toolResults.push({ name: toolName, result });
-        msgHistory.push({
-          role: "tool",
-          tool_call_id: tc.id,
-          name: toolName,
-          content: JSON.stringify(result),
-        });
+      // Execute tools, collect responses
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const responseParts: any[] = [];
+      for (const part of fnCalls) {
+        const fc = part.functionCall as { name: string; args: Record<string, unknown> };
+        const result = await executeTool(fc.name, fc.args);
+        toolResults.push({ name: fc.name, result });
+        responseParts.push({ functionResponse: { name: fc.name, response: result } });
       }
 
-      iterations++;
+      // Push function responses as user turn (Gemini native format)
+      geminiHistory.push({ role: "user", parts: responseParts });
     }
 
     return NextResponse.json({ text: "تکایە دووبارە هەوڵ بدەرەوە.", toolResults });
