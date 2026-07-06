@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const GEMINI_KEY = process.env.GEMINI_API_KEY!;
+const GEMINI_KEY = (process.env.GEMINI_API_KEY ?? "").trim();
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
