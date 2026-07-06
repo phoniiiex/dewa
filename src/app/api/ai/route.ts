@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// ── AI Providers (tried in order until one works) ─────────────────────────
-// Both Gemini AI Studio and Groq use the OpenAI-compatible format
+// ── AI Providers ─────────────────────────────────────────────────────────
 const GEMINI_KEY = process.env.GEMINI_API_KEY!;
 const GROQ_KEY   = process.env.GROQ_API_KEY!;
 
-const PROVIDERS = [
-  // Gemini — smarter, primary
-  { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: GEMINI_KEY, model: "gemini-2.5-flash" },
-  { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: GEMINI_KEY, model: "gemini-2.0-flash" },
-  // Groq — fallback when Gemini quota is exhausted
+// Native Gemini endpoint (uses X-goog-api-key, NOT Authorization: Bearer)
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent`;
+
+// Groq fallback — OpenAI-compatible
+const GROQ_PROVIDERS = [
   { url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ_KEY, model: "llama-3.3-70b-versatile" },
   { url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ_KEY, model: "meta-llama/llama-4-scout-17b-16e-instruct" },
   { url: "https://api.groq.com/openai/v1/chat/completions", key: GROQ_KEY, model: "llama-3.1-8b-instant" },
@@ -409,12 +408,116 @@ Step 6: Show summary — order number, client, each product+qty+price, warehouse
 Format currency as: [amount] دینار`;
 
 
+// ── Convert OpenAI-format tools → Gemini function declarations ──────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toGeminiTools(openAiTools: any[]) {
+  return [{
+    functionDeclarations: openAiTools.map(t => ({
+      name: t.function.name,
+      description: t.function.description,
+      parameters: t.function.parameters,
+    })),
+  }];
+}
+
+// ── Convert OpenAI message history → Gemini contents ────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toGeminiContents(msgs: any[]) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const contents: any[] = [];
+  for (const m of msgs) {
+    if (m.role === "system") continue; // handled via systemInstruction
+    if (m.role === "user") {
+      contents.push({ role: "user", parts: [{ text: m.content || "" }] });
+    } else if (m.role === "assistant") {
+      if (m.tool_calls?.length) {
+        // Function call turn
+        contents.push({
+          role: "model",
+          parts: m.tool_calls.map((tc: { function: { name: string; arguments: string } }) => ({
+            functionCall: { name: tc.function.name, args: JSON.parse(tc.function.arguments || "{}") },
+          })),
+        });
+      } else {
+        contents.push({ role: "model", parts: [{ text: m.content || "" }] });
+      }
+    } else if (m.role === "tool") {
+      // Function response
+      contents.push({
+        role: "user",
+        parts: [{ functionResponse: { name: m.name || "tool", response: JSON.parse(m.content || "{}") } }],
+      });
+    }
+  }
+  return contents;
+}
+
+// ── Call native Gemini API ───────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callGemini(systemPrompt: string, msgs: any[]): Promise<{ ok: boolean; data?: any; err?: string }> {
+  try {
+    const body = {
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: toGeminiContents(msgs),
+      tools: toGeminiTools(tools),
+      toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+      generationConfig: { maxOutputTokens: 4096 },
+    };
+    const res = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-goog-api-key": GEMINI_KEY },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      return { ok: false, err: txt };
+    }
+    return { ok: true, data: await res.json() };
+  } catch (e) {
+    return { ok: false, err: String(e) };
+  }
+}
+
+// ── Parse Gemini response → { text?, tool_calls? } ───────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseGeminiResponse(data: any): { text?: string; toolCalls?: { id: string; function: { name: string; arguments: string } }[] } {
+  const candidate = data.candidates?.[0];
+  if (!candidate) return { text: "" };
+  const parts = candidate.content?.parts || [];
+  const textParts = parts.filter((p: { text?: string }) => p.text).map((p: { text: string }) => p.text).join("");
+  const fnParts = parts.filter((p: { functionCall?: unknown }) => p.functionCall);
+  if (fnParts.length > 0) {
+    return {
+      toolCalls: fnParts.map((p: { functionCall: { name: string; args: unknown } }, i: number) => ({
+        id: `call_${i}`,
+        function: { name: p.functionCall.name, arguments: JSON.stringify(p.functionCall.args) },
+      })),
+    };
+  }
+  return { text: textParts };
+}
+
+// ── Call Groq (OpenAI-compatible) ────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callGroq(msgs: any[]): Promise<{ ok: boolean; data?: any; err?: string }> {
+  for (const provider of GROQ_PROVIDERS) {
+    const res = await fetch(provider.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider.key}` },
+      body: JSON.stringify({ model: provider.model, messages: msgs, tools, tool_choice: "auto", parallel_tool_calls: false, max_tokens: 4096 }),
+    });
+    if (res.ok) return { ok: true, data: await res.json() };
+    console.warn(`[Groq ${provider.model}] failed (${res.status})`);
+  }
+  return { ok: false, err: "All Groq models failed" };
+}
+
 // ── Main handler ───────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const { messages } = await req.json();
 
-    // ── Pre-load context from DB so AI can resolve names→IDs without tool calls ──
+    // Pre-load context from DB
     const [
       { data: allProducts },
       { data: allClients },
@@ -444,10 +547,12 @@ ${(allReps || []).map(r => `- ID: ${r.id} | Name: ${r.name}`).join("\n")}
 
 Since you have all the IDs above, you do NOT need to call find_client_by_name, find_product_by_name, find_warehouse_by_name, or find_rep_by_name. Match names from the user's message to the lists above (use fuzzy/partial matching for Kurdish spelling variants), then call create_order directly with the correct IDs.`;
 
-    // Build OpenAI-format message history
+    const systemPrompt = SYSTEM_PROMPT + dbContext;
+
+    // Build message history (OpenAI format — converted to Gemini format inside callGemini)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const groqMessages: any[] = [
-      { role: "system", content: SYSTEM_PROMPT + dbContext },
+    const msgHistory: any[] = [
+      { role: "system", content: systemPrompt },
       ...messages.map((m: { role: string; content: string }) => ({
         role: m.role === "assistant" ? "assistant" : "user",
         content: m.content,
@@ -457,71 +562,54 @@ Since you have all the IDs above, you do NOT need to call find_client_by_name, f
     const toolResults: { name: string; result: unknown }[] = [];
     let iterations = 0;
     const MAX_ITERATIONS = 6;
+    let useGroqFallback = false;
 
     while (iterations < MAX_ITERATIONS) {
-      // Try each provider until one works
-      let response!: Response;
-      let lastErr = "";
-      for (const provider of PROVIDERS) {
-        response = await fetch(provider.url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${provider.key}`,
-          },
-          body: JSON.stringify({
-            model: provider.model,
-            messages: groqMessages,
-            tools,
-            tool_choice: "auto",
-            parallel_tool_calls: false,
-            max_tokens: 4096,
-          }),
-        });
-        if (response.ok) break;
-        lastErr = await response.text();
-        console.warn(`[${provider.model}] failed (${response.status}):`, lastErr.slice(0, 100));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let text: string | undefined, toolCalls: any[] | undefined;
+
+      if (!useGroqFallback) {
+        // Try native Gemini first
+        const geminiResult = await callGemini(systemPrompt, msgHistory);
+        if (geminiResult.ok) {
+          const parsed = parseGeminiResponse(geminiResult.data);
+          text = parsed.text;
+          toolCalls = parsed.toolCalls;
+        } else {
+          console.warn("Gemini failed, falling back to Groq:", geminiResult.err?.slice(0, 100));
+          useGroqFallback = true;
+        }
       }
 
-      if (!response.ok) {
-        // Try to extract a retry delay if rate limited
-        let retryMsg = "تکایە چەند خولەکێک چاوەڕێ بکە و دووبارە هەوڵ بدەرەوە.";
-        try {
-          const errJson = JSON.parse(lastErr);
-          const retryAfter = errJson?.error?.message?.match(/Please try again in ([\d.]+)s/)?.[1];
-          if (retryAfter) {
-            const secs = Math.ceil(parseFloat(retryAfter));
-            retryMsg = `تکایە ${secs} چرکە چاوەڕێ بکە و دووبارە هەوڵ بدەرەوە.`;
-          }
-        } catch { /* ignore */ }
-        return NextResponse.json({ error: `⏳ کوتای داواکاری پڕبوو. ${retryMsg}` }, { status: 429 });
+      if (useGroqFallback) {
+        const groqResult = await callGroq(msgHistory);
+        if (!groqResult.ok) {
+          return NextResponse.json({ error: "⏳ کوتای داواکاری پڕبوو. تکایە چەند خولەکێک چاوەڕێ بکە." }, { status: 429 });
+        }
+        const msg = groqResult.data.choices?.[0]?.message;
+        if (!msg) return NextResponse.json({ error: "Empty response from AI" }, { status: 500 });
+        text = msg.content;
+        toolCalls = msg.tool_calls;
       }
 
-      const data = await response.json();
-      const msg = data.choices?.[0]?.message;
-      if (!msg) return NextResponse.json({ error: "Empty response from AI" }, { status: 500 });
-
-      // No tool calls — this is the final answer
-      if (!msg.tool_calls || msg.tool_calls.length === 0) {
-        return NextResponse.json({ text: msg.content || "", toolResults });
+      // No tool calls — final answer
+      if (!toolCalls || toolCalls.length === 0) {
+        return NextResponse.json({ text: text || "", toolResults });
       }
 
-      // Push assistant message with tool calls into history
-      groqMessages.push({
-        role: "assistant",
-        content: msg.content || null,
-        tool_calls: msg.tool_calls,
-      });
+      // Push assistant tool call turn
+      msgHistory.push({ role: "assistant", content: null, tool_calls: toolCalls });
 
-      // Execute each tool and push results
-      for (const tc of msg.tool_calls) {
+      // Execute tools and push results
+      for (const tc of toolCalls) {
         const toolName = tc.function.name;
         const toolArgs = JSON.parse(tc.function.arguments || "{}");
         const result = await executeTool(toolName, toolArgs);
         toolResults.push({ name: toolName, result });
-        groqMessages.push({
+        msgHistory.push({
           role: "tool",
           tool_call_id: tc.id,
+          name: toolName,
           content: JSON.stringify(result),
         });
       }
