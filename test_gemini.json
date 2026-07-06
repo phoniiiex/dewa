@@ -1,0 +1,4 @@
+{
+  "contents": [{"role": "user", "parts": [{"text": "say hi"}]}],
+  "tools": [{"functionDeclarations": [{"name": "get_stats", "description": "Get stats", "parameters": {"type": "object", "properties": {}}}]}]
+}

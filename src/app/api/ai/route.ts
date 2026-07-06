@@ -93,7 +93,17 @@ const tools = [
           notes: { type: "string", description: "Order notes" },
           items: {
             type: "array",
-            description: "Order line items. Each element must be an object with: product_id (string, required), product_name (string, required), quantity (integer, required), unit_price (number in IQD, required - never 0).",
+            description: "Order line items.",
+            items: {
+              type: "object",
+              properties: {
+                product_id:   { type: "string",  description: "Product ID" },
+                product_name: { type: "string",  description: "Product name" },
+                quantity:     { type: "integer", description: "Quantity" },
+                unit_price:   { type: "number",  description: "Unit price in IQD — never 0" },
+              },
+              required: ["product_id", "product_name", "quantity", "unit_price"],
+            },
           },
         },
       },
