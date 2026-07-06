@@ -1,6 +1,6 @@
 "use client";
-import { useState, FormEvent, useMemo } from "react";
-import { Search, Plus, UserCheck, Phone, MapPin, Edit3, Trash2, Eye, X } from "lucide-react";
+import { useState, FormEvent, useMemo, useRef } from "react";
+import { Search, Plus, UserCheck, Phone, MapPin, Edit3, Trash2, X, Camera } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Rep } from "@/lib/types";
@@ -28,6 +28,30 @@ export default function RepsPage() {
   const resetForm = () => setForm({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true });
   const openAdd  = () => { resetForm(); setEditing(null); setModalOpen(true); };
   const openEdit = (r: Rep) => { setEditing(r); setForm({ name: r.name, phone: r.phone, email: r.email || "", city: r.city, profilePic: r.profilePic || "", isActive: r.isActive }); setModalOpen(true); };
+
+  const picInputRef = useRef<HTMLInputElement>(null);
+
+  // Resize image to ≤200px and return base64 JPEG
+  const resizeImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 200;
+          const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+          const canvas = document.createElement("canvas");
+          canvas.width  = Math.round(img.width  * ratio);
+          canvas.height = Math.round(img.height * ratio);
+          canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.onerror = reject;
+        img.src = ev.target!.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -123,21 +147,44 @@ export default function RepsPage() {
       {/* Add/Edit Modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "دەستکاری نوێنەر" : "نوێنەری نوێ"} width={480}>
         <form onSubmit={handleSubmit}>
-          {/* Photo preview */}
+          {/* Clickable avatar upload */}
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-            <div style={{ width: 72, height: 72, borderRadius: "50%", overflow: "hidden", border: "3px solid #E9ECEF", background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div
+              onClick={() => picInputRef.current?.click()}
+              style={{ position: "relative", width: 80, height: 80, borderRadius: "50%", overflow: "hidden", border: "3px solid #4263EB", background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+            >
               {form.profilePic
-                ? <img src={form.profilePic} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => (e.target as HTMLImageElement).style.display = "none"} />
+                ? <img src={form.profilePic} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 : <span style={{ color: "white", fontSize: 28, fontWeight: 800 }}>{form.name.charAt(0) || "?"}</span>
               }
+              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity .2s" }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                onMouseLeave={e => (e.currentTarget.style.opacity = "0")}>
+                <Camera size={18} color="white" />
+              </div>
             </div>
+            <input ref={picInputRef} type="file" accept="image/*" style={{ display: "none" }}
+              onChange={async e => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                try { setForm(prev => ({ ...prev, profilePic: "" })); const b64 = await resizeImage(f); setForm(prev => ({ ...prev, profilePic: b64 })); }
+                catch { alert("وێنەکە بارنەبوو"); }
+              }}
+            />
           </div>
+          {form.profilePic && (
+            <div style={{ textAlign: "center", marginBottom: 8 }}>
+              <button type="button" onClick={() => setForm(prev => ({ ...prev, profilePic: "" }))}
+                style={{ fontSize: 11, color: "#FA5252", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                سڕینەوەی وێنە
+              </button>
+            </div>
+          )}
           <FormGrid cols={1}>
             <FormField label="ناوی نوێنەر" required><input style={inputStyle} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
             <FormField label="ئیمەیڵ"><input style={inputStyle} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="rep@example.com" dir="ltr" /></FormField>
             <FormField label="تەلەفۆن" required><input style={inputStyle} required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0770 XXX XXXX" /></FormField>
             <FormField label="شار"><select style={selectStyle} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })}>{cities.map(c => <option key={c} value={c}>{c}</option>)}</select></FormField>
-            <FormField label="لینکی وێنەی پرۆفایل (URL)"><input style={inputStyle} value={form.profilePic} onChange={(e) => setForm({ ...form, profilePic: e.target.value })} placeholder="https://..." dir="ltr" /></FormField>
           </FormGrid>
           <div style={{ marginTop: 16 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
