@@ -549,7 +549,7 @@ Since you have all the IDs above, you do NOT need to call find_client_by_name, f
 
     const systemPrompt = SYSTEM_PROMPT + dbContext;
 
-    // Build message history (OpenAI format — converted to Gemini format inside callGemini)
+    // Build message history
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const msgHistory: any[] = [
       { role: "system", content: systemPrompt },
@@ -562,35 +562,34 @@ Since you have all the IDs above, you do NOT need to call find_client_by_name, f
     const toolResults: { name: string; result: unknown }[] = [];
     let iterations = 0;
     const MAX_ITERATIONS = 6;
-    let useGroqFallback = false;
 
     while (iterations < MAX_ITERATIONS) {
+      // Call Gemini
+      const geminiResult = await callGemini(systemPrompt, msgHistory);
+
+      // Surface the real error if Gemini fails
+      if (!geminiResult.ok) {
+        console.error("[Gemini] error:", geminiResult.err);
+        let errMsg = "هەڵە ڕووی دا لە پەیوەندی بە Gemini.";
+        try {
+          const parsed = JSON.parse(geminiResult.err || "");
+          const detail = parsed?.error?.message || parsed?.error?.status;
+          if (detail) errMsg = `Gemini: ${detail}`;
+        } catch { /* raw text */ if (geminiResult.err) errMsg = `Gemini: ${geminiResult.err.slice(0, 200)}`; }
+        return NextResponse.json({ error: errMsg }, { status: 500 });
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let text: string | undefined, toolCalls: any[] | undefined;
+      const raw = geminiResult.data as any;
 
-      if (!useGroqFallback) {
-        // Try native Gemini first
-        const geminiResult = await callGemini(systemPrompt, msgHistory);
-        if (geminiResult.ok) {
-          const parsed = parseGeminiResponse(geminiResult.data);
-          text = parsed.text;
-          toolCalls = parsed.toolCalls;
-        } else {
-          console.warn("Gemini failed, falling back to Groq:", geminiResult.err?.slice(0, 100));
-          useGroqFallback = true;
-        }
+      // Handle safety block or empty candidates
+      if (!raw.candidates || raw.candidates.length === 0) {
+        const reason = raw.promptFeedback?.blockReason || "UNKNOWN";
+        return NextResponse.json({ text: `بەشداری: Gemini داواکاریەکە بڕووشاند (${reason}).`, toolResults });
       }
 
-      if (useGroqFallback) {
-        const groqResult = await callGroq(msgHistory);
-        if (!groqResult.ok) {
-          return NextResponse.json({ error: "⏳ کوتای داواکاری پڕبوو. تکایە چەند خولەکێک چاوەڕێ بکە." }, { status: 429 });
-        }
-        const msg = groqResult.data.choices?.[0]?.message;
-        if (!msg) return NextResponse.json({ error: "Empty response from AI" }, { status: 500 });
-        text = msg.content;
-        toolCalls = msg.tool_calls;
-      }
+      const parsed = parseGeminiResponse(raw);
+      const { text, toolCalls } = parsed;
 
       // No tool calls — final answer
       if (!toolCalls || toolCalls.length === 0) {
