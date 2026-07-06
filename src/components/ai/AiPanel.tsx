@@ -4,7 +4,7 @@ import {
   X, Mic, Paperclip, Send, ChevronDown, Sparkles,
   Package, TrendingUp, ClipboardList, AlertTriangle,
   BarChart4, Plus, Users, DollarSign, Search, ShoppingCart,
-  Keyboard, ChevronRight, CheckCircle2, Building2, User, MapPin,
+  Keyboard, ChevronRight, CheckCircle2, Building2, User, MapPin, Trash2,
 } from "lucide-react";
 import { useLayout } from "@/app/dashboard/layout";
 
@@ -464,6 +464,23 @@ export default function AiPanel({ open, onClose }: { open: boolean; onClose: () 
         fontFamily: "Inter, system-ui, sans-serif",
         overflow: "hidden",
       }}>
+
+        {/* ── Clear history button ── */}
+        <button
+          onClick={() => { setMessages([]); try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ } }}
+          title="Clear chat history"
+          style={{
+            position: "absolute", top: 12, right: 56, zIndex: 10,
+            width: 40, height: 40,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "transparent", border: "none", borderRadius: 8,
+            cursor: "pointer", color: "#a3a3a3", transition: "all 0.12s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "#fef2f2"; e.currentTarget.style.color = "#dc2626"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#a3a3a3"; }}
+        >
+          <Trash2 size={17} strokeWidth={2} />
+        </button>
 
         {/* ── Close button ── */}
         <button onClick={onClose} style={{
