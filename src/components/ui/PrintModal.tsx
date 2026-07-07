@@ -63,10 +63,12 @@ export default function PrintModal({ open, onClose, order }: Props) {
   };
 
   const handleQuickPrint = async () => {
+    // Open the window FIRST (synchronously while still in user-gesture context)
+    // so the browser popup blocker doesn't kill it after the async await below
+    const w = window.open("", "_blank");
+    if (!w) { alert("Popup blocked — please allow popups for this site."); return; }
     const qrSvg = await buildQrSvg();
     const html = buildQuickPrintHTML(order, client, settings, docTypeFilter, subtotal, qrSvg);
-    const w = window.open("", "_blank");
-    if (!w) return;
     w.document.write(html);
     w.document.close();
     setTimeout(() => { w.print(); }, 400);
@@ -75,10 +77,10 @@ export default function PrintModal({ open, onClose, order }: Props) {
 
   const handlePrintWithTemplate = async () => {
     if (!selectedTemplate) return;
+    const w = window.open("", "_blank");
+    if (!w) { alert("Popup blocked — please allow popups for this site."); return; }
     const qrSvg = await buildQrSvg();
     const html = buildTemplateHTML(order, client, settings, selectedTemplate, subtotal, qrSvg);
-    const w = window.open("", "_blank");
-    if (!w) return;
     w.document.write(html);
     w.document.close();
     setTimeout(() => { w.print(); }, 500);
@@ -262,7 +264,7 @@ function buildTemplateHTML(
   const disc = subtotal * (t.defaultDiscount / 100);
   const total = subtotal - disc;
   const sc = order.status === "PAID" ? "inv-status-paid" : "inv-status-pending";
-  const stL: Record<string, string> = { PENDING: "چاوەڕوان", PROCESSING: "لە پڕۆسەدا", SHIPPED: "نێردرا", DELIVERED: "گەیشت", PAID: "پارەدراو", CANCELLED: "هەڵوەشاوە" };
+  const stL: Record<string, string> = { WAITING: "چاوەڕوان", IN_PROGRESS: "لە پڕۆسەدا", READY: "ئامادەیە", SENT: "نێردراوە", DELIVERED: "گەیشتووە", PAID: "پارەدراوە", NOT_ACCEPTED: "ڕەتکراوە" };
   const parts: string[] = [];
 
   for (const b of t.blocks.filter(b => b.visible)) {
@@ -294,7 +296,7 @@ function buildQuickPrintHTML(
   docType: DocType, subtotal: number, qrSvg: string
 ): string {
   const docLabel = { invoice: "پسووڵە", receipt: "وەسڵ", delivery: "وەرقەی گەیاندن", quote: "نرخنامە" }[docType];
-  const stL: Record<string, string> = { PENDING: "چاوەڕوان", PROCESSING: "لە پڕۆسەدا", SHIPPED: "نێردرا", DELIVERED: "گەیشت", PAID: "پارەدراو", CANCELLED: "هەڵوەشاوە" };
+  const stL: Record<string, string> = { WAITING: "چاوەڕوان", IN_PROGRESS: "لە پڕۆسەدا", READY: "ئامادەیە", SENT: "نێردراوە", DELIVERED: "گەیشتووە", PAID: "پارەدراوە", NOT_ACCEPTED: "ڕەتکراوە" };
   const rows = order.items.map((it, i) => `<tr><td style="color:#ADB5BD">${i + 1}</td><td style="font-weight:600">${it.productName}</td><td>${it.quantity}</td><td style="color:#40C057;font-weight:700">+${it.bonusQty}</td><td>${formatIQD(it.unitPrice)}</td><td style="font-weight:800">${formatIQD(it.quantity * it.unitPrice)}</td></tr>`).join("");
   const sc = order.status === "PAID" ? "#D3F9D8;color:#2B8A3E" : "#FFF3BF;color:#E67700";
   const body = `
