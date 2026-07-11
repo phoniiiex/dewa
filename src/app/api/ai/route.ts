@@ -398,8 +398,10 @@ ${(reps || []).map(r => `ID:${r.id} | ${r.name}`).join("\n")}`;
       for (const part of fnCalls) {
         const fc = part.functionCall as { name: string; args: Record<string, unknown> };
         const result = await executeTool(fc.name, fc.args);
-        toolResults.push({ name: fc.name, result });
-        responseParts.push({ functionResponse: { name: fc.name, response: result } });
+        // Gemini's functionResponse.response must be a proto Struct (object), never an array.
+        // Wrap any array result in { items: [...] } to satisfy the schema.
+        const geminiResult = Array.isArray(result) ? { items: result } : (result as Record<string, unknown>);
+        responseParts.push({ functionResponse: { name: fc.name, response: geminiResult } });
       }
 
       // Push function responses as user turn (Gemini native format)
