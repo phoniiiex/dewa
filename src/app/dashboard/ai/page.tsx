@@ -397,7 +397,7 @@ export default function AiPage() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const recognition: any = new SpeechRecognitionAPI();
-    // No lang lock — use browser/OS default for best accuracy
+    recognition.lang = "ckb"; // Central Kurdish — Sorani
     recognition.interimResults = true;
     recognition.continuous = true; // keep recording until user stops
 
