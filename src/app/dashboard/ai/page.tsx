@@ -369,15 +369,22 @@ export default function AiPage() {
     }
   }, [messages, loading]);
 
+  const transcriptRef = useRef("");
+
   const handleMic = useCallback(() => {
-    // Stop if already listening
+    // ── Stop if already listening ──────────────────────────────────────────────
     if (recognitionRef.current) {
+      const finalText = transcriptRef.current.trim();
       recognitionRef.current.stop();
       recognitionRef.current = null;
       setListening(false);
+      transcriptRef.current = "";
+      setInputValue("");
+      if (finalText) sendMessage(finalText);
       return;
     }
 
+    // ── Start ──────────────────────────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
@@ -386,33 +393,50 @@ export default function AiPage() {
       return;
     }
 
+    transcriptRef.current = "";
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const recognition: any = new SpeechRecognitionAPI();
-    recognition.lang = "ku"; // Kurdish — falls back to closest available
+    // No lang lock — use browser/OS default for best accuracy
     recognition.interimResults = true;
-    recognition.continuous = false;
+    recognition.continuous = true; // keep recording until user stops
 
     recognition.onstart = () => setListening(true);
+
     recognition.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
+      // If user hasn't manually stopped (recognitionRef still set), restart
+      // This handles browser auto-stopping after long silence
+      if (recognitionRef.current) {
+        try { recognitionRef.current.start(); } catch { /* ignore */ }
+      } else {
+        setListening(false);
+      }
     };
-    recognition.onerror = () => {
-      setListening(false);
+
+    recognition.onerror = (e: { error: string }) => {
+      // "no-speech" and "aborted" are non-fatal — just restart
+      if (e.error === "no-speech" || e.error === "aborted") return;
       recognitionRef.current = null;
+      setListening(false);
+      transcriptRef.current = "";
+      setInputValue("");
     };
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results as ArrayLike<{ [0]: { transcript: string } }>)
-        .map((r) => r[0].transcript)
-        .join("");
-      const isFinal = (event.results[event.results.length - 1] as { isFinal: boolean }).isFinal;
-      setInputValue(transcript);
-      if (isFinal) {
-        recognition.stop();
-        if (transcript.trim()) sendMessage(transcript.trim());
-        setInputValue("");
+      let finalChunk = "";
+      let interimChunk = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalChunk += result[0].transcript;
+        } else {
+          interimChunk += result[0].transcript;
+        }
       }
+      // Accumulate finals, show interim preview
+      transcriptRef.current += finalChunk;
+      setInputValue(transcriptRef.current + interimChunk);
     };
 
     recognitionRef.current = recognition;
