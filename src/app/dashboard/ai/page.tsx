@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  useState, useCallback, useRef,
+  useState, useCallback, useRef, useEffect,
 } from "react";
 import { StreamingText } from "@/components/ui/streaming-text";
 import {
@@ -9,6 +9,7 @@ import {
   Package, Users, CheckCircle2, AlertCircle,
   ChevronDown, ChevronUp, Loader2, TrendingUp,
   Warehouse, Archive, Camera, LayoutGrid, Plug,
+  Phone, PhoneOff, Volume2,
 } from "lucide-react";
 import { useLayout } from "@/app/dashboard/layout";
 import { Button } from "@/components/ui/button";
@@ -327,8 +328,11 @@ export default function AiPage() {
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [inputValue, setInputValue] = useState("");
 
   const userInitials = currentUser?.name
@@ -428,6 +432,61 @@ export default function AiPage() {
     setListening(true);
   }, [sendMessage]);
 
+  // ── TTS: play AI response in voice mode ─────────────────────────────────────
+  const playTTS = useCallback(async (text: string) => {
+    // Stop any current playback
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setSpeaking(true);
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) { setSpeaking(false); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        audioRef.current = null;
+        setSpeaking(false);
+        // Auto-trigger mic after AI speaks (if still in voice mode)
+        setVoiceMode(vm => { if (vm) setTimeout(() => handleMic(), 300); return vm; });
+      };
+      audio.onerror = () => { setSpeaking(false); };
+      audio.play().catch(() => setSpeaking(false));
+    } catch { setSpeaking(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-play TTS when a new non-loading assistant message arrives in voice mode
+  useEffect(() => {
+    if (!voiceMode) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant" || last.loading || !last.text) return;
+    // Only play the most recent message (prevent replaying old ones)
+    const prevCount = messages.length;
+    if (prevCount < 1) return;
+    playTTS(last.text);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
+
+  const toggleVoiceMode = useCallback(() => {
+    setVoiceMode(v => {
+      if (v) {
+        // Stop playback and recording on exit
+        if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+        setSpeaking(false);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+          mediaRecorderRef.current.stop();
+        }
+      }
+      return !v;
+    });
+  }, []);
+
   const isEmpty = messages.length === 0;
 
   return (
@@ -435,24 +494,37 @@ export default function AiPage() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between py-4 px-1 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="size-9 rounded-xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-sm shadow-primary/30">
-            <Sparkles className="size-4 text-white" />
+          <div className={`size-9 rounded-xl flex items-center justify-center shadow-sm transition-all ${voiceMode ? "bg-gradient-to-br from-red-500 to-pink-600 shadow-red-500/30 animate-pulse" : "bg-gradient-to-br from-primary to-violet-500 shadow-primary/30"}`}>
+            {voiceMode && speaking ? <Volume2 className="size-4 text-white" /> : <Sparkles className="size-4 text-white" />}
           </div>
           <div>
             <h1 className="font-bold text-lg leading-none">Dewa AI</h1>
-            <p className="text-xs text-muted-foreground">Gemini · ئاژیاری زیرەک</p>
+            <p className="text-xs text-muted-foreground">
+              {voiceMode ? (speaking ? "🔊 گوێدەگرم…" : listening ? "🎙️ قسەبکە…" : "دەنگی چالاکە") : "Gemini · ئاژیاری زیرەک"}
+            </p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1.5 text-muted-foreground"
-          onClick={() => setMessages([])}
-          disabled={isEmpty || loading}
-        >
-          <RotateCwIcon className="size-3.5" />
-          گفتوگۆی نوێ
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={voiceMode ? "default" : "outline"}
+            size="sm"
+            className={`gap-1.5 ${voiceMode ? "bg-red-500 hover:bg-red-600 border-0 text-white" : ""}`}
+            onClick={toggleVoiceMode}
+          >
+            {voiceMode ? <PhoneOff className="size-3.5" /> : <Phone className="size-3.5" />}
+            {voiceMode ? "دەنگ کۆتابی بهێنە" : "گفتوگۆی دەنگی"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground"
+            onClick={() => setMessages([])}
+            disabled={isEmpty || loading}
+          >
+            <RotateCwIcon className="size-3.5" />
+            گفتوگۆی نوێ
+          </Button>
+        </div>
       </div>
 
       {/* ── Messages ── */}
