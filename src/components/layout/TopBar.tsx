@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Search, Bell, Calendar, SlidersHorizontal, Plus,
-  Sparkles, CheckCircle2, AlertTriangle, Clock,
+  Sparkles, CheckCircle2, AlertTriangle, Clock, GripVertical,
 } from "lucide-react";
 import { useLayout, type DateRange } from "@/app/dashboard/layout";
 import { useData } from "@/lib/store";
@@ -69,6 +69,7 @@ export default function TopBar() {
     dateRange, setDateRange,
     globalStatusFilter, setGlobalStatusFilter,
     setOpenNewOrder,
+    dashboardEditing, setDashboardEditing,
   } = useLayout();
 
   const { orders, products } = useData();
@@ -175,6 +176,22 @@ export default function TopBar() {
             <Sparkles className="size-3.5 shrink-0" />
             <span className="hidden sm:inline">دەوا AI</span>
           </Button>
+
+          {/* Dashboard customize — only on home */}
+          {pathname === "/dashboard" && (
+            <Button
+              id="topbar-customize"
+              variant={dashboardEditing ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setDashboardEditing(!dashboardEditing)}
+            >
+              <GripVertical className="size-3.5" />
+              <span className="hidden sm:inline">
+                {dashboardEditing ? "مووچکردن" : "تەرخانکردن"}
+              </span>
+            </Button>
+          )}
 
           {/* Notifications */}
           <Popover open={notifOpen} onOpenChange={setNotifOpen}>

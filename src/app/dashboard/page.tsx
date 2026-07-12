@@ -7,6 +7,7 @@ import {
   ArrowUpRight, Boxes, Activity,
 } from "lucide-react";
 import { useData } from "@/lib/store";
+import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -141,12 +142,15 @@ const STATUS_LABELS: Record<string, string> = {
 export default function DashboardPage() {
   const { orders, products, clients, reps, transactions, loading } = useData();
 
+  const { dashboardEditing: isEditing, setDashboardEditing: setIsEditing } = useLayout();
   const [layout, setLayout] = useState<string[]>(DEFAULT_LAYOUT);
-  const [isEditing, setIsEditing] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [showCatalog, setShowCatalog] = useState(false);
   const [allUsers, setAllUsers] = useState<{ id: string; name: string; role: string; avatar_url: string; last_seen: string }[]>([]);
+
+  // Close catalog when editing stops
+  useEffect(() => { if (!isEditing) setShowCatalog(false); }, [isEditing]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -659,14 +663,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Edit toggle (top-right floating) ── */}
-      <div className="flex justify-end mb-3">
-        <Button variant={isEditing ? "default" : "outline"} size="sm" className="text-xs"
-          onClick={() => { setIsEditing(e => !e); if (isEditing) setShowCatalog(false); }}>
-          <GripVertical className="size-3.5 me-1" />
-          {isEditing ? "مووچکردن" : "تەرخانکردن"}
-        </Button>
-      </div>
 
       {/* ── Widget Grid ── */}
       <div className="grid grid-cols-4 gap-4 page-stagger">

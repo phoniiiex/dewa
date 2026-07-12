@@ -29,6 +29,8 @@ interface LayoutContextType {
   setGlobalStatusFilter: (s: string) => void;
   openNewOrder: boolean;
   setOpenNewOrder: (v: boolean) => void;
+  dashboardEditing: boolean;
+  setDashboardEditing: (v: boolean) => void;
 }
 
 const LayoutContext = createContext<LayoutContextType | null>(null);
@@ -48,6 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null, label: "هەموو ماوەکان" });
   const [globalStatusFilter, setGlobalStatusFilter] = useState("هەموو");
   const [openNewOrder, setOpenNewOrder] = useState(false);
+  const [dashboardEditing, setDashboardEditing] = useState(false);
   const hbIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Auth guard
@@ -139,6 +142,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           dateRange, setDateRange,
           globalStatusFilter, setGlobalStatusFilter,
           openNewOrder, setOpenNewOrder,
+          dashboardEditing, setDashboardEditing,
         }}>
           <SidebarProvider dir="rtl">
             <AppSidebar />
