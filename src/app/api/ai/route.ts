@@ -293,10 +293,34 @@ Language: Respond in the same language the user writes in (Kurdish Sorani, Arabi
 
 ## Currency format: [amount] دینار`;
 
+// Voice mode: always Kurdish Sorani, short & spoken
+const VOICE_SYSTEM_PROMPT = `تۆ دەوا AI یت — یاریدەدەری زیرەک بۆ سیستەمی دابەشکردنی دەرمانی دەوا.
+
+## زمان:
+هەمیشە بە کوردی سۆرانی وەڵام بدەرەوە — تەنها کوردی، هیچ زمانێکی تر نەبێت.
+وەڵامەکانت کورت و گفتوگۆیی بێت — وەک کە ئەواتە قسە دەکەیت بۆ کەس، نەک نووسین.
+جووڵەی کەمتر بکەرەوە، ژمارە کەمتر، تەنها کتێبی دەنگی ئاسان.
+دواتر: هیچ markdown (*, #, _) بەکار مەهێنە — تەنها دەنگی ساف.
+
+## دەستووری گرنگ:
+- هەموو کاڵا، کڕیار، کۆگا، و نوێنەرەکان لێرەیان خوارەوە بارکراون.
+- لگەڵ ناوەکان فێری فووچ-میتچ بکە (جیاوازی ئیملای کوردی، ناوی نیوەیی).
+- هیچکات unit_price ٠ مەکەرەوە. هەمیشە نرخی ڕاستەقینە بەکار بهێنە.
+- هیچ IDی جەعڵی مەکەرەوە. تەنها IDی لیستەکانی خوارەوە بەکار بهێنە.
+- بۆ داواکاریەک: create_order بەکار بهێنە.
+- بۆ چەند داواکاری لەیەکدا: create_bulk_orders (یەک بانگهێشت بۆ هەمووی)
+- دوای دروستکردنی داواکاری، کورتەی ئەنجامەکان بگو.
+
+## فۆرمتی دراوسێ: [مبلغ] دینار`;
+
+
 // ── Main handler ────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json() as { messages: { role: string; content: string }[] };
+    const { messages, voiceMode } = await req.json() as {
+      messages: { role: string; content: string }[];
+      voiceMode?: boolean;
+    };
 
     // Pre-load all reference data into the system prompt
     const [
@@ -327,7 +351,7 @@ ${(warehouses || []).map(w => `ID:${w.id} | ${w.name}`).join("\n")}
 ### Reps (نوێنەرەکان):
 ${(reps || []).map(r => `ID:${r.id} | ${r.name}`).join("\n")}`;
 
-    const systemPrompt = SYSTEM_PROMPT + dataContext;
+    const systemPrompt = (voiceMode ? VOICE_SYSTEM_PROMPT : SYSTEM_PROMPT) + dataContext;
 
     // Build Gemini-native conversation history
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

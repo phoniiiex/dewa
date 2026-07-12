@@ -350,7 +350,7 @@ export default function AiPage() {
       const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ messages: history, voiceMode }),
       });
       const data = await res.json();
       setMessages(prev => [
@@ -446,7 +446,7 @@ export default function AiPage() {
 
   const playTTS = useCallback(async (rawText: string) => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    window.speechSynthesis?.cancel(); // cancel any prior browser TTS
+    window.speechSynthesis?.cancel();
     setSpeaking(true);
 
     const text = toSpeechText(rawText);
@@ -455,7 +455,7 @@ export default function AiPage() {
       if (voiceModeRef.current) setTimeout(() => handleMicRef.current(), 400);
     };
 
-    // ── Try ElevenLabs TTS first ───────────────────────────────────────────────
+    // ElevenLabs TTS — eleven_multilingual_v2 understands Kurdish Sorani
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
@@ -468,25 +468,17 @@ export default function AiPage() {
         const audio = new Audio(url);
         audioRef.current = audio;
         audio.onended = () => { URL.revokeObjectURL(url); audioRef.current = null; afterSpeak(); };
-        audio.onerror = () => { URL.revokeObjectURL(url); audioRef.current = null; useBrowserTTS(text, afterSpeak); };
+        audio.onerror = () => { URL.revokeObjectURL(url); audioRef.current = null; afterSpeak(); };
         await audio.play();
         return;
       }
-    } catch { /* fall through to browser TTS */ }
-
-    // ── Fallback: browser speechSynthesis (always works) ──────────────────────
-    useBrowserTTS(text, afterSpeak);
+      console.error("TTS response not ok:", res.status, await res.text());
+    } catch (e) {
+      console.error("TTS fetch error:", e);
+    }
+    // If TTS fails, still re-enable mic so conversation can continue
+    afterSpeak();
   }, []);
-
-  const useBrowserTTS = (text: string, onEnd: () => void) => {
-    if (!window.speechSynthesis) { onEnd(); return; }
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang = "ckb"; // Kurdish Sorani
-    utt.rate = 0.95;
-    utt.onend = onEnd;
-    utt.onerror = onEnd;
-    window.speechSynthesis.speak(utt);
-  };
 
   // Auto-play TTS when a new completed assistant message arrives in voice mode
   useEffect(() => {
