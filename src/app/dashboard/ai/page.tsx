@@ -326,8 +326,9 @@ export default function AiPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const recognitionRef = useRef<any>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const [inputValue, setInputValue] = useState("");
 
   const userInitials = currentUser?.name
@@ -369,78 +370,62 @@ export default function AiPage() {
     }
   }, [messages, loading]);
 
-  const transcriptRef = useRef("");
-
-  const handleMic = useCallback(() => {
-    // ── Stop if already listening ──────────────────────────────────────────────
-    if (recognitionRef.current) {
-      const finalText = transcriptRef.current.trim();
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-      setListening(false);
-      transcriptRef.current = "";
-      setInputValue("");
-      if (finalText) sendMessage(finalText);
+  const handleMic = useCallback(async () => {
+    // ── Stop recording → transcribe ───────────────────────────────────────────
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop(); // triggers onstop below
       return;
     }
 
-    // ── Start ──────────────────────────────────────────────────────────────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognitionAPI) {
-      alert("وتنەوە پشتگیری ناکرێت لەم وێبگەڕەدا. Chrome بەکاربهێنە.");
+    // ── Start recording ───────────────────────────────────────────────────────
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      alert("مایکرۆفۆن بەردەست نییە. تکایە ڕووتینی دەسترسی بدە.");
       return;
     }
 
-    transcriptRef.current = "";
+    audioChunksRef.current = [];
+    const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg" });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const recognition: any = new SpeechRecognitionAPI();
-    recognition.lang = "ckb"; // Central Kurdish — Sorani
-    recognition.interimResults = true;
-    recognition.continuous = true; // keep recording until user stops
-
-    recognition.onstart = () => setListening(true);
-
-    recognition.onend = () => {
-      // If user hasn't manually stopped (recognitionRef still set), restart
-      // This handles browser auto-stopping after long silence
-      if (recognitionRef.current) {
-        try { recognitionRef.current.start(); } catch { /* ignore */ }
-      } else {
-        setListening(false);
-      }
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunksRef.current.push(e.data);
     };
 
-    recognition.onerror = (e: { error: string }) => {
-      // "no-speech" and "aborted" are non-fatal — just restart
-      if (e.error === "no-speech" || e.error === "aborted") return;
-      recognitionRef.current = null;
+    recorder.onstop = async () => {
+      // Stop all tracks to release mic indicator
+      stream.getTracks().forEach(t => t.stop());
       setListening(false);
-      transcriptRef.current = "";
-      setInputValue("");
-    };
+      mediaRecorderRef.current = null;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (event: any) => {
-      let finalChunk = "";
-      let interimChunk = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalChunk += result[0].transcript;
-        } else {
-          interimChunk += result[0].transcript;
+      const chunks = audioChunksRef.current;
+      if (chunks.length === 0) return;
+
+      setTranscribing(true);
+      try {
+        const blob = new Blob(chunks, { type: recorder.mimeType });
+        const form = new FormData();
+        form.append("file", blob, "audio.webm");
+        // model_id and language_code set server-side in /api/stt
+
+        const res = await fetch("/api/stt", { method: "POST", body: form });
+        const data = await res.json();
+        const transcript = (data.transcript as string)?.trim();
+        if (transcript) {
+          sendMessage(transcript);
         }
+      } catch (e) {
+        console.error("STT error:", e);
+      } finally {
+        setTranscribing(false);
+        setInputValue("");
       }
-      // Accumulate finals, show interim preview
-      transcriptRef.current += finalChunk;
-      setInputValue(transcriptRef.current + interimChunk);
     };
 
-    recognitionRef.current = recognition;
-    recognition.start();
+    mediaRecorderRef.current = recorder;
+    recorder.start();
+    setListening(true);
   }, [sendMessage]);
 
   const isEmpty = messages.length === 0;
@@ -532,7 +517,7 @@ export default function AiPage() {
           }}
           onSend={(message) => sendMessage(message)}
           onMic={handleMic}
-          placeholder={listening ? "🎙️ گوێدەگرم…" : loading ? "جواب دەدرێتەوە…" : "پەیامێک بنوسە…"}
+          placeholder={listening ? "🎙️ گوێدەگرم… (دووبارە کلیک بکە بۆ ناردن)" : transcribing ? "⏳ وەرگێڕانی دەنگ…" : loading ? "جواب دەدرێتەوە…" : "پەیامێک بنوسە…"}
         />
         <p className="text-[11px] text-muted-foreground text-center mt-2">
           Gemini · Dewa {new Date().getFullYear()} · هەموو وەڵامەکان دەتوانن هەڵەش بن
