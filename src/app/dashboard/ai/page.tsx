@@ -432,9 +432,15 @@ export default function AiPage() {
     setListening(true);
   }, [sendMessage]);
 
+  // Stable ref so TTS onended always calls the latest handleMic
+  const handleMicRef = useRef(handleMic);
+  useEffect(() => { handleMicRef.current = handleMic; }, [handleMic]);
+
   // ── TTS: play AI response in voice mode ─────────────────────────────────────
+  const voiceModeRef = useRef(voiceMode);
+  useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
+
   const playTTS = useCallback(async (text: string) => {
-    // Stop any current playback
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setSpeaking(true);
     try {
@@ -452,40 +458,49 @@ export default function AiPage() {
         URL.revokeObjectURL(url);
         audioRef.current = null;
         setSpeaking(false);
-        // Auto-trigger mic after AI speaks (if still in voice mode)
-        setVoiceMode(vm => { if (vm) setTimeout(() => handleMic(), 300); return vm; });
+        // Auto-start listening again (use ref to avoid stale closure)
+        if (voiceModeRef.current) {
+          setTimeout(() => handleMicRef.current(), 400);
+        }
       };
       audio.onerror = () => { setSpeaking(false); };
       audio.play().catch(() => setSpeaking(false));
     } catch { setSpeaking(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-play TTS when a new non-loading assistant message arrives in voice mode
+  // Auto-play TTS when a new completed assistant message arrives in voice mode
   useEffect(() => {
     if (!voiceMode) return;
     const last = messages[messages.length - 1];
     if (!last || last.role !== "assistant" || last.loading || !last.text) return;
-    // Only play the most recent message (prevent replaying old ones)
-    const prevCount = messages.length;
-    if (prevCount < 1) return;
     playTTS(last.text);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
   const toggleVoiceMode = useCallback(() => {
-    setVoiceMode(v => {
-      if (v) {
-        // Stop playback and recording on exit
+    setVoiceMode(prev => {
+      const next = !prev;
+      if (!next) {
+        // Turning OFF: stop playback and recording
         if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
         setSpeaking(false);
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
           mediaRecorderRef.current.stop();
         }
+        setListening(false);
       }
-      return !v;
+      return next;
     });
   }, []);
+
+  // When voice mode turns ON, auto-start the mic
+  useEffect(() => {
+    if (voiceMode && !listening && !speaking && !loading) {
+      const t = setTimeout(() => handleMicRef.current(), 300);
+      return () => clearTimeout(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceMode]);
 
   const isEmpty = messages.length === 0;
 
