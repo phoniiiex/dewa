@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Default to "Aria" — ElevenLabs multilingual voice
-const DEFAULT_VOICE_ID = "9BWtsMINqrJLrRacOk9x";
+// "Rachel" — universally available across all ElevenLabs plans
+const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ELEVENLABS_API_KEY;

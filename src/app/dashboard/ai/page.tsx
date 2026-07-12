@@ -440,33 +440,53 @@ export default function AiPage() {
   const voiceModeRef = useRef(voiceMode);
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
 
-  const playTTS = useCallback(async (text: string) => {
+  // Strip markdown for cleaner TTS speech
+  const toSpeechText = (raw: string) =>
+    raw.replace(/[#*`_~>\[\]()]/g, "").replace(/\n+/g, " ").trim();
+
+  const playTTS = useCallback(async (rawText: string) => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    window.speechSynthesis?.cancel(); // cancel any prior browser TTS
     setSpeaking(true);
+
+    const text = toSpeechText(rawText);
+    const afterSpeak = () => {
+      setSpeaking(false);
+      if (voiceModeRef.current) setTimeout(() => handleMicRef.current(), 400);
+    };
+
+    // ── Try ElevenLabs TTS first ───────────────────────────────────────────────
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      if (!res.ok) { setSpeaking(false); return; }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onended = () => {
-        URL.revokeObjectURL(url);
-        audioRef.current = null;
-        setSpeaking(false);
-        // Auto-start listening again (use ref to avoid stale closure)
-        if (voiceModeRef.current) {
-          setTimeout(() => handleMicRef.current(), 400);
-        }
-      };
-      audio.onerror = () => { setSpeaking(false); };
-      audio.play().catch(() => setSpeaking(false));
-    } catch { setSpeaking(false); }
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => { URL.revokeObjectURL(url); audioRef.current = null; afterSpeak(); };
+        audio.onerror = () => { URL.revokeObjectURL(url); audioRef.current = null; useBrowserTTS(text, afterSpeak); };
+        await audio.play();
+        return;
+      }
+    } catch { /* fall through to browser TTS */ }
+
+    // ── Fallback: browser speechSynthesis (always works) ──────────────────────
+    useBrowserTTS(text, afterSpeak);
   }, []);
+
+  const useBrowserTTS = (text: string, onEnd: () => void) => {
+    if (!window.speechSynthesis) { onEnd(); return; }
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = "ckb"; // Kurdish Sorani
+    utt.rate = 0.95;
+    utt.onend = onEnd;
+    utt.onerror = onEnd;
+    window.speechSynthesis.speak(utt);
+  };
 
   // Auto-play TTS when a new completed assistant message arrives in voice mode
   useEffect(() => {
@@ -541,6 +561,85 @@ export default function AiPage() {
           </Button>
         </div>
       </div>
+
+      {/* ── Live Voice Overlay ── */}
+      {voiceMode && (
+        <div className="shrink-0 mx-1 mb-3 rounded-2xl border border-border bg-gradient-to-br from-muted/60 to-muted/20 p-5 flex flex-col items-center gap-4 shadow-inner">
+          {/* Animated orb */}
+          <div className="relative flex items-center justify-center">
+            {/* Outer pulse rings */}
+            {speaking && (
+              <>
+                <div className="absolute size-24 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: "1.2s" }} />
+                <div className="absolute size-20 rounded-full bg-primary/15 animate-ping" style={{ animationDuration: "0.9s", animationDelay: "0.15s" }} />
+              </>
+            )}
+            {listening && !speaking && (
+              <>
+                <div className="absolute size-24 rounded-full bg-red-500/10 animate-ping" style={{ animationDuration: "1.4s" }} />
+                <div className="absolute size-20 rounded-full bg-red-500/15 animate-ping" style={{ animationDuration: "1.1s", animationDelay: "0.2s" }} />
+              </>
+            )}
+            {/* Central orb */}
+            <div className={`size-16 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${
+              speaking
+                ? "bg-gradient-to-br from-primary to-violet-500 shadow-primary/40 scale-110"
+                : listening
+                ? "bg-gradient-to-br from-red-500 to-rose-600 shadow-red-500/40 scale-105"
+                : "bg-muted border-2 border-border"
+            }`}>
+              {speaking
+                ? <Volume2 className="size-7 text-white" />
+                : listening
+                ? <div className="flex items-end gap-[3px] h-7">
+                    {[3,5,7,5,4,6,3].map((h, i) => (
+                      <div key={i} className="w-[3px] bg-white rounded-full animate-bounce"
+                        style={{ height: h * 4, animationDelay: `${i * 80}ms`, animationDuration: "600ms" }} />
+                    ))}
+                  </div>
+                : <Phone className="size-6 text-muted-foreground" />
+              }
+            </div>
+          </div>
+
+          {/* Waveform bars — shown when speaking */}
+          {speaking && (
+            <div className="flex items-center gap-[3px] h-8">
+              {Array.from({ length: 18 }).map((_, i) => (
+                <div key={i} className="w-[3px] rounded-full bg-primary animate-bounce"
+                  style={{
+                    height: `${20 + Math.sin(i * 0.8) * 14}px`,
+                    animationDelay: `${i * 60}ms`,
+                    animationDuration: "700ms",
+                  }} />
+              ))}
+            </div>
+          )}
+
+          {/* Status text */}
+          <div className="text-center">
+            <p className="text-sm font-bold">
+              {speaking ? "🔊 ئاژیارەکە وەڵام دەداتەوە…" : listening ? "🎙️ گوێ دەگرێت — قسە بکە" : transcribing ? "⏳ وەرگێڕانی دەنگ…" : "✋ چاوەڕوان…"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {speaking ? "نا، ئاژیارەکە قسە دەکات" : listening ? "کرتەی مایکرۆفۆن بکە بۆ کۆتایی هێنان" : "دەستپێکردنی خودکار…"}
+            </p>
+          </div>
+
+          {/* Tap to stop / manual controls */}
+          <div className="flex gap-2">
+            {listening && (
+              <Button size="sm" variant="destructive" onClick={handleMic} className="gap-1.5 rounded-full px-4">
+                <span className="size-2 rounded-full bg-white animate-pulse" />
+                کۆتایی هێنانی تۆمارکردن
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={toggleVoiceMode} className="gap-1.5 rounded-full px-4">
+              <PhoneOff className="size-3.5" /> دەرچوون
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* ── Messages ── */}
       <div className="flex-1 min-h-0 overflow-hidden">
