@@ -2,9 +2,13 @@
 import { useEffect, useState, useMemo } from "react";
 import { useLayout } from "@/app/dashboard/layout";
 import { supabase } from "@/lib/supabase";
-import { Activity, ShoppingCart, Users, Package, RefreshCw, Filter } from "lucide-react";
+import { Activity, ShoppingCart, Users, Package, RefreshCw } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface ActivityLog {
   id: string;
   user_id: string;
@@ -18,21 +22,20 @@ interface ActivityLog {
   created_at: string;
 }
 
-// ── Action config ──────────────────────────────────────────────────────────────
-const ACTION_CONFIG: Record<string, { label: string; emoji: string; color: string; bg: string }> = {
-  CREATE_ORDER:            { label: "داواکاری نوێ دروستکرا",    emoji: "🛒", color: "#4263EB", bg: "#EDF2FF" },
-  EDIT_ORDER:              { label: "داواکاری دەستکاری کرا",     emoji: "✏️", color: "#7950F2", bg: "#F3F0FF" },
-  ORDER_STATUS_WAITING:    { label: "داواکاری چاوەڕوانی کرا",   emoji: "⏳", color: "#E67700", bg: "#FFF3BF" },
-  ORDER_STATUS_IN_PROGRESS:{ label: "داواکاری دەستپێکرا",       emoji: "🔄", color: "#7C5CFC", bg: "#F3F0FF" },
-  ORDER_STATUS_READY:      { label: "داواکاری ئامادەبوو",        emoji: "✅", color: "#1098AD", bg: "#C3FAE8" },
-  ORDER_STATUS_SENT:       { label: "داواکاری نێردرا",           emoji: "🚚", color: "#4263EB", bg: "#EDF2FF" },
-  ORDER_STATUS_DELIVERED:  { label: "داواکاری گەیشت",            emoji: "📦", color: "#F47B35", bg: "#FFF3BF" },
-  ORDER_STATUS_PAID:       { label: "داواکاری پارەی داوە",       emoji: "💰", color: "#2F9E44", bg: "#D3F9D8" },
-  ORDER_STATUS_REJECTED:   { label: "داواکاری ڕەتکرایەوە",      emoji: "❌", color: "#E03131", bg: "#FFE3E3" },
-  CREATE_CLIENT:           { label: "کڕیاری نوێ زیادکرا",       emoji: "👤", color: "#2F9E44", bg: "#D3F9D8" },
-  UPDATE_CLIENT:           { label: "زانیاری کڕیار گۆڕا",       emoji: "📝", color: "#1098AD", bg: "#C3FAE8" },
-  CREATE_PRODUCT:          { label: "بەرهەمی نوێ زیادکرا",      emoji: "📦", color: "#7950F2", bg: "#F3F0FF" },
-  UPDATE_PRODUCT:          { label: "بەرهەم نوێکرایەوە",        emoji: "🔧", color: "#E67700", bg: "#FFF3BF" },
+const ACTION_CONFIG: Record<string, { label: string; emoji: string; cls: string }> = {
+  CREATE_ORDER:             { label: "داواکاری نوێ دروستکرا",  emoji: "🛒", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  EDIT_ORDER:               { label: "داواکاری دەستکاری کرا",  emoji: "✏️", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
+  ORDER_STATUS_WAITING:     { label: "داواکاری چاوەڕوانی کرا", emoji: "⏳", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  ORDER_STATUS_IN_PROGRESS: { label: "داواکاری دەستپێکرا",     emoji: "🔄", cls: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" },
+  ORDER_STATUS_READY:       { label: "داواکاری ئامادەبوو",     emoji: "✅", cls: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300" },
+  ORDER_STATUS_SENT:        { label: "داواکاری نێردرا",         emoji: "🚚", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  ORDER_STATUS_DELIVERED:   { label: "داواکاری گەیشت",          emoji: "📦", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  ORDER_STATUS_PAID:        { label: "داواکاری پارەی داوە",     emoji: "💰", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  ORDER_STATUS_REJECTED:    { label: "داواکاری ڕەتکرایەوە",    emoji: "❌", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+  CREATE_CLIENT:            { label: "کڕیاری نوێ زیادکرا",     emoji: "👤", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  UPDATE_CLIENT:            { label: "زانیاری کڕیار گۆڕا",     emoji: "📝", cls: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300" },
+  CREATE_PRODUCT:           { label: "بەرهەمی نوێ زیادکرا",    emoji: "📦", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
+  UPDATE_PRODUCT:           { label: "بەرهەم نوێکرایەوە",      emoji: "🔧", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -40,19 +43,18 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ENTITY_FILTERS = [
-  { key: "ALL",     label: "هەموو",       icon: <Activity size={14} /> },
-  { key: "ORDER",   label: "داواکارییەکان", icon: <ShoppingCart size={14} /> },
-  { key: "CLIENT",  label: "کڕیارەکان",   icon: <Users size={14} /> },
-  { key: "PRODUCT", label: "بەرهەمەکان", icon: <Package size={14} /> },
+  { key: "ALL",     label: "هەموو",        icon: <Activity className="size-3.5" /> },
+  { key: "ORDER",   label: "داواکارییەکان", icon: <ShoppingCart className="size-3.5" /> },
+  { key: "CLIENT",  label: "کڕیارەکان",    icon: <Users className="size-3.5" /> },
+  { key: "PRODUCT", label: "بەرهەمەکان",  icon: <Package className="size-3.5" /> },
 ];
 
-// ── Time-ago helper ────────────────────────────────────────────────────────────
 function timeAgo(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60)   return "چەند چرکەیەک پێش";
-  if (diff < 3600) return `${Math.floor(diff / 60)} خولەک پێش`;
-  if (diff < 86400)return `${Math.floor(diff / 3600)} کاتژمێر پێش`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)} ڕۆژ پێش`;
+  if (diff < 60)    return "چەند چرکەیەک پێش";
+  if (diff < 3600)  return `${Math.floor(diff / 60)} خولەک پێش`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} کاتژمێر پێش`;
+  if (diff < 604800)return `${Math.floor(diff / 86400)} ڕۆژ پێش`;
   return new Date(iso).toLocaleDateString("ckb-IQ");
 }
 
@@ -67,7 +69,6 @@ function avatarColor(userId: string) {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ActivitiesPage() {
   const { currentUser } = useLayout();
   const isManager = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
@@ -79,21 +80,11 @@ export default function ActivitiesPage() {
   const [uniqueUsers, setUniqueUsers] = useState<{ id: string; name: string }[]>([]);
 
   const fetchLogs = async () => {
-    let q = supabase
-      .from("activity_logs")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(200);
-
-    if (!isManager && currentUser?.id) {
-      q = q.eq("user_id", currentUser.id);
-    }
-
+    let q = supabase.from("activity_logs").select("*").order("created_at", { ascending: false }).limit(200);
+    if (!isManager && currentUser?.id) q = q.eq("user_id", currentUser.id);
     const { data } = await q;
     const rows = (data || []) as ActivityLog[];
     setLogs(rows);
-
-    // Extract unique users for filter dropdown
     const seen = new Map<string, string>();
     rows.forEach(r => { if (!seen.has(r.user_id)) seen.set(r.user_id, r.user_name); });
     setUniqueUsers(Array.from(seen, ([id, name]) => ({ id, name })));
@@ -102,136 +93,124 @@ export default function ActivitiesPage() {
 
   useEffect(() => {
     fetchLogs();
-
-    // Real-time subscription
-    const channel = supabase
-      .channel("activity_logs_changes")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_logs" },
-        (payload) => {
-          const newLog = payload.new as ActivityLog;
-          if (!isManager && newLog.user_id !== currentUser?.id) return;
-          setLogs(prev => [newLog, ...prev]);
-        }
-      )
+    const channel = supabase.channel("activity_logs_changes")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_logs" }, payload => {
+        const newLog = payload.new as ActivityLog;
+        if (!isManager && newLog.user_id !== currentUser?.id) return;
+        setLogs(prev => [newLog, ...prev]);
+      })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, isManager]);
 
-  const filtered = useMemo(() => {
-    return logs.filter(l => {
+  const filtered = useMemo(() =>
+    logs.filter(l => {
       if (entityFilter !== "ALL" && l.entity_type !== entityFilter) return false;
       if (userFilter !== "ALL" && l.user_id !== userFilter) return false;
       return true;
-    });
-  }, [logs, entityFilter, userFilter]);
-
-  const pill: React.CSSProperties = {
-    display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px",
-    borderRadius: 10, border: "1.5px solid", cursor: "pointer", fontSize: 12,
-    fontWeight: 700, transition: "all .15s", fontFamily: "inherit",
-  };
+    }),
+  [logs, entityFilter, userFilter]);
 
   return (
-    <div style={{ padding: "24px", maxWidth: 860, margin: "0 auto", direction: "rtl" }}>
-      {/* ── Header ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+    <div className="max-w-3xl mx-auto" dir="rtl">
+      {/* Header */}
+      <div className="flex justify-between items-start mb-6">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#1A1A2E", margin: 0 }}>📋 چالاکییەکان</h1>
-          <p style={{ color: "#6C757D", fontSize: 13, margin: "4px 0 0" }}>
+          <h1 className="text-2xl font-black">📋 چالاکییەکان</h1>
+          <p className="text-muted-foreground text-sm mt-1">
             کێ چی کرد و کەی — {isManager ? "هەموو بەکارهێنەران" : "چالاکییەکانی خۆت"}
           </p>
         </div>
-        <button onClick={() => { setLoading(true); fetchLogs(); }}
-          style={{ ...pill, borderColor: "#DEE2E6", background: "#fff", color: "#495057" }}>
-          <RefreshCw size={13} /> نوێکردنەوە
-        </button>
+        <Button variant="outline" size="sm" className="gap-1.5"
+          onClick={() => { setLoading(true); fetchLogs(); }}>
+          <RefreshCw className="size-3.5" /> نوێکردنەوە
+        </Button>
       </div>
 
-      {/* ── Filters ── */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {ENTITY_FILTERS.map(f => {
-          const active = entityFilter === f.key;
-          return (
-            <button key={f.key} onClick={() => setEntityFilter(f.key)}
-              style={{ ...pill, borderColor: active ? "#4263EB" : "#DEE2E6", background: active ? "#EDF2FF" : "#fff", color: active ? "#4263EB" : "#495057" }}>
-              {f.icon} {f.label}
-            </button>
-          );
-        })}
+      {/* Filters */}
+      <div className="flex gap-2 flex-wrap mb-4">
+        {ENTITY_FILTERS.map(f => (
+          <Button key={f.key} variant={entityFilter === f.key ? "default" : "outline"} size="sm"
+            onClick={() => setEntityFilter(f.key)}
+            className={cn("gap-1.5 rounded-xl text-xs font-bold",
+              entityFilter === f.key ? "" : "text-muted-foreground")}>
+            {f.icon} {f.label}
+          </Button>
+        ))}
 
         {isManager && uniqueUsers.length > 0 && (
-          <select value={userFilter} onChange={e => setUserFilter(e.target.value)}
-            style={{ padding: "6px 12px", borderRadius: 10, border: "1.5px solid #DEE2E6", fontSize: 12, fontWeight: 700, background: "#fff", color: "#495057", cursor: "pointer", fontFamily: "inherit" }}>
-            <option value="ALL">👥 هەموو بەکارهێنەران</option>
-            {uniqueUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
+          <Select value={userFilter} onValueChange={(v: string | null) => v && setUserFilter(v)}>
+            <SelectTrigger className="w-auto min-w-[180px] text-xs font-bold rounded-xl h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">👥 هەموو بەکارهێنەران</SelectItem>
+              {uniqueUsers.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
         )}
       </div>
 
-      {/* ── Count badge ── */}
-      <div style={{ fontSize: 12, color: "#6C757D", marginBottom: 14 }}>
-        {filtered.length} چالاکی
-      </div>
+      <p className="text-xs text-muted-foreground mb-3">{filtered.length} چالاکی</p>
 
-      {/* ── Log list ── */}
+      {/* Log list */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: 60, color: "#ADB5BD" }}>
-          <div style={{ width: 36, height: 36, border: "3px solid #DEE2E6", borderTopColor: "#4263EB", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 12px" }} />
-          <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
-          <div style={{ fontSize: 13 }}>چاوەڕوان بکە...</div>
+        <div className="flex flex-col items-center py-16 text-muted-foreground">
+          <RefreshCw className="size-8 animate-spin mb-3 opacity-40" />
+          <p className="text-sm">چاوەڕوان بکە...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 60, background: "#F8F9FA", borderRadius: 16 }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>📋</div>
-          <div style={{ color: "#ADB5BD", fontSize: 13 }}>هیچ چالاکییەک نەدۆزرایەوە</div>
-        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center py-16">
+            <p className="text-4xl mb-3">📋</p>
+            <p className="text-muted-foreground text-sm">هیچ چالاکییەک نەدۆزرایەوە</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          {filtered.map((log, idx) => {
-            const cfg = ACTION_CONFIG[log.action] || { label: log.action, emoji: "•", color: "#495057", bg: "#F8F9FA" };
-            const color = avatarColor(log.user_id);
-
-            return (
-              <div key={log.id} style={{
-                display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px",
-                background: idx % 2 === 0 ? "#fff" : "#FAFAFA",
-                borderBottom: "1px solid #F1F3F5",
-                borderRadius: idx === 0 ? "12px 12px 0 0" : idx === filtered.length - 1 ? "0 0 12px 12px" : 0,
-              }}>
-                {/* Avatar */}
-                <div style={{ width: 38, height: 38, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-                  {getInitials(log.user_name)}
-                </div>
-
-                {/* Content */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700, fontSize: 13, color: "#1A1A2E" }}>{log.user_name}</span>
-                    <span style={{ fontSize: 11, color: "#ADB5BD", background: "#F1F3F5", padding: "1px 7px", borderRadius: 6 }}>{ROLE_LABELS[log.user_role] || log.user_role}</span>
+        <Card>
+          <CardContent className="p-0 divide-y divide-border">
+            {filtered.map(log => {
+              const cfg = ACTION_CONFIG[log.action] || { label: log.action, emoji: "•", cls: "bg-muted text-muted-foreground" };
+              const color = avatarColor(log.user_id);
+              return (
+                <div key={log.id} className="flex items-start gap-3 px-4 py-3.5 hover:bg-muted/30 transition-colors">
+                  {/* Avatar */}
+                  <div className="size-9 rounded-full flex items-center justify-center text-white font-black text-xs shrink-0"
+                    style={{ background: color }}>
+                    {getInitials(log.user_name)}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: 7, background: cfg.bg, color: cfg.color, fontWeight: 700 }}>
-                      {cfg.emoji} {cfg.label}
-                    </span>
-                    {log.entity_name && log.entity_name !== log.entity_id && (
-                      <span style={{ fontSize: 12, color: "#495057", fontWeight: 600 }}>— {log.entity_name}</span>
-                    )}
-                    {typeof log.meta?.clientName === "string" && (
-                      <span style={{ fontSize: 12, color: "#6C757D" }}>بۆ {log.meta.clientName}</span>
-                    )}
-                  </div>
-                </div>
 
-                {/* Time */}
-                <div style={{ fontSize: 11, color: "#ADB5BD", whiteSpace: "nowrap", flexShrink: 0, paddingTop: 4 }}>
-                  {timeAgo(log.created_at)}
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      <span className="font-bold text-sm">{log.user_name}</span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5">
+                        {ROLE_LABELS[log.user_role] || log.user_role}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className={cn("text-[11px] gap-0.5", cfg.cls)}>
+                        {cfg.emoji} {cfg.label}
+                      </Badge>
+                      {log.entity_name && log.entity_name !== log.entity_id && (
+                        <span className="text-xs text-foreground font-semibold">— {log.entity_name}</span>
+                      )}
+                      {typeof log.meta?.clientName === "string" && (
+                        <span className="text-xs text-muted-foreground">بۆ {log.meta.clientName}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Time */}
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0 pt-0.5">
+                    {timeAgo(log.created_at)}
+                  </span>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

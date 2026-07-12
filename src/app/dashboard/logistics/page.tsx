@@ -1,17 +1,24 @@
 "use client";
 import { useState } from "react";
-import { Truck, Search, Eye, Package, CheckCircle, Upload } from "lucide-react";
+import { Truck, Search, Eye, CheckCircle, Upload } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Order, OrderStatus } from "@/lib/types";
-import Modal from "@/components/ui/Modal";
-import { inputStyle } from "@/components/ui/FormField";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type ActiveStatus = "SENT" | "DELIVERED";
 
-const STATUS_META: Partial<Record<OrderStatus, { label: string; color: string; bg: string; icon: React.ReactNode }>> = {
-  SENT:      { label: "نێردراوە",   color: "#7C3AED", bg: "#EDE9FE", icon: <Truck size={13} /> },
-  DELIVERED: { label: "گەیشتووە",  color: "#0891B2", bg: "#CFFAFE", icon: <CheckCircle size={13} /> },
+const STATUS_META: Partial<Record<OrderStatus, { label: string; cls: string; icon: React.ReactNode }>> = {
+  SENT:      { label: "نێردراوە",  cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300", icon: <Truck className="size-3" /> },
+  DELIVERED: { label: "گەیشتووە", cls: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",     icon: <CheckCircle className="size-3" /> },
 };
 
 const TABS: { key: ActiveStatus | "all"; label: string }[] = [
@@ -21,7 +28,7 @@ const TABS: { key: ActiveStatus | "all"; label: string }[] = [
 ];
 
 export default function LogisticsPage() {
-  const { orders, drivers, updateOrder, showToast } = useData();
+  const { orders, updateOrder, showToast } = useData();
 
   const [tab, setTab] = useState<"all" | ActiveStatus>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -29,11 +36,10 @@ export default function LogisticsPage() {
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  // Only show in-flight orders
   const inFlight = orders.filter(o => o.status === "SENT" || o.status === "DELIVERED");
   const filtered = inFlight.filter(o => {
     const matchTab = tab === "all" || o.status === tab;
-    const matchSearch = o.orderNumber.includes(searchTerm) || o.clientName.includes(searchTerm) || o.driverName.includes(searchTerm);
+    const matchSearch = o.orderNumber.includes(searchTerm) || o.clientName.includes(searchTerm) || (o.driverName || "").includes(searchTerm);
     return matchTab && matchSearch;
   });
 
@@ -43,8 +49,6 @@ export default function LogisticsPage() {
     drivers:   new Set(inFlight.filter(o => o.driverId).map(o => o.driverId)).size,
     value:     inFlight.filter(o => o.status === "SENT").reduce((s, o) => s + o.totalAmount, 0),
   };
-
-  const card: React.CSSProperties = { background: "#fff", borderRadius: 14, padding: "16px 20px", border: "1px solid #F1F3F5", boxShadow: "0 1px 4px rgba(0,0,0,.05)" };
 
   const confirmDelivered = async () => {
     if (!detailOrder) return;
@@ -73,163 +77,176 @@ export default function LogisticsPage() {
   return (
     <>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <div style={{ width: 40, height: 40, background: "#EDE9FE", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#7C3AED" }}><Truck size={20} /></div>
-        <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>لۆجستیک</h1><p style={{ fontSize: 13, color: "#6C757D" }}>شوفێرەکان و داواکارییەکانی لە ڕێگادا</p></div>
+      <div className="flex items-center gap-3 mb-6">
+        <div className="size-10 bg-violet-50 dark:bg-violet-950/40 rounded-xl flex items-center justify-center text-violet-600">
+          <Truck className="size-5" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold">لۆجستیک</h1>
+          <p className="text-sm text-muted-foreground">شوفێرەکان و داواکارییەکانی لە ڕێگادا</p>
+        </div>
       </div>
 
       {/* KPIs */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { label: "لە ڕێگادا",   value: kpi.sent,              color: "#7C3AED", bg: "#EDE9FE" },
-          { label: "گەیشتووە",   value: kpi.delivered,          color: "#0891B2", bg: "#CFFAFE" },
-          { label: "شوفێری چالاک", value: kpi.drivers,           color: "#059669", bg: "#D1FAE5" },
-          { label: "نرخی لە ڕێگادا", value: formatIQD(kpi.value), color: "#D97706", bg: "#FEF3C7" },
+          { label: "لە ڕێگادا",      value: kpi.sent,              cls: "text-violet-600" },
+          { label: "گەیشتووە",       value: kpi.delivered,          cls: "text-cyan-600" },
+          { label: "شوفێری چالاک",   value: kpi.drivers,            cls: "text-emerald-600" },
+          { label: "نرخی لە ڕێگادا", value: formatIQD(kpi.value),   cls: "text-amber-600" },
         ].map(k => (
-          <div key={k.label} style={card}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</div>
-            <div style={{ fontSize: 12, color: "#6C757D", marginTop: 4 }}>{k.label}</div>
-          </div>
+          <Card key={k.label}>
+            <CardContent className="p-4">
+              <p className={cn("text-xl font-black", k.cls)}>{k.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{k.label}</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
       {/* Tabs + Search */}
-      <div style={{ ...card, marginBottom: 20, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 0, background: "#F1F3F5", borderRadius: 10, padding: 4 }}>
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              style={{ padding: "7px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: tab === t.key ? "white" : "transparent", color: tab === t.key ? "#7C3AED" : "#6C757D", boxShadow: tab === t.key ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .15s" }}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-          <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
-          <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="گەڕان بە کڕیار، ژمارە، یان شوفێر..."
-            style={{ ...inputStyle, paddingLeft: 38, width: "100%", boxSizing: "border-box" as const }} />
-        </div>
-      </div>
+      <Card className="mb-5">
+        <CardContent className="p-3 flex gap-3 items-center flex-wrap">
+          <div className="flex bg-muted p-1 rounded-xl gap-1">
+            {TABS.map(t => (
+              <Button key={t.key} variant={tab === t.key ? "secondary" : "ghost"} size="sm"
+                onClick={() => setTab(t.key)}
+                className={cn("px-3.5 rounded-lg text-xs font-bold",
+                  tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+                {t.label}
+              </Button>
+            ))}
+          </div>
+          <div className="relative flex-1 min-w-48">
+            <Search className="size-3.5 absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+              placeholder="گەڕان بە کڕیار، ژمارە، یان شوفێر..." className="pe-9" />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Table */}
-      <div style={{ ...card, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #F1F3F5", background: "#FAFAFA" }}>
-                {["ژمارە", "کڕیار", "شوفێر", "تەلەفۆن", "بارودۆخ", "نرخ", "کردار"].map(h => (
-                  <th key={h} style={{ padding: "12px 16px", textAlign: "right", fontWeight: 600, color: "#495057", fontSize: 13 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: 48, textAlign: "center", color: "#ADB5BD" }}>هیچ داواکارییەک نەدۆزرایەوە</td></tr>
-              ) : filtered.map(o => {
-                const meta = STATUS_META[o.status as ActiveStatus];
-                return (
-                  <tr key={o.id} style={{ borderBottom: "1px solid #F8F9FA" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#FAFAFA")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "")}>
-                    <td style={{ padding: "14px 16px", fontWeight: 700, color: "#4263EB" }}>{o.orderNumber}</td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <div style={{ fontWeight: 600 }}>{o.clientName}</div>
-                      <div style={{ fontSize: 12, color: "#ADB5BD" }}>{new Date(o.createdAt).toLocaleDateString("ku")}</div>
-                    </td>
-                    <td style={{ padding: "14px 16px" }}>
-                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                         <div style={{ width: 28, height: 28, background: "#EDE9FE", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "#7C3AED", flexShrink: 0, fontWeight: 700, fontSize: 12 }}>
-                           {(o.driverName || "?").charAt(0)}
-                         </div>
-                         <span style={{ fontWeight: 600 }}>{o.driverName || "—"}</span>
-                       </div>
-                     </td>
-                    <td style={{ padding: "14px 16px", fontSize: 13, color: "#6C757D" }}>{o.driverPhone || "—"}</td>
-                    <td style={{ padding: "14px 16px" }}>
-                      {meta && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600, background: meta.bg, color: meta.color }}>
-                          {meta.icon} {meta.label}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ padding: "14px 16px", fontWeight: 600 }}>{formatIQD(o.totalAmount)}</td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <button onClick={() => { setDetailOrder(o); setInvoiceFile(null); }}
-                        style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-                        <Eye size={13} /> بینین
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
+      <Card>
+        <CardContent className="p-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {["ژمارە", "کڕیار", "شوفێر", "تەلەفۆن", "بارودۆخ", "نرخ", "کردار"].map(h => (
+                    <TableHead key={h}>{h}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground">هیچ داواکارییەک نەدۆزرایەوە</TableCell></TableRow>
+                ) : filtered.map(o => {
+                  const meta = STATUS_META[o.status as ActiveStatus];
+                  return (
+                    <TableRow key={o.id}>
+                      <TableCell className="font-bold text-primary">{o.orderNumber}</TableCell>
+                      <TableCell>
+                        <p className="font-semibold">{o.clientName}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleDateString("ku")}</p>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="size-7 bg-violet-100 dark:bg-violet-900/40 rounded-full flex items-center justify-center text-violet-700 font-bold text-xs shrink-0">
+                            {(o.driverName || "?").charAt(0)}
+                          </div>
+                          <span className="font-semibold">{o.driverName || "—"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{o.driverPhone || "—"}</TableCell>
+                      <TableCell>
+                        {meta && (
+                          <Badge className={cn("gap-1 text-[11px]", meta.cls)}>
+                            {meta.icon} {meta.label}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-semibold">{formatIQD(o.totalAmount)}</TableCell>
+                      <TableCell>
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5"
+                          onClick={() => { setDetailOrder(o); setInvoiceFile(null); }}>
+                          <Eye className="size-3" /> بینین
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Detail modal */}
       {detailOrder && (
-        <Modal open={true} onClose={() => setDetailOrder(null)} title={`${detailOrder.orderNumber} — وردەکاری`} width={580}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <Dialog open={true} onOpenChange={open => !open && setDetailOrder(null)}>
+          <DialogContent className="sm:max-w-[580px] max-h-[85vh] overflow-y-auto" dir="rtl">
+            <DialogHeader><DialogTitle>{detailOrder.orderNumber} — وردەکاری</DialogTitle><DialogDescription>زانیاری داواکاری</DialogDescription></DialogHeader>
+          <div className="flex flex-col gap-3.5">
             {/* Info grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div className="grid grid-cols-2 gap-2.5">
               {[
-                { label: "کڕیار",     value: detailOrder.clientName },
-                { label: "نوێنەر",    value: detailOrder.repName },
-                { label: "شوفێر",     value: detailOrder.driverName || "—" },
-                { label: "تەلەفۆن",   value: detailOrder.driverPhone || "—" },
-                { label: "نرخ",       value: formatIQD(detailOrder.totalAmount) },
-                { label: "بارودۆخ",   value: STATUS_META[detailOrder.status as ActiveStatus]?.label || detailOrder.status },
+                { label: "کڕیار",   value: detailOrder.clientName },
+                { label: "نوێنەر", value: detailOrder.repName },
+                { label: "شوفێر",  value: detailOrder.driverName || "—" },
+                { label: "تەلەفۆن", value: detailOrder.driverPhone || "—" },
+                { label: "نرخ",    value: formatIQD(detailOrder.totalAmount) },
+                { label: "بارودۆخ", value: STATUS_META[detailOrder.status as ActiveStatus]?.label || detailOrder.status },
               ].map(f => (
-                <div key={f.label} style={{ padding: "10px 14px", background: "#FAFAFA", borderRadius: 10, border: "1px solid #F1F3F5" }}>
-                  <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 2 }}>{f.label}</div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{f.value}</div>
+                <div key={f.label} className="px-3.5 py-2.5 bg-muted/50 rounded-xl border border-border">
+                  <p className="text-[11px] text-muted-foreground mb-0.5">{f.label}</p>
+                  <p className="font-semibold text-sm">{f.value}</p>
                 </div>
               ))}
             </div>
 
             {/* Items */}
-            <div style={{ border: "1px solid #F1F3F5", borderRadius: 10, overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead><tr style={{ background: "#FAFAFA" }}>
-                  {["بەرهەم", "ژمارە", "بۆنەس", "نرخ"].map(h => <th key={h} style={{ padding: "9px 14px", textAlign: "right", fontWeight: 600, color: "#495057" }}>{h}</th>)}
-                </tr></thead>
-                <tbody>
+            <div className="border border-border rounded-xl overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {["بەرهەم", "ژمارە", "بۆنەس", "نرخ"].map(h => <TableHead key={h}>{h}</TableHead>)}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {detailOrder.items.map((item, idx) => (
-                    <tr key={idx} style={{ borderTop: "1px solid #F8F9FA" }}>
-                      <td style={{ padding: "9px 14px" }}>{item.productName}</td>
-                      <td style={{ padding: "9px 14px" }}>{item.quantity}</td>
-                      <td style={{ padding: "9px 14px", color: "#059669", fontWeight: 600 }}>{item.bonusQty > 0 ? `+${item.bonusQty}` : "—"}</td>
-                      <td style={{ padding: "9px 14px" }}>{formatIQD(item.unitPrice)}</td>
-                    </tr>
+                    <TableRow key={idx}>
+                      <TableCell>{item.productName}</TableCell>
+                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell className="text-emerald-600 font-semibold">{item.bonusQty > 0 ? `+${item.bonusQty}` : "—"}</TableCell>
+                      <TableCell>{formatIQD(item.unitPrice)}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
 
-            {/* Signed invoice link if already delivered */}
             {detailOrder.signedInvoiceUrl && (
-              <a href={detailOrder.signedInvoiceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#4263EB", fontSize: 13, fontWeight: 600 }}>📄 پسوولەی واژووکراو</a>
+              <a href={detailOrder.signedInvoiceUrl} target="_blank" rel="noopener noreferrer"
+                className="text-primary text-sm font-semibold hover:underline">📄 پسوولەی واژووکراو</a>
             )}
 
-            {/* Mark as delivered (only if status = SENT) */}
             {detailOrder.status === "SENT" && (
-              <div style={{ paddingTop: 10, borderTop: "1px solid #F1F3F5" }}>
-                <p style={{ fontSize: 13, color: "#6C757D", marginBottom: 10 }}>پسوولەی واژووکراو بارکە تا گەیشتووە تۆمار بکرێت.</p>
-                <div style={{ border: "2px dashed #DEE2E6", borderRadius: 10, padding: 18, textAlign: "center", cursor: "pointer", marginBottom: 12 }}
+              <div className="pt-3 border-t border-border">
+                <p className="text-sm text-muted-foreground mb-3">پسوولەی واژووکراو بارکە تا گەیشتووە تۆمار بکرێت.</p>
+                <div className="border-2 border-dashed border-border rounded-xl p-4 text-center cursor-pointer hover:border-primary/50 transition-colors mb-3"
                   onClick={() => document.getElementById("log-inv-file")?.click()}>
-                  <Upload size={22} style={{ color: "#ADB5BD", marginBottom: 6, display: "block", margin: "0 auto 6px" }} />
-                  <div style={{ fontSize: 12, color: "#6C757D" }}>{invoiceFile ? invoiceFile.name : "هەڵبژاردنی فایل (ئەگەر هەبوو)"}</div>
-                  <input id="log-inv-file" type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => setInvoiceFile(e.target.files?.[0] || null)} />
+                  <Upload className="size-5 text-muted-foreground mx-auto mb-1.5" />
+                  <p className="text-xs text-muted-foreground">{invoiceFile ? invoiceFile.name : "هەڵبژاردنی فایل (ئەگەر هەبوو)"}</p>
+                  <input id="log-inv-file" type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setInvoiceFile(e.target.files?.[0] || null)} />
                 </div>
-                <button onClick={confirmDelivered} disabled={uploading}
-                  style={{ width: "100%", padding: "11px 0", background: "#0891B2", color: "#fff", border: "none", borderRadius: 10, cursor: uploading ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, fontFamily: "inherit", opacity: uploading ? 0.7 : 1 }}>
+                <Button className="w-full gap-2 bg-cyan-600 hover:bg-cyan-700" onClick={confirmDelivered} disabled={uploading}>
                   {uploading ? "بارکردن..." : "✓ گەیشتووە — تۆمارکردن"}
-                </button>
+                </Button>
               </div>
             )}
           </div>
-        </Modal>
+          </DialogContent>
+        </Dialog>
       )}
     </>
   );

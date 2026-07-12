@@ -1,8 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Mail, Lock, Eye, EyeOff, User, Globe } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, User, Globe, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent } from "@/components/ui/card";
 import "@/styles/login.css";
 
 export default function LoginPage() {
@@ -48,9 +53,8 @@ export default function LoginPage() {
   };
 
   if (checking) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F8F9FA" }}>
-      <div style={{ width: 40, height: 40, border: "3px solid #DEE2E6", borderTopColor: "#4263EB", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    <div className="min-h-screen flex items-center justify-center bg-muted/40">
+      <Loader2 className="size-8 animate-spin text-primary" />
     </div>
   );
 
@@ -67,41 +71,46 @@ export default function LoginPage() {
           <h1>چوونە ژوورەوە</h1>
           <p>زانیارییەکانت بنووسە بۆ چوونە ژوورەوە</p>
 
-          <div style={{ background: "#EDF2FF", border: "1px solid #D0BFFF", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#4263EB" }}>
-            <strong>دێمۆ:</strong> admin@dewa.com / dewa2025
-          </div>
+          <Card className="border-primary/20 bg-primary/5 mb-4">
+            <CardContent className="py-2.5 px-3.5 text-xs text-primary">
+              <strong>دێمۆ:</strong> admin@dewa.com / dewa2025
+            </CardContent>
+          </Card>
 
           <form className="login-form" onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>ئیمەیڵ<span className="required">*</span></label>
-              <div className="input-wrapper">
-                <span className="input-icon"><Mail size={18} /></span>
-                <input type="email" placeholder="hello@dewa.com" value={email} onChange={(e) => setEmail(e.target.value)} required id="login-email" />
+            <div className="space-y-1.5">
+              <Label htmlFor="login-email">ئیمەیڵ<span className="text-destructive ms-0.5">*</span></Label>
+              <div className="relative">
+                <Mail className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                <Input type="email" placeholder="hello@dewa.com" value={email} onChange={(e) => setEmail(e.target.value)} required id="login-email" className="ps-9" />
               </div>
             </div>
 
-            <div className="form-group">
-              <label>وشەی نهێنی<span className="required">*</span></label>
-              <div className="input-wrapper">
-                <span className="input-icon"><Lock size={18} /></span>
-                <input type={showPassword ? "text" : "password"} placeholder="••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required id="login-password" />
-                <button type="button" className="toggle-password" onClick={() => setShowPassword(!showPassword)} aria-label="Toggle password visibility">
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+            <div className="space-y-1.5">
+              <Label htmlFor="login-password">وشەی نهێنی<span className="text-destructive ms-0.5">*</span></Label>
+              <div className="relative">
+                <Lock className="absolute start-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                <Input type={showPassword ? "text" : "password"} placeholder="••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required id="login-password" className="ps-9 pe-9" />
+                <Button type="button" variant="ghost" size="icon" className="absolute end-1 top-1/2 -translate-y-1/2 size-7" onClick={() => setShowPassword(!showPassword)} aria-label="Toggle password visibility">
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </Button>
               </div>
             </div>
 
-            <div className="form-extras">
-              <div className="checkbox-group"><input type="checkbox" id="keep-logged" /><label htmlFor="keep-logged">لە ژوورەوە بمهێڵەوە</label></div>
-              <a href="#" className="forgot-password">وشەی نهێنیت لەبیرکردووە؟</a>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Checkbox id="keep-logged" />
+                <Label htmlFor="keep-logged" className="text-sm font-normal cursor-pointer">لە ژوورەوە بمهێڵەوە</Label>
+              </div>
+              <a href="#" className="text-sm text-primary hover:underline">وشەی نهێنیت لەبیرکردووە؟</a>
             </div>
 
-            <button type="submit" className="login-btn" disabled={isLoading} id="login-submit">
-              {isLoading ? "چاوەڕوانبە..." : "چوونە ژوورەوە"}
-            </button>
+            <Button type="submit" className="w-full" disabled={isLoading} id="login-submit">
+              {isLoading ? <><Loader2 className="size-4 animate-spin me-2" />چاوەڕوانبە...</> : "چوونە ژوورەوە"}
+            </Button>
 
             {error && (
-              <div style={{ background: "#FFF5F5", color: "#FA5252", padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, textAlign: "center", border: "1px solid #FFE3E3" }}>
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-center text-sm font-semibold text-destructive">
                 {error}
               </div>
             )}
@@ -110,7 +119,7 @@ export default function LoginPage() {
 
         <div className="login-footer">
           <span>© ٢٠٢٥ دەوا</span>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}><Globe size={14} /><span>کوردی</span></div>
+          <div className="flex items-center gap-1.5"><Globe size={14} /><span>کوردی</span></div>
         </div>
       </div>
 

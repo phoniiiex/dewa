@@ -2,13 +2,16 @@
 import { Gift, Warehouse as WarehouseIcon, UserCheck, Package, Tag } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 export default function BonusPage() {
   const { orders, warehouses, reps } = useData();
 
   const bonusOrders = orders.filter(o => o.items.some(i => i.bonusQty > 0));
 
-  // Per-warehouse breakdown with per-product analysis
   const warehouseStats = warehouses.map(w => {
     const wo = orders.filter(o => o.warehouseId === w.id);
     const totalBonusUnits = wo.reduce((s, o) => s + o.items.reduce((a, i) => a + i.bonusQty, 0), 0);
@@ -16,7 +19,6 @@ export default function BonusPage() {
     return { ...w, orders: wo.length, totalBonusUnits, totalBonusValue };
   });
 
-  // Per-rep breakdown
   const repStats = reps.map(r => {
     const ro = orders.filter(o => o.repId === r.id);
     const totalBonusUnits = ro.reduce((s, o) => s + o.items.reduce((a, i) => a + i.bonusQty, 0), 0);
@@ -24,7 +26,6 @@ export default function BonusPage() {
     return { ...r, orders: ro.length, totalBonusUnits, totalBonusValue };
   });
 
-  // Flat list of all bonus items across all orders for the detail table
   const allBonusRows = bonusOrders.flatMap(o =>
     o.items
       .filter(i => i.bonusQty > 0)
@@ -44,145 +45,174 @@ export default function BonusPage() {
   const totalBonusUnits = orders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.bonusQty, 0), 0);
   const totalBonusValue = orders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.bonusQty * i.unitPrice, 0), 0);
 
+
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <div style={{ width: 40, height: 40, background: "linear-gradient(135deg, #7C5CFC, #4263EB)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "white" }}><Gift size={20} /></div>
-        <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>سیستەمی بۆنەس</h1><p style={{ fontSize: 13, color: "#6C757D" }}>شیکاری بۆنەسی کۆگاکان — بە دانە و ڕێژە</p></div>
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="size-10 bg-gradient-to-br from-violet-600 to-primary rounded-xl flex items-center justify-center text-white">
+          <Gift className="size-5" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold">سیستەمی بۆنەس</h1>
+          <p className="text-sm text-muted-foreground">شیکاری بۆنەسی کۆگاکان — بە دانە و ڕێژە</p>
+        </div>
       </div>
 
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { title: "داواکاری بە بۆنەس", value: String(bonusOrders.length) },
-          { title: "کۆی دانەی بۆنەس", value: String(totalBonusUnits) + " دانە", color: "#7C5CFC" },
-          { title: "نرخی بۆنەسی کۆ", value: formatIQD(totalBonusValue), color: "#4263EB" },
-          { title: "ڕیزی بۆنەس", value: String(allBonusRows.length) + " ڕیز" },
-        ].map((k, i) => (
-          <div className="kpi-card" key={i}><div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: k.color }}>{k.value}</div></div>
+          { title: "داواکاری بە بۆنەس", value: String(bonusOrders.length),          cls: "text-foreground" },
+          { title: "کۆی دانەی بۆنەس",  value: totalBonusUnits + " دانە",            cls: "text-violet-600" },
+          { title: "نرخی بۆنەسی کۆ",   value: formatIQD(totalBonusValue),           cls: "text-primary" },
+          { title: "ڕیزی بۆنەس",        value: String(allBonusRows.length) + " ڕیز", cls: "text-foreground" },
+        ].map(k => (
+          <Card key={k.title}>
+            <CardContent className="p-4">
+              <p className={cn("text-xl font-black", k.cls)}>{k.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{k.title}</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
       {/* How Bonus Works */}
-      <div style={{ background: "linear-gradient(135deg, #1A1A2E, #2D2B55)", color: "white", borderRadius: 14, padding: 24, marginBottom: 24 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>چۆنیەتی کارکردنی سیستەمی بۆنەس</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-          <div style={{ padding: 16, background: "rgba(255,255,255,0.1)", borderRadius: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#F47B35" }}>١. بۆنەسی بنەڕەتی کۆگا</div>
-            <p style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.6 }}>هەر کۆگایەک ڕێژەیەکی بنەڕەت هەیە (بۆ نموونە: ٢٠٪) بۆ هەموو بەرهەمەکان</p>
-          </div>
-          <div style={{ padding: 16, background: "rgba(255,255,255,0.1)", borderRadius: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#7C5CFC", display: "flex", alignItems: "center", gap: 4 }}><Tag size={12} /> ٢. یاسای تایبەت بە بەرهەم</div>
-            <p style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.6 }}>هەر بەرهەمێک دەتوانێت ڕێژەی بۆنەسی تایبەتی خۆی هەبێت (بۆ نموونە: پاراسیتامۆڵ ٣٠٪)</p>
-          </div>
-          <div style={{ padding: 16, background: "rgba(255,255,255,0.1)", borderRadius: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#40C057" }}>٣. دانەی بۆنەس</div>
-            <p style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.6 }}>بڕ × ڕێژەی بۆنەس = دانەی بۆنەسی دەنێردرێت (بۆ نموونە: ١٠ لاکتێنس × ٢٠٪ = ٢ دانە بۆنەس)</p>
-          </div>
+      <div className="bg-gradient-to-br from-slate-900 to-violet-950 text-white rounded-2xl p-6 mb-6">
+        <h3 className="text-base font-bold mb-4">چۆنیەتی کارکردنی سیستەمی بۆنەس</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[
+            { step: "١", title: "بۆنەسی بنەڕەتی کۆگا",     color: "text-amber-400", desc: "هەر کۆگایەک ڕێژەیەکی بنەڕەت هەیە (بۆ نموونە: ٢٠٪) بۆ هەموو بەرهەمەکان" },
+            { step: "٢", title: "یاسای تایبەت بە بەرهەم",  color: "text-violet-300", desc: "هەر بەرهەمێک دەتوانێت ڕێژەی بۆنەسی تایبەتی خۆی هەبێت (بۆ نموونە: پاراسیتامۆڵ ٣٠٪)" },
+            { step: "٣", title: "دانەی بۆنەس",              color: "text-emerald-400", desc: "بڕ × ڕێژەی بۆنەس = دانەی بۆنەسی دەنێردرێت (بۆ نموونە: ١٠ × ٢٠٪ = ٢ دانە بۆنەس)" },
+          ].map(item => (
+            <div key={item.step} className="p-4 bg-white/10 rounded-xl">
+              <p className={cn("text-sm font-bold mb-2", item.color)}>{item.step}. {item.title}</p>
+              <p className="text-xs text-white/75 leading-relaxed">{item.desc}</p>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Warehouse Bonus Table */}
-      <div style={{ marginBottom: 24 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><WarehouseIcon size={18} color="#7C5CFC" /> بۆنەسی کۆگاکان</h3>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead><tr><th>کۆگا</th><th>شار</th><th>ڕێژەی بنەڕەت</th><th>یاسای تایبەت</th><th>داواکاری</th><th>کۆی دانەی بۆنەس</th><th>نرخی بۆنەسی کۆ</th></tr></thead>
-            <tbody>
-              {warehouseStats.map(w => (
-                <tr key={w.id}>
-                  <td style={{ fontWeight: 600 }}>{w.name}</td>
-                  <td style={{ color: "#6C757D" }}>{w.city}</td>
-                  <td><span style={{ padding: "4px 12px", borderRadius: 8, background: "linear-gradient(135deg, #7C5CFC, #4263EB)", color: "white", fontWeight: 700, fontSize: 14 }}>{w.bonusPct}٪</span></td>
-                  <td>
-                    {(w.bonusRules || []).length > 0 ? (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                        {w.bonusRules.map((r, i) => (
-                          <span key={i} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "#F3F0FF", color: "#7C5CFC", fontWeight: 700, border: "1px solid #E9D7FF" }}>
-                            {r.productName}: {r.percent}٪
-                          </span>
-                        ))}
-                      </div>
-                    ) : <span style={{ color: "#ADB5BD", fontSize: 12 }}>—</span>}
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{w.orders}</td>
-                  <td style={{ fontWeight: 700, color: "#40C057" }}>{w.totalBonusUnits} دانە</td>
-                  <td style={{ fontWeight: 700, color: "#7C5CFC" }}>{formatIQD(w.totalBonusValue)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <WarehouseIcon className="size-4 text-violet-600" /> بۆنەسی کۆگاکان
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+          <Table>
+              <TableHeader>
+                <TableRow>
+                  {["کۆگا","شار","ڕێژەی بنەڕەت","یاسای تایبەت","داواکاری","کۆی دانەی بۆنەس","نرخی بۆنەسی کۆ"].map(h =>
+                    <TableHead key={h}>{h}</TableHead>)}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {warehouseStats.map(w => (
+                  <TableRow key={w.id}>
+                    <TableCell className="font-semibold">{w.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{w.city}</TableCell>
+                    <TableCell>
+                      <span className="px-3 py-1 rounded-lg bg-gradient-to-r from-violet-600 to-primary text-white font-bold text-sm">{w.bonusPct}٪</span>
+                    </TableCell>
+                    <TableCell>
+                      {(w.bonusRules || []).length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {w.bonusRules.map((r, i) => (
+                            <Badge key={i} variant="outline" className="text-[10px] text-violet-700 border-violet-300 bg-violet-50 dark:bg-violet-950/30 dark:text-violet-300">
+                              <Tag className="size-2 me-0.5" />{r.productName}: {r.percent}٪
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : <span className="text-muted-foreground text-xs">—</span>}
+                    </TableCell>
+                    <TableCell className="font-semibold">{w.orders}</TableCell>
+                    <TableCell className="font-bold text-emerald-600">{w.totalBonusUnits} دانە</TableCell>
+                    <TableCell className="font-bold text-violet-600">{formatIQD(w.totalBonusValue)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Rep Bonus Table */}
-      <div style={{ marginBottom: 24 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}><UserCheck size={18} color="#40C057" /> بۆنەسی نوێنەران</h3>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead><tr><th>نوێنەر</th><th>شار</th><th>داواکاری</th><th>کۆی دانەی بۆنەس</th><th>نرخی بۆنەسی کۆ</th></tr></thead>
-            <tbody>
-              {repStats.map(r => (
-                <tr key={r.id}>
-                  <td style={{ fontWeight: 600 }}>{r.name}</td>
-                  <td style={{ color: "#6C757D" }}>{r.city}</td>
-                  <td style={{ fontWeight: 600 }}>{r.orders}</td>
-                  <td style={{ fontWeight: 700, color: "#40C057" }}>{r.totalBonusUnits} دانە</td>
-                  <td style={{ fontWeight: 700, color: "#40C057" }}>{formatIQD(r.totalBonusValue)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <UserCheck className="size-4 text-emerald-600" /> بۆنەسی نوێنەران
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {["نوێنەر","شار","داواکاری","کۆی دانەی بۆنەس","نرخی بۆنەسی کۆ"].map(h => <TableHead key={h}>{h}</TableHead>)}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {repStats.map(r => (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-semibold">{r.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.city}</TableCell>
+                    <TableCell className="font-semibold">{r.orders}</TableCell>
+                    <TableCell className="font-bold text-emerald-600">{r.totalBonusUnits} دانە</TableCell>
+                    <TableCell className="font-bold text-emerald-600">{formatIQD(r.totalBonusValue)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Per-product bonus detail — the key new section */}
-      <div style={{ marginTop: 8 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
-          <Package size={18} color="#F47B35" /> شیکاری بۆنەس بەرهەم بەرهەم
-          <span style={{ fontSize: 12, fontWeight: 400, color: "#6C757D" }}>— چەند دانە دەنێردرێت هەر داواکارییەک</span>
-        </h3>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>ژمارەی داواکاری</th>
-                <th>کڕیار</th>
-                <th>نوێنەر</th>
-                <th>کۆگا</th>
-                <th>بەرهەم</th>
-                <th>بڕی داواکراو</th>
-                <th>ڕێژەی بۆنەس</th>
-                <th>دانەی بۆنەس دەنێردرێت</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allBonusRows.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: "center", color: "#ADB5BD", padding: 24 }}>هیچ بۆنەسێک تۆمار نەکراوە</td></tr>
-              ) : allBonusRows.map((row, i) => (
-                <tr key={i}>
-                  <td style={{ fontFamily: "monospace", fontWeight: 700 }}>{row.orderNumber}</td>
-                  <td style={{ fontSize: 13 }}>{row.clientName}</td>
-                  <td style={{ fontSize: 13, color: "#6C757D" }}>{row.repName}</td>
-                  <td style={{ fontSize: 13, color: "#6C757D" }}>{row.warehouseName || "—"}</td>
-                  <td style={{ fontWeight: 600 }}>{row.productName}</td>
-                  <td style={{ textAlign: "center", fontWeight: 600 }}>{row.quantity}</td>
-                  <td style={{ textAlign: "center" }}>
-                    <span style={{ padding: "3px 10px", borderRadius: 6, background: "linear-gradient(135deg, #7C5CFC, #4263EB)", color: "white", fontWeight: 700, fontSize: 13 }}>
-                      {row.bonusPct}٪
-                    </span>
-                  </td>
-                  <td style={{ textAlign: "center" }}>
-                    <span style={{ padding: "4px 14px", borderRadius: 8, background: "#EBFBEE", color: "#2B8A3E", fontWeight: 800, fontSize: 16 }}>
-                      +{row.bonusQty}
-                    </span>
-                    <span style={{ fontSize: 11, color: "#6C757D", marginRight: 4 }}>دانە</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Per-product bonus detail */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Package className="size-4 text-amber-500" />
+            شیکاری بۆنەس بەرهەم بەرهەم
+            <span className="text-xs font-normal text-muted-foreground">— چەند دانە دەنێردرێت هەر داواکارییەک</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {["ژمارەی داواکاری","کڕیار","نوێنەر","کۆگا","بەرهەم","بڕی داواکراو","ڕێژەی بۆنەس","دانەی بۆنەس دەنێردرێت"].map(h =>
+                    <TableHead key={h}>{h}</TableHead>)}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {allBonusRows.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">هیچ بۆنەسێک تۆمار نەکراوە</TableCell></TableRow>
+                ) : allBonusRows.map((row, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="font-mono font-bold">{row.orderNumber}</TableCell>
+                    <TableCell>{row.clientName}</TableCell>
+                    <TableCell className="text-muted-foreground">{row.repName}</TableCell>
+                    <TableCell className="text-muted-foreground">{row.warehouseName || "—"}</TableCell>
+                    <TableCell className="font-semibold">{row.productName}</TableCell>
+                    <TableCell className="text-center font-semibold">{row.quantity}</TableCell>
+                    <TableCell className="text-center">
+                      <span className="px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-violet-600 to-primary text-white font-bold text-xs">{row.bonusPct}٪</span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="px-3.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 font-black text-base">+{row.bonusQty}</span>
+                      <span className="text-[11px] text-muted-foreground me-1"> دانە</span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </>
   );
 }

@@ -1,8 +1,118 @@
 /* ============================================
-   DEWA (دەوا) — Design System
+   DEWA (دەوا) — Design System v2
    B2B Pharmaceutical Management System
    RTL-first, Kurdish Sorani
+   
+   Purple accent (#6D28D9 / hsl 263 70% 50%)
+   Premium glassmorphic dashboard aesthetic
    ============================================ */
+
+/* === Tailwind CSS v4 === */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* === Color Tokens (Purple Theme) === */
+@layer base {
+  :root {
+    /* Core */
+    --background: 0 0% 98%;
+    --foreground: 240 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+    /* Primary — Purple */
+    --primary: 263 70% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 263 30% 95%;
+    --secondary-foreground: 263 70% 30%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 263 30% 95%;
+    --accent-foreground: 263 70% 30%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 263 70% 50%;
+    --radius: 0.625rem;
+    /* Charts */
+    --chart-1: 263 70% 50%;
+    --chart-2: 210 70% 50%;
+    --chart-3: 142 70% 45%;
+    --chart-4: 25 95% 53%;
+    --chart-5: 340 75% 55%;
+    /* Sidebar */
+    --sidebar: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 240 10% 4%;
+    --foreground: 0 0% 95%;
+    --card: 240 10% 7%;
+    --card-foreground: 0 0% 95%;
+    --popover: 240 10% 7%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 263 70% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 263 20% 15%;
+    --secondary-foreground: 263 50% 80%;
+    --muted: 240 5% 15%;
+    --muted-foreground: 240 5% 60%;
+    --accent: 263 20% 15%;
+    --accent-foreground: 263 50% 80%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 18%;
+    --input: 240 6% 18%;
+    --ring: 263 70% 65%;
+    --chart-1: 263 70% 65%;
+    --chart-2: 210 70% 60%;
+    --chart-3: 142 60% 50%;
+    --chart-4: 25 95% 58%;
+    --chart-5: 340 75% 60%;
+    /* Sidebar */
+    --sidebar: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* === Tailwind Theme Extensions === */
+@theme {
+  --color-primary: hsl(263 70% 50%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --font-family-sans: 'Zavi Gifts', 'Inter', 'Segoe UI', Tahoma, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
 
 /* === Font Face: Zavi Gifts === */
 @font-face {
@@ -12,7 +122,6 @@
   font-style: normal;
   font-display: swap;
 }
-
 @font-face {
   font-family: 'Zavi Gifts';
   src: url('/fonts/Zavi Gifts-Regular.ttf') format('truetype');
@@ -20,7 +129,6 @@
   font-style: normal;
   font-display: swap;
 }
-
 @font-face {
   font-family: 'Zavi Gifts';
   src: url('/fonts/Zavi Gifts-Medium.ttf') format('truetype');
@@ -28,7 +136,6 @@
   font-style: normal;
   font-display: swap;
 }
-
 @font-face {
   font-family: 'Zavi Gifts';
   src: url('/fonts/Zavi Gifts-SemiBold.ttf') format('truetype');
@@ -36,7 +143,6 @@
   font-style: normal;
   font-display: swap;
 }
-
 @font-face {
   font-family: 'Zavi Gifts';
   src: url('/fonts/Zavi Gifts-Bold.ttf') format('truetype');
@@ -44,7 +150,6 @@
   font-style: normal;
   font-display: swap;
 }
-
 @font-face {
   font-family: 'Zavi Gifts';
   src: url('/fonts/Zavi Gifts-ExtraBold.ttf') format('truetype');
@@ -52,7 +157,6 @@
   font-style: normal;
   font-display: swap;
 }
-
 @font-face {
   font-family: 'Zavi Gifts';
   src: url('/fonts/Zavi Gifts-Black.ttf') format('truetype');
@@ -63,97 +167,37 @@
 
 /* === Design Tokens === */
 :root {
-  /* Colors — Primary */
-  --color-primary: #F47B35;
-  --color-primary-hover: #E06820;
-  --color-primary-light: #FEF3EB;
-  --color-primary-50: #FFF7F0;
+  /* Motion — custom easing (Emil Kowalski) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
-  /* Colors — Action (Blue) */
-  --color-action: #4263EB;
-  --color-action-hover: #3B5BDB;
-  --color-action-light: #EDF2FF;
+  /* Motion — durations */
+  --duration-fast: 100ms;
+  --duration-base: 180ms;
+  --duration-moderate: 250ms;
+  --duration-slow: 350ms;
 
-  /* Colors — Neutral */
-  --color-bg: #F8F9FA;
-  --color-bg-card: #FFFFFF;
-  --color-bg-sidebar: #FFFFFF;
-  --color-bg-hover: #F1F3F5;
-  --color-bg-active: #E9ECEF;
-
-  /* Colors — Text */
-  --color-text-primary: #1A1A2E;
-  --color-text-secondary: #6C757D;
-  --color-text-tertiary: #ADB5BD;
-  --color-text-inverse: #FFFFFF;
-
-  /* Colors — Semantic */
-  --color-success: #40C057;
-  --color-success-light: #EBFBEE;
-  --color-danger: #FA5252;
-  --color-danger-light: #FFF5F5;
-  --color-warning: #FD7E14;
-  --color-warning-light: #FFF9DB;
-  --color-info: #339AF0;
-  --color-info-light: #E7F5FF;
-
-  /* Borders */
-  --color-border: #DEE2E6;
-  --color-border-light: #E9ECEF;
-  --border-radius-sm: 6px;
-  --border-radius-md: 8px;
-  --border-radius-lg: 12px;
-  --border-radius-xl: 16px;
-  --border-radius-full: 9999px;
-
-  /* Shadows */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  /* Shadows — subtle depth system */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 40px -8px rgba(0, 0, 0, 0.1), 0 8px 16px -4px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-card-hover: 0 8px 30px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.02);
+  --shadow-glow: 0 0 20px -4px hsl(263 70% 50% / 0.25);
 
   /* Typography */
   --font-primary: 'Zavi Gifts', 'Inter', 'Segoe UI', Tahoma, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-
-  --text-xs: 0.75rem;    /* 12px */
-  --text-sm: 0.8125rem;  /* 13px */
-  --text-base: 0.875rem; /* 14px */
-  --text-md: 1rem;       /* 16px */
-  --text-lg: 1.125rem;   /* 18px */
-  --text-xl: 1.25rem;    /* 20px */
-  --text-2xl: 1.5rem;    /* 24px */
-  --text-3xl: 1.875rem;  /* 30px */
-  --text-4xl: 2.25rem;   /* 36px */
-
-  --leading-tight: 1.25;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.75;
-
-  /* Spacing */
-  --space-1: 0.25rem;   /* 4px */
-  --space-2: 0.5rem;    /* 8px */
-  --space-3: 0.75rem;   /* 12px */
-  --space-4: 1rem;      /* 16px */
-  --space-5: 1.25rem;   /* 20px */
-  --space-6: 1.5rem;    /* 24px */
-  --space-8: 2rem;      /* 32px */
-  --space-10: 2.5rem;   /* 40px */
-  --space-12: 3rem;     /* 48px */
-  --space-16: 4rem;     /* 64px */
 
   /* Layout */
   --sidebar-width: 272px;
   --sidebar-collapsed: 72px;
   --topbar-height: 64px;
   --content-max-width: 1440px;
-
-  /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-base: 200ms ease;
-  --transition-slow: 300ms ease;
-  --transition-spring: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* Z-index layers */
   --z-dropdown: 100;
@@ -163,122 +207,99 @@
   --z-toast: 500;
 }
 
-/* === Reset === */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/* === Reset (inside @layer base so Tailwind utilities can override) === */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
-html {
-  direction: rtl;
-  font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
+  html {
+    direction: rtl;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
 
-body {
-  font-family: var(--font-primary);
-  font-size: var(--text-base);
-  line-height: var(--leading-normal);
-  color: var(--color-text-primary);
-  background-color: var(--color-bg);
-  min-height: 100vh;
-}
+  body {
+    font-family: var(--font-primary);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+  a { color: inherit; text-decoration: none; }
 
-button {
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  background: none;
-  font-size: inherit;
-}
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    font-size: inherit;
+    /* Do NOT reset border — let shadcn/Tailwind control it */
+  }
 
-input, select, textarea {
-  font-family: inherit;
-  font-size: inherit;
-  border: none;
-  outline: none;
-}
+  input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+    /* Do NOT reset border/outline — let shadcn/Tailwind control it */
+  }
 
-img {
-  max-width: 100%;
-  display: block;
-}
-
-ul, ol {
-  list-style: none;
-}
-
-table {
-  border-collapse: collapse;
-  width: 100%;
+  img { max-width: 100%; display: block; }
+  ul, ol { list-style: none; }
+  table { border-collapse: collapse; width: 100%; }
 }
 
 /* === Scrollbar === */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: var(--border-radius-full);
+  background: hsl(var(--border));
+  border-radius: 9999px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-tertiary);
+  background: hsl(var(--muted-foreground) / 0.4);
 }
 
-/* === Utility Classes === */
+/* === Utility === */
 .sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
+  position: absolute; width: 1px; height: 1px; padding: 0;
+  margin: -1px; overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border-width: 0;
 }
 
-/* === Animations === */
+/* =========================================================
+   MOTION SYSTEM
+   Based on Emil Kowalski's design engineering principles
+   ========================================================= */
+
+/* --- Keyframes --- */
 @keyframes fadeIn {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to   { opacity: 1; }
 }
 
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fadeInDown {
   from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideInRight {
   from { opacity: 0; transform: translateX(-16px); }
-  to { opacity: 1; transform: translateX(0); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes slideInLeft {
   from { opacity: 0; transform: translateX(16px); }
-  to { opacity: 1; transform: translateX(0); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes scaleIn {
@@ -293,20 +314,264 @@ table {
 
 @keyframes spin {
   from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  to   { transform: rotate(360deg); }
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
+  0%   { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50%      { opacity: 0.5; }
 }
 
 @keyframes shimmerSlide {
-  0% { background-position: 200% 0; }
+  0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* Stagger — apply to children via nth-child */
+@keyframes staggerFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Subtle number counter feel */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(4px); filter: blur(2px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+/* Glow pulse for active/notification elements */
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(263 70% 50% / 0); }
+  50%      { box-shadow: 0 0 12px 2px hsl(263 70% 50% / 0.15); }
+}
+
+/* Bar chart width animation */
+@keyframes barGrow {
+  from { width: 0; }
+}
+
+/* --- Button Press Feedback --- */
+button:not([disabled]):active,
+[role="button"]:not([disabled]):active {
+  transform: scale(0.97);
+}
+
+/* Exclude nav items from press feedback */
+[data-no-press]:active,
+nav button:active {
+  transform: none;
+}
+
+/* --- Card Hover Effect (Emil: specify exact properties, custom curves) --- */
+@media (hover: hover) and (pointer: fine) {
+  .card-interactive {
+    transition:
+      transform var(--duration-base) var(--ease-out),
+      box-shadow var(--duration-base) var(--ease-out);
+    will-change: transform;
+  }
+
+  .card-interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.1),
+                0 2px 8px -2px rgba(0, 0, 0, 0.06);
+  }
+
+  .card-interactive:active {
+    transform: translateY(0px) scale(0.99);
+    transition-duration: var(--duration-fast);
+  }
+}
+
+/* --- Page Stagger --- */
+.page-stagger > * {
+  animation: staggerFadeIn 350ms var(--ease-out) both;
+}
+.page-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.page-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.page-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.page-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.page-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.page-stagger > *:nth-child(6) { animation-delay: 200ms; }
+.page-stagger > *:nth-child(7) { animation-delay: 240ms; }
+.page-stagger > *:nth-child(8) { animation-delay: 280ms; }
+.page-stagger > *:nth-child(9) { animation-delay: 320ms; }
+.page-stagger > *:nth-child(10) { animation-delay: 360ms; }
+.page-stagger > *:nth-child(n+11) { animation-delay: 400ms; }
+
+/* --- Glass/Depth --- */
+.glass {
+  background: hsl(var(--card) / 0.7);
+  backdrop-filter: blur(12px) saturate(1.5);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  border: 1px solid hsl(var(--border) / 0.5);
+}
+
+.glass-strong {
+  background: hsl(var(--card) / 0.85);
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  border: 1px solid hsl(var(--border) / 0.3);
+}
+
+/* --- Gradient Accents --- */
+.gradient-primary {
+  background: linear-gradient(135deg, hsl(263 70% 50%), hsl(263 80% 62%));
+}
+
+.gradient-primary-subtle {
+  background: linear-gradient(135deg, hsl(263 70% 50% / 0.08), hsl(263 80% 62% / 0.04));
+}
+
+.dark .gradient-primary-subtle {
+  background: linear-gradient(135deg, hsl(263 70% 65% / 0.12), hsl(263 80% 72% / 0.06));
+}
+
+/* --- Focus Ring --- */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: calc(var(--radius) * 0.8);
+}
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .card-interactive,
+  .card-interactive:hover,
+  .card-interactive:active {
+    transform: none;
+    box-shadow: none;
+    transition: none;
+  }
+
+  .page-stagger > *,
+  .table-stagger > tr {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* === Theme Inline Tokens (shadcn compatibility) === */
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-ring: hsl(var(--ring));
+  --color-input: hsl(var(--input));
+  --color-border: hsl(var(--border));
+  --color-destructive: hsl(var(--destructive));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-card: hsl(var(--card));
+  --color-foreground: hsl(var(--foreground));
+  --color-background: hsl(var(--background));
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* =========================================================
+   ADDITIONAL MOTION UTILITIES
+   Emil Kowalski — "unseen details compound"
+   ========================================================= */
+
+/* --- Table Row Stagger --- */
+.table-stagger > tr {
+  animation: staggerFadeIn 300ms var(--ease-out) both;
+}
+.table-stagger > tr:nth-child(1)  { animation-delay: 0ms; }
+.table-stagger > tr:nth-child(2)  { animation-delay: 30ms; }
+.table-stagger > tr:nth-child(3)  { animation-delay: 60ms; }
+.table-stagger > tr:nth-child(4)  { animation-delay: 90ms; }
+.table-stagger > tr:nth-child(5)  { animation-delay: 120ms; }
+.table-stagger > tr:nth-child(6)  { animation-delay: 150ms; }
+.table-stagger > tr:nth-child(7)  { animation-delay: 180ms; }
+.table-stagger > tr:nth-child(8)  { animation-delay: 210ms; }
+.table-stagger > tr:nth-child(n+9) { animation-delay: 240ms; }
+
+/* --- Status Filter Pill (Emil: specify exact properties, never 'all') --- */
+.status-pill {
+  transition:
+    background-color var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+
+/* --- Invoice Drop Zone --- */
+.drop-zone {
+  border: 1.5px dashed hsl(var(--border));
+  border-radius: 12px;
+  padding: 28px 20px;
+  text-align: center;
+  cursor: pointer;
+  background: hsl(var(--muted));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    background-color var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
+}
+.drop-zone:hover {
+  border-color: hsl(var(--primary));
+}
+.drop-zone.drop-zone--active {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.05);
+  transform: scale(1.01);
+}
+
+/* --- Modal Content Stagger (Emil: 30-50ms between sections) --- */
+.modal-stagger > * {
+  animation: staggerFadeIn 250ms var(--ease-out) both;
+}
+.modal-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.modal-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.modal-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.modal-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.modal-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.modal-stagger > *:nth-child(n+6) { animation-delay: 200ms; }

@@ -1,129 +1,110 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
-  X, Send, Sparkles, Trash2, Package, TrendingUp,
-  CheckCircle2, AlertCircle, Loader2, ShoppingCart,
-  Users, BarChart3, Warehouse, ChevronDown, ChevronUp,
+  Sparkles, ArrowUpIcon, RotateCwIcon, X,
+  Package, TrendingUp, CheckCircle2, AlertCircle,
+  Loader2, ShoppingCart, Users, BarChart3, Warehouse,
+  ChevronDown, ChevronUp, PlusIcon, MessageCircleDashedIcon,
 } from "lucide-react";
 import { useLayout } from "@/app/dashboard/layout";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
-// ── Types ─────────────────────────────────────────────────────────────────
-interface OrderItem {
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-}
+// ── shadcn chat primitives ────────────────────────────────────────────────────
+import {
+  MessageScrollerProvider,
+  MessageScroller,
+  MessageScrollerViewport,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerButton,
+} from "@/components/ui/message-scroller";
+import {
+  Message,
+  MessageAvatar,
+  MessageContent,
+} from "@/components/ui/message";
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
 
-interface OrderResult {
-  success: boolean;
-  orderNumber?: string;
-  clientName?: string;
-  repName?: string;
-  warehouseName?: string;
-  totalAmount?: number;
-  status?: string;
-  items?: OrderItem[];
-  error?: string;
-}
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface OrderItem { productName: string; quantity: number; unitPrice: number; total: number; }
+interface OrderResult { success: boolean; orderNumber?: string; clientName?: string; repName?: string; warehouseName?: string; totalAmount?: number; status?: string; items?: OrderItem[]; error?: string; }
+interface BulkResult { bulk: boolean; count: number; orders: OrderResult[]; }
+interface ToolResult { name: string; result: unknown; }
+interface ChatMessage { id: string; role: "user" | "assistant"; text: string; toolResults?: ToolResult[]; loading?: boolean; error?: boolean; animated?: boolean; }
 
-interface BulkResult {
-  bulk: boolean;
-  count: number;
-  orders: OrderResult[];
-}
-
-interface ToolResult {
-  name: string;
-  result: unknown;
-}
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  toolResults?: ToolResult[];
-  loading?: boolean;
-  error?: boolean;
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-US").format(Math.round(n)) + " IQD";
-
+const fmt = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n)) + " IQD";
 const STATUS_COLOR: Record<string, string> = {
   WAITING: "#f59e0b", IN_PROGRESS: "#3b82f6", READY: "#8b5cf6",
   SENT: "#06b6d4", DELIVERED: "#10b981", PAID: "#22c55e", NOT_ACCEPTED: "#ef4444",
 };
 
-// ── Cards ──────────────────────────────────────────────────────────────────
+// ── Animated text (typewriter) ────────────────────────────────────────────────
+function AnimatedText({ text }: { text: string }) {
+  const [displayed, setDisplayed] = useState("");
+  useEffect(() => {
+    setDisplayed("");
+    let i = 0;
+    const id = setInterval(() => {
+      i++;
+      setDisplayed(text.slice(0, i));
+      if (i >= text.length) clearInterval(id);
+    }, 8);
+    return () => clearInterval(id);
+  }, [text]);
+  return <span className="whitespace-pre-wrap leading-relaxed">{displayed}</span>;
+}
+
+// ── Rich result cards ─────────────────────────────────────────────────────────
 function OrderCard({ order }: { order: OrderResult }) {
   const [expanded, setExpanded] = useState(false);
   const ok = order.success && !order.error;
-
   return (
-    <div style={{
-      background: ok ? "linear-gradient(135deg,#f0fdf4,#dcfce7)" : "linear-gradient(135deg,#fef2f2,#fee2e2)",
-      border: `1.5px solid ${ok ? "#86efac" : "#fca5a5"}`,
-      borderRadius: 12, overflow: "hidden", marginTop: 8,
-    }}>
-      {/* Header */}
-      <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
-        {ok
-          ? <CheckCircle2 size={18} color="#16a34a" strokeWidth={2.5} />
-          : <AlertCircle  size={18} color="#dc2626" strokeWidth={2.5} />}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: ok ? "#14532d" : "#7f1d1d" }}>
-            {ok ? order.orderNumber : "Order Failed"}
+    <div className={cn("rounded-xl overflow-hidden border", ok ? "bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800" : "bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800")}>
+      <div className="flex items-start gap-2.5 p-3">
+        {ok ? <CheckCircle2 className="size-4 text-green-600 mt-0.5 shrink-0" /> : <AlertCircle className="size-4 text-red-600 mt-0.5 shrink-0" />}
+        <div className="flex-1 min-w-0">
+          <div className={cn("font-bold text-sm", ok ? "text-green-900 dark:text-green-100" : "text-red-900 dark:text-red-100")}>
+            {ok ? order.orderNumber : "فەيل بوو"}
           </div>
-          {ok && (
-            <div style={{ fontSize: 12, color: "#166534" }}>
-              {order.clientName}{order.repName ? ` · ${order.repName}` : ""}
-            </div>
-          )}
-          {order.error && <div style={{ fontSize: 12, color: "#991b1b" }}>{order.error}</div>}
+          {ok && <div className="text-xs text-green-700 dark:text-green-300">{order.clientName}{order.repName ? ` · ${order.repName}` : ""}</div>}
+          {order.error && <div className="text-xs text-red-700 dark:text-red-300">{order.error}</div>}
         </div>
         {ok && (
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: "#15803d" }}>
-              {fmt(order.totalAmount || 0)}
-            </div>
-            <div style={{
-              fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20,
-              background: STATUS_COLOR[order.status || "WAITING"] + "22",
-              color: STATUS_COLOR[order.status || "WAITING"],
-              display: "inline-block", marginTop: 2,
-            }}>
-              {order.status}
-            </div>
+          <div className="text-right shrink-0">
+            <div className="font-black text-sm text-green-700">{fmt(order.totalAmount || 0)}</div>
+            <Badge variant="outline" className="text-[9px] mt-0.5" style={{ color: STATUS_COLOR[order.status || "WAITING"] }}>{order.status}</Badge>
           </div>
         )}
       </div>
-
-      {/* Items toggle */}
       {ok && order.items && order.items.length > 0 && (
         <>
-          <button
-            onClick={() => setExpanded(e => !e)}
-            style={{
-              width: "100%", background: "rgba(0,0,0,0.04)", border: "none",
-              borderTop: "1px solid rgba(0,0,0,0.06)", padding: "6px 14px",
-              display: "flex", alignItems: "center", gap: 6,
-              cursor: "pointer", fontSize: 12, color: "#374151",
-            }}
-          >
-            <Package size={13} />
-            {order.items.length} item{order.items.length > 1 ? "s" : ""}
-            {expanded ? <ChevronUp size={13} style={{ marginLeft: "auto" }} /> : <ChevronDown size={13} style={{ marginLeft: "auto" }} />}
+          <button onClick={() => setExpanded(e => !e)} className="w-full flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground bg-black/5 border-t border-black/5 hover:bg-black/10 transition-colors">
+            <Package className="size-3" />{order.items.length} بەرهەم
+            {expanded ? <ChevronUp className="size-3 ms-auto" /> : <ChevronDown className="size-3 ms-auto" />}
           </button>
           {expanded && (
-            <div style={{ padding: "8px 14px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+            <div className="flex flex-col gap-1 px-3 pb-3 pt-1.5">
               {order.items.map((item, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                  <span style={{ color: "#374151", fontWeight: 500 }}>
-                    {item.productName} <span style={{ color: "#6b7280" }}>×{item.quantity}</span>
-                  </span>
-                  <span style={{ color: "#15803d", fontWeight: 600 }}>{fmt(item.total)}</span>
+                <div key={i} className="flex justify-between text-xs">
+                  <span>{item.productName} <span className="text-muted-foreground">×{item.quantity}</span></span>
+                  <span className="font-semibold text-green-700">{fmt(item.total)}</span>
                 </div>
               ))}
             </div>
@@ -137,19 +118,11 @@ function OrderCard({ order }: { order: OrderResult }) {
 function BulkOrderCard({ result }: { result: BulkResult }) {
   const successCount = result.orders.filter(o => o.success).length;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-      <div style={{
-        background: "linear-gradient(135deg,#eff6ff,#dbeafe)",
-        border: "1.5px solid #93c5fd", borderRadius: 10,
-        padding: "8px 14px", display: "flex", alignItems: "center", gap: 8,
-      }}>
-        <ShoppingCart size={16} color="#1d4ed8" />
-        <span style={{ fontWeight: 700, fontSize: 14, color: "#1e3a8a" }}>
-          {successCount} / {result.count} Orders Created
-        </span>
-        <span style={{ marginLeft: "auto", fontSize: 13, color: "#1d4ed8", fontWeight: 600 }}>
-          {fmt(result.orders.filter(o => o.success).reduce((s, o) => s + (o.totalAmount || 0), 0))}
-        </span>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2">
+        <ShoppingCart className="size-4 text-blue-700" />
+        <span className="font-bold text-sm text-blue-900 dark:text-blue-100">{successCount} / {result.count} داواکاری</span>
+        <span className="ms-auto text-sm font-semibold text-blue-700">{fmt(result.orders.filter(o => o.success).reduce((s, o) => s + (o.totalAmount || 0), 0))}</span>
       </div>
       {result.orders.map((order, i) => <OrderCard key={i} order={order} />)}
     </div>
@@ -157,22 +130,18 @@ function BulkOrderCard({ result }: { result: BulkResult }) {
 }
 
 function StatsCard({ result }: { result: Record<string, number> }) {
-  const items = [
-    { label: "Today's Orders", value: result.totalOrders, icon: ShoppingCart, color: "#3b82f6" },
-    { label: "Revenue", value: fmt(result.totalRevenue), icon: TrendingUp, color: "#10b981" },
-    { label: "Delivered", value: result.delivered, icon: CheckCircle2, color: "#22c55e" },
-    { label: "Waiting", value: result.waiting, icon: Loader2, color: "#f59e0b" },
-  ];
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-      {items.map(({ label, value, icon: Icon, color }) => (
-        <div key={label} style={{
-          background: color + "12", border: `1.5px solid ${color}33`,
-          borderRadius: 10, padding: "10px 12px",
-        }}>
-          <Icon size={16} color={color} />
-          <div style={{ fontSize: 18, fontWeight: 800, color, marginTop: 4 }}>{value}</div>
-          <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>{label}</div>
+    <div className="grid grid-cols-2 gap-2">
+      {[
+        { label: "داواکارییەکان", value: result.totalOrders, icon: ShoppingCart, color: "text-blue-600 bg-blue-50 dark:bg-blue-950/30" },
+        { label: "داهات", value: fmt(result.totalRevenue), icon: TrendingUp, color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" },
+        { label: "گەیشتووە", value: result.delivered, icon: CheckCircle2, color: "text-green-600 bg-green-50 dark:bg-green-950/30" },
+        { label: "چاوەڕوان", value: result.waiting, icon: Loader2, color: "text-amber-600 bg-amber-50 dark:bg-amber-950/30" },
+      ].map(({ label, value, icon: Icon, color }) => (
+        <div key={label} className={cn("rounded-xl p-3 border border-border", color)}>
+          <Icon className="size-4 mb-1" />
+          <div className="text-lg font-black">{value}</div>
+          <div className="text-xs text-muted-foreground">{label}</div>
         </div>
       ))}
     </div>
@@ -182,32 +151,17 @@ function StatsCard({ result }: { result: Record<string, number> }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ProductsCard({ products }: { products: any[] }) {
   return (
-    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+    <div className="flex flex-col gap-1">
       {products.slice(0, 8).map((p, i) => (
-        <div key={i} style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-          padding: "7px 12px", background: "#f8fafc",
-          border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 13,
-        }}>
-          <span style={{ fontWeight: 500, color: "#1e293b" }}>{p.name}</span>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <span style={{ color: "#10b981", fontWeight: 600 }}>{fmt(p.price)}</span>
-            <span style={{
-              fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20,
-              background: p.stock <= 5 ? "#fef2f2" : "#f0fdf4",
-              color: p.stock <= 5 ? "#dc2626" : "#16a34a",
-              border: `1px solid ${p.stock <= 5 ? "#fca5a5" : "#86efac"}`,
-            }}>
-              {p.stock}
-            </span>
+        <div key={i} className="flex justify-between items-center px-3 py-2 bg-muted/50 border border-border rounded-lg text-xs">
+          <span className="font-medium">{p.name}</span>
+          <div className="flex gap-2 items-center">
+            <span className="text-emerald-600 font-semibold">{fmt(p.price)}</span>
+            <Badge variant={p.stock <= 5 ? "destructive" : "outline"} className="text-[9px]">{p.stock}</Badge>
           </div>
         </div>
       ))}
-      {products.length > 8 && (
-        <div style={{ fontSize: 12, color: "#6b7280", textAlign: "center", paddingTop: 4 }}>
-          +{products.length - 8} more
-        </div>
-      )}
+      {products.length > 8 && <div className="text-xs text-muted-foreground text-center pt-1">+{products.length - 8} زیاتر</div>}
     </div>
   );
 }
@@ -215,23 +169,15 @@ function ProductsCard({ products }: { products: any[] }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ClientsCard({ clients }: { clients: any[] }) {
   return (
-    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+    <div className="flex flex-col gap-1">
       {clients.slice(0, 6).map((c, i) => (
-        <div key={i} style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "7px 12px", background: "#f8fafc",
-          border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 13,
-        }}>
-          <Users size={13} color="#6b7280" />
-          <span style={{ fontWeight: 500, color: "#1e293b", flex: 1 }}>{c.name}</span>
-          {c.city && <span style={{ color: "#6b7280", fontSize: 12 }}>{c.city}</span>}
+        <div key={i} className="flex items-center gap-2 px-3 py-2 bg-muted/50 border border-border rounded-lg text-xs">
+          <Users className="size-3 text-muted-foreground shrink-0" />
+          <span className="font-medium flex-1">{c.name}</span>
+          {c.city && <span className="text-muted-foreground">{c.city}</span>}
         </div>
       ))}
-      {clients.length > 6 && (
-        <div style={{ fontSize: 12, color: "#6b7280", textAlign: "center", paddingTop: 4 }}>
-          +{clients.length - 6} more
-        </div>
-      )}
+      {clients.length > 6 && <div className="text-xs text-muted-foreground text-center pt-1">+{clients.length - 6} زیاتر</div>}
     </div>
   );
 }
@@ -239,25 +185,16 @@ function ClientsCard({ clients }: { clients: any[] }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function OrdersListCard({ orders }: { orders: any[] }) {
   return (
-    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+    <div className="flex flex-col gap-1">
       {orders.slice(0, 6).map((o, i) => (
-        <div key={i} style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-          padding: "8px 12px", background: "#f8fafc",
-          border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 13,
-        }}>
+        <div key={i} className="flex justify-between items-center px-3 py-2 bg-muted/50 border border-border rounded-lg text-xs">
           <div>
-            <div style={{ fontWeight: 600, color: "#1e293b" }}>{o.orderNumber || o.order_number}</div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>{o.client || o.client_name}</div>
+            <div className="font-semibold">{o.orderNumber || o.order_number}</div>
+            <div className="text-muted-foreground">{o.client || o.client_name}</div>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontWeight: 700, color: "#374151" }}>{fmt(o.total || o.total_amount || 0)}</div>
-            <div style={{
-              fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20,
-              background: (STATUS_COLOR[o.status] || "#6b7280") + "22",
-              color: STATUS_COLOR[o.status] || "#6b7280",
-              display: "inline-block",
-            }}>{o.status}</div>
+          <div className="text-right">
+            <div className="font-bold">{fmt(o.total || o.total_amount || 0)}</div>
+            <Badge variant="outline" className="text-[9px]" style={{ color: STATUS_COLOR[o.status] || undefined }}>{o.status}</Badge>
           </div>
         </div>
       ))}
@@ -267,23 +204,18 @@ function OrdersListCard({ orders }: { orders: any[] }) {
 
 function WarehousesCard({ warehouses }: { warehouses: { id: string; name: string; city?: string }[] }) {
   return (
-    <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+    <div className="flex flex-col gap-1">
       {warehouses.map((w, i) => (
-        <div key={i} style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "7px 12px", background: "#f8fafc",
-          border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 13,
-        }}>
-          <Warehouse size={13} color="#6b7280" />
-          <span style={{ fontWeight: 500, color: "#1e293b", flex: 1 }}>{w.name}</span>
-          {w.city && <span style={{ color: "#6b7280", fontSize: 12 }}>{w.city}</span>}
+        <div key={i} className="flex items-center gap-2 px-3 py-2 bg-muted/50 border border-border rounded-lg text-xs">
+          <Warehouse className="size-3 text-muted-foreground shrink-0" />
+          <span className="font-medium flex-1">{w.name}</span>
+          {w.city && <span className="text-muted-foreground">{w.city}</span>}
         </div>
       ))}
     </div>
   );
 }
 
-// ── Render tool results as rich cards ──────────────────────────────────────
 function ToolResultCards({ toolResults }: { toolResults: ToolResult[] }) {
   return (
     <>
@@ -302,123 +234,107 @@ function ToolResultCards({ toolResults }: { toolResults: ToolResult[] }) {
   );
 }
 
-// ── Message bubble ─────────────────────────────────────────────────────────
-function MessageBubble({ msg }: { msg: Message }) {
+// ── Suggested prompts ─────────────────────────────────────────────────────────
+const SUGGESTED = [
+  { icon: BarChart3,    label: "ئاماری ئەمڕۆ",  prompt: "ئاماری ئەمڕۆم پیشان بدە" },
+  { icon: ShoppingCart, label: "داواکاری نوێ",  prompt: "داواکاری نوێ" },
+  { icon: Package,      label: "بەرهەمەکان",    prompt: "لیستی بەرهەمەکانم نیشان بدە" },
+  { icon: Users,        label: "کڕیارەکان",     prompt: "لیستی کڕیارەکانم نیشان بدە" },
+];
+
+// ── Single message row ────────────────────────────────────────────────────────
+function ChatRow({ msg, userInitials }: { msg: ChatMessage; userInitials: string }) {
   const isUser = msg.role === "user";
 
   if (msg.loading) {
     return (
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "flex-start" }}>
-        <div style={{
-          width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-          background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Sparkles size={15} color="white" />
-        </div>
-        <div style={{
-          padding: "10px 14px", background: "white",
-          border: "1px solid #e5e7eb", borderRadius: "4px 12px 12px 12px",
-          display: "flex", gap: 5, alignItems: "center",
-        }}>
-          {[0, 1, 2].map(i => (
-            <span key={i} style={{
-              width: 6, height: 6, borderRadius: "50%",
-              background: "#6366f1",
-              display: "inline-block",
-              animation: `bounce 1s ease-in-out ${i * 0.2}s infinite`,
-            }} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (isUser) {
-    return (
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-        <div style={{
-          maxWidth: "78%", padding: "10px 14px",
-          background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-          borderRadius: "12px 12px 4px 12px",
-          color: "white", fontSize: 14, lineHeight: "22px",
-          fontWeight: 400, whiteSpace: "pre-wrap", wordBreak: "break-word",
-        }}>
-          {msg.text}
-        </div>
-      </div>
+      <Message align="start">
+        <MessageAvatar className="size-8 rounded-full bg-primary/10 border border-primary/20 shrink-0">
+          <Sparkles className="size-3.5 text-primary" />
+        </MessageAvatar>
+        <MessageContent>
+          <Bubble variant="ghost" align="start">
+            <BubbleContent className="flex gap-1.5 items-center py-1">
+              {[0, 1, 2].map(i => (
+                <span key={i} className="size-1.5 rounded-full bg-foreground/30 animate-bounce" style={{ animationDelay: `${i * 0.18}s` }} />
+              ))}
+            </BubbleContent>
+          </Bubble>
+        </MessageContent>
+      </Message>
     );
   }
 
   return (
-    <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "flex-start" }}>
-      {/* Bot avatar */}
-      <div style={{
-        width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-        background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <Sparkles size={15} color="white" />
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {/* Text */}
+    <Message align={isUser ? "end" : "start"}>
+      {!isUser && (
+        <MessageAvatar className="size-8 rounded-full bg-primary/10 border border-primary/20 shrink-0">
+          <Sparkles className="size-3.5 text-primary" />
+        </MessageAvatar>
+      )}
+
+      <MessageContent>
         {msg.text && (
-          <div style={{
-            padding: "10px 14px", background: msg.error ? "#fef2f2" : "white",
-            border: `1px solid ${msg.error ? "#fca5a5" : "#e5e7eb"}`,
-            borderRadius: "4px 12px 12px 12px",
-            fontSize: 14, lineHeight: "22px", color: msg.error ? "#dc2626" : "#111827",
-            whiteSpace: "pre-wrap", wordBreak: "break-word",
-          }}>
-            {msg.text}
+          <Bubble
+            variant={isUser ? "tinted" : msg.error ? "destructive" : "ghost"}
+            align={isUser ? "end" : "start"}
+          >
+            <BubbleContent className="text-sm leading-relaxed">
+              {!isUser && msg.animated
+                ? <AnimatedText text={msg.text} />
+                : <span className="whitespace-pre-wrap">{msg.text}</span>
+              }
+            </BubbleContent>
+          </Bubble>
+        )}
+        {msg.toolResults && msg.toolResults.length > 0 && (
+          <div className="w-full max-w-[85%]">
+            <ToolResultCards toolResults={msg.toolResults} />
           </div>
         )}
-        {/* Tool result cards */}
-        {msg.toolResults && msg.toolResults.length > 0 && (
-          <ToolResultCards toolResults={msg.toolResults} />
-        )}
-      </div>
-    </div>
+      </MessageContent>
+
+      {isUser && (
+        <MessageAvatar className="size-8 rounded-full bg-muted border border-border shrink-0">
+          <span className="text-foreground font-bold text-xs">{userInitials}</span>
+        </MessageAvatar>
+      )}
+    </Message>
   );
 }
 
-// ── Quick actions ──────────────────────────────────────────────────────────
-const QUICK_ACTIONS = [
-  { icon: BarChart3,    label: "ئاماری ئەمڕۆ",   prompt: "ئاماری ئەمڕۆم پیشان بدە" },
-  { icon: ShoppingCart, label: "داواکاری نوێ",   prompt: "داواکاری نوێ" },
-  { icon: Package,      label: "بەرهەمەکان",     prompt: "لیستی بەرهەمەکانم نیشان بدە" },
-  { icon: Users,        label: "کڕیارەکان",      prompt: "لیستی کڕیارەکانم نیشان بدە" },
-];
-
-// ── Main Panel ─────────────────────────────────────────────────────────────
+// ── Main panel ────────────────────────────────────────────────────────────────
 export default function AiPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { currentUser } = useLayout();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput]       = useState("");
-  const [loading, setLoading]   = useState(false);
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const inputRef   = useRef<HTMLTextAreaElement>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // Focus input when opened
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 150);
   }, [open]);
 
+  const userInitials = currentUser?.name
+    ? currentUser.name.split(" ").map(w => w[0]).join("").slice(0, 2)
+    : "؟";
+
+  const autoResize = (el: HTMLTextAreaElement) => {
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+  };
+
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || loading) return;
-
-    const userMsg: Message = { id: Date.now() + "-u", role: "user", text: text.trim() };
-    const loadingMsg: Message = { id: Date.now() + "-l", role: "assistant", text: "", loading: true };
-
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", text: text.trim() };
+    const loadingMsg: ChatMessage = { id: crypto.randomUUID(), role: "assistant", text: "", loading: true };
     setMessages(prev => [...prev, userMsg, loadingMsg]);
     setInput("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
     setLoading(true);
-
     try {
       const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.text }));
       const res = await fetch("/api/ai", {
@@ -430,23 +346,21 @@ export default function AiPanel({ open, onClose }: { open: boolean; onClose: () 
       setMessages(prev => [
         ...prev.filter(m => !m.loading),
         {
-          id: Date.now() + "-a",
+          id: crypto.randomUUID(),
           role: "assistant",
-          text:        data.text || (data.error ? "" : "کێشەیەک ڕوویدا."),
+          text: data.text || (data.error ? "" : "کێشەیەک ڕوویدا."),
           toolResults: data.toolResults || [],
-          error:       !!data.error,
+          error: !!data.error,
+          animated: true,
         },
       ]);
       if (data.error) {
-        setMessages(prev => [
-          ...prev,
-          { id: Date.now() + "-e", role: "assistant", text: data.error, error: true },
-        ]);
+        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: "assistant", text: data.error, error: true }]);
       }
     } catch {
       setMessages(prev => [
         ...prev.filter(m => !m.loading),
-        { id: Date.now() + "-e", role: "assistant", text: "پەیوەندی سەرکەوتوو نەبوو.", error: true },
+        { id: crypto.randomUUID(), role: "assistant", text: "پەیوەندی سەرکەوتوو نەبوو.", error: true },
       ]);
     } finally {
       setLoading(false);
@@ -460,209 +374,165 @@ export default function AiPanel({ open, onClose }: { open: boolean; onClose: () 
     }
   };
 
-  if (!open) return null;
+  const isEmpty = messages.length === 0;
 
   return (
-    <>
-      {/* CSS animations */}
-      <style>{`
-        @keyframes bounce {
-          0%,100% { transform: translateY(0); opacity:.4 }
-          50%      { transform: translateY(-5px); opacity:1 }
-        }
-        @keyframes slideIn {
-          from { transform: translateX(100%); opacity:0 }
-          to   { transform: translateX(0);    opacity:1 }
-        }
-      `}</style>
-
-      {/* Panel */}
-      <div style={{
-        position: "fixed", top: 0, right: 0, bottom: 0,
-        width: 420, zIndex: 1000,
-        background: "#ffffff",
-        display: "flex", flexDirection: "column",
-        boxShadow: "-4px 0 40px rgba(0,0,0,0.12)",
-        animation: "slideIn 0.22s cubic-bezier(0.32,0.72,0,1)",
-        fontFamily: "Inter, system-ui, sans-serif",
-      }}>
-
-        {/* ── Header ── */}
-        <div style={{
-          background: "linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a855f7 100%)",
-          padding: "16px 18px",
-          display: "flex", alignItems: "center", gap: 12,
-          flexShrink: 0,
-        }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: "50%",
-            background: "rgba(255,255,255,0.2)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            border: "2px solid rgba(255,255,255,0.3)",
-          }}>
-            <Sparkles size={20} color="white" />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ color: "white", fontWeight: 700, fontSize: 16 }}>Dewa AI</div>
-            <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12 }}>
-              {currentUser?.name ?? "Assistant"} · Powered by Gemini
+    <Sheet open={open} onOpenChange={v => !v && onClose()}>
+      <SheetContent
+        side="right"
+        className="w-[420px] sm:w-[420px] p-0 flex flex-col gap-0 overflow-hidden"
+        dir="rtl"
+      >
+        <MessageScrollerProvider>
+          {/* ── Header ──────────────────────────────────────────────── */}
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-background shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="size-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Sparkles className="size-3.5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold leading-none">Dewa AI</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Gemini</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                onClick={() => setMessages([])}
+                disabled={loading || isEmpty}
+                title="سڕینەوەی مێژوو"
+              >
+                <RotateCwIcon className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                onClick={onClose}
+              >
+                <X className="size-3.5" />
+              </Button>
             </div>
           </div>
 
-          {/* Clear button */}
-          <button
-            onClick={() => setMessages([])}
-            title="Clear chat"
-            style={{
-              background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8,
-              width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: "white", transition: "background 0.15s",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.25)")}
-            onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
-          >
-            <Trash2 size={16} />
-          </button>
-
-          {/* Close button */}
-          <button
-            onClick={onClose}
-            style={{
-              background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8,
-              width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: "white", transition: "background 0.15s",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.25)")}
-            onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.15)")}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* ── Messages area ── */}
-        <div style={{
-          flex: 1, overflowY: "auto", padding: "20px 16px",
-          display: "flex", flexDirection: "column",
-        }}>
-          {/* Empty state */}
-          {messages.length === 0 && (
-            <div style={{ textAlign: "center", paddingTop: 32 }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: "50%", margin: "0 auto 16px",
-                background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <Sparkles size={28} color="white" />
-              </div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 8 }}>
-                Dewa AI
-              </div>
-              <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 28, lineHeight: "21px" }}>
-                Ask me to create orders, check stats,<br />list products, clients and more.
-              </div>
-
-              {/* Quick actions */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-                {QUICK_ACTIONS.map(({ icon: Icon, label, prompt }) => (
-                  <button
-                    key={label}
-                    onClick={() => sendMessage(prompt)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "8px 14px",
-                      background: "#f8f7ff", border: "1.5px solid #e0e7ff",
-                      borderRadius: 20, cursor: "pointer", fontSize: 13,
-                      color: "#4f46e5", fontWeight: 500,
-                      transition: "all 0.15s",
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = "#ede9fe";
-                      e.currentTarget.style.borderColor = "#a5b4fc";
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = "#f8f7ff";
-                      e.currentTarget.style.borderColor = "#e0e7ff";
-                    }}
+          {/* ── Body ────────────────────────────────────────────────── */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            {isEmpty ? (
+              /* Empty state */
+              <Empty className="flex-1 border-0 rounded-none px-6">
+                <EmptyHeader>
+                  <EmptyMedia className="size-16 rounded-2xl bg-gradient-to-br from-primary/80 to-violet-500 shadow-lg shadow-primary/20">
+                    <Sparkles className="size-7 text-white" />
+                  </EmptyMedia>
+                  <EmptyTitle className="text-base font-semibold mt-1">Dewa AI</EmptyTitle>
+                  <EmptyDescription>
+                    داواکاری دروست بکە، ئامار ببینە،<br />بەرهەم و کڕیارەکان بپرسە.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent className="mt-2">
+                  <div className="grid grid-cols-2 gap-2 w-full">
+                    {SUGGESTED.map(({ icon: Icon, label, prompt }) => (
+                      <button
+                        key={label}
+                        onClick={() => sendMessage(prompt)}
+                        className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-start text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                      >
+                        <Icon className="size-3.5 text-muted-foreground shrink-0" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </EmptyContent>
+              </Empty>
+            ) : (
+              /* Message list */
+              <MessageScroller className="flex-1">
+                <MessageScrollerViewport>
+                  <MessageScrollerContent
+                    aria-busy={loading}
+                    className="px-4 py-4 gap-4"
                   >
-                    <Icon size={14} />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Messages */}
-          {messages.map(msg => <MessageBubble key={msg.id} msg={msg} />)}
-          <div ref={bottomRef} />
-        </div>
-
-        {/* ── Input area ── */}
-        <div style={{
-          padding: "12px 16px 16px",
-          borderTop: "1px solid #f3f4f6",
-          flexShrink: 0,
-          background: "white",
-        }}>
-          <div style={{
-            display: "flex", alignItems: "flex-end", gap: 8,
-            background: "#f9fafb", border: "1.5px solid #e5e7eb",
-            borderRadius: 14, padding: "8px 8px 8px 14px",
-            transition: "border-color 0.15s",
-          }}
-            onFocus={() => {}}
-          >
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => {
-                setInput(e.target.value);
-                e.target.style.height = "auto";
-                e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
-              }}
-              onKeyDown={handleKey}
-              placeholder="Type a message… (Enter to send, Shift+Enter for new line)"
-              rows={1}
-              style={{
-                flex: 1, border: "none", background: "transparent",
-                resize: "none", outline: "none",
-                fontSize: 14, lineHeight: "22px", color: "#111827",
-                fontFamily: "Inter, system-ui, sans-serif",
-                maxHeight: 120, overflowY: "auto",
-              }}
-            />
-            <button
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim() || loading}
-              style={{
-                width: 36, height: 36, borderRadius: 10, border: "none",
-                background: !input.trim() || loading ? "#e5e7eb" : "linear-gradient(135deg,#6366f1,#8b5cf6)",
-                color: !input.trim() || loading ? "#9ca3af" : "white",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: !input.trim() || loading ? "not-allowed" : "pointer",
-                flexShrink: 0, transition: "all 0.15s",
-              }}
-            >
-              {loading
-                ? <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
-                : <Send size={16} />
-              }
-            </button>
+                    {messages.map((msg, idx) => (
+                      <MessageScrollerItem
+                        key={msg.id}
+                        scrollAnchor={msg.role === "user" && idx === messages.length - 2}
+                      >
+                        <ChatRow msg={msg} userInitials={userInitials} />
+                      </MessageScrollerItem>
+                    ))}
+                  </MessageScrollerContent>
+                </MessageScrollerViewport>
+                <MessageScrollerButton direction="end" />
+              </MessageScroller>
+            )}
           </div>
-          <div style={{ fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 6 }}>
-            Gemini · دەوا {new Date().getFullYear()}
-          </div>
-        </div>
-      </div>
 
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0, zIndex: 999,
-          background: "rgba(0,0,0,0.15)", backdropFilter: "blur(2px)",
-        }}
-      />
-    </>
+          {/* ── Input ───────────────────────────────────────────────── */}
+          <div className="shrink-0 border-t bg-background px-4 py-3">
+            <InputGroup className="rounded-2xl border-input bg-background shadow-sm min-h-[2.75rem]">
+              {/* Top addon: new chat button */}
+              <InputGroupAddon align="block-start" className="pb-0 pt-2 px-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6 text-muted-foreground hover:text-foreground"
+                  onClick={() => setMessages([])}
+                  disabled={loading || isEmpty}
+                  title="گفتوگۆی نوێ"
+                >
+                  <PlusIcon className="size-3.5" />
+                </Button>
+              </InputGroupAddon>
+
+              {/* Textarea */}
+              <InputGroupTextarea
+                ref={(el) => {
+                  (inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
+                  (textareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
+                }}
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value);
+                  autoResize(e.target);
+                }}
+                onKeyDown={handleKey}
+                placeholder="پەیامێک بنوسە…"
+                rows={1}
+                disabled={loading}
+                className="min-h-[2rem] max-h-[160px] py-2 text-sm resize-none"
+              />
+
+              {/* Bottom addon: send button */}
+              <InputGroupAddon align="block-end" className="justify-end pb-2 pt-0 px-3">
+                <div className="flex items-center gap-1 ms-auto">
+                  <span className="text-[10px] text-muted-foreground hidden sm:block">
+                    {loading ? "جواب دەدرێتەوە…" : "Enter بۆ ناردن"}
+                  </span>
+                  <InputGroupButton
+                    size="icon-sm"
+                    variant={input.trim() ? "default" : "ghost"}
+                    disabled={!input.trim() || loading}
+                    onClick={() => sendMessage(input)}
+                    className={cn("transition-all", input.trim() && "shadow-sm")}
+                  >
+                    {loading
+                      ? <Loader2 className="size-3.5 animate-spin" />
+                      : <ArrowUpIcon className="size-3.5" />
+                    }
+                  </InputGroupButton>
+                </div>
+              </InputGroupAddon>
+            </InputGroup>
+
+            <p className="text-[10px] text-muted-foreground text-center mt-2">
+              Gemini · Dewa {new Date().getFullYear()}
+            </p>
+          </div>
+
+        </MessageScrollerProvider>
+      </SheetContent>
+    </Sheet>
   );
 }

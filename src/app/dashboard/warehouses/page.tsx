@@ -3,11 +3,21 @@ import { useState, FormEvent } from "react";
 import { Plus, Warehouse as WarehouseIcon, Edit3, Trash2, MapPin, Phone, Percent, Tag, X } from "lucide-react";
 import { useData } from "@/lib/store";
 import type { Warehouse, BonusRule } from "@/lib/types";
-import Modal from "@/components/ui/Modal";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
-import ExportButton from "@/components/ui/ExportButton";
-import { SkeletonKPI } from "@/components/ui/Skeleton";
+import ExportButton from "@/components/custom/ExportButton";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const warehouseExportCols = [
   { key: "name", label: "ناو" }, { key: "city", label: "شار" },
@@ -63,149 +73,238 @@ export default function WarehousesPage() {
   const getWarehouseOrders = (whId: string) => orders.filter(o => o.warehouseId === whId);
 
   return (
-    <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, background: "#F3F0FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#7C5CFC" }}><WarehouseIcon size={20} /></div>
-          <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>کۆگاکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی هاوبەشی کۆگاکان و ڕێژەی بۆنەس</p></div>
+    <div className="page-stagger">
+      {/* ── Page Header ── */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <div className="size-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+            <WarehouseIcon className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">کۆگاکان</h1>
+            <p className="text-sm text-muted-foreground">بەڕێوەبردنی هاوبەشی کۆگاکان و ڕێژەی بۆنەس</p>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="flex items-center gap-2">
           <ExportButton data={warehouses as unknown as Record<string, unknown>[]} columns={warehouseExportCols} filename="warehouses" title="کۆگاکان" />
-          <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>کۆگای نوێ</span></button>
+          <Button onClick={openAdd}><Plus className="size-4 me-1" />کۆگای نوێ</Button>
         </div>
       </div>
 
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 24 }}>
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         {[
-          { title: "کۆی کۆگاکان", value: String(warehouses.length) },
-          { title: "چالاک", value: String(warehouses.filter(w => w.isActive).length) },
-          { title: "داواکاری لە ڕێگای کۆگا", value: String(orders.filter(o => o.warehouseId).length) },
-        ].map((k, i) => (
-          <div className="kpi-card" key={i}><div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div><div className="kpi-card-value" style={{ fontSize: "1.4rem" }}>{k.value}</div></div>
+          { title: "کۆی کۆگاکان", value: warehouses.length, cls: "text-primary" },
+          { title: "چالاک", value: warehouses.filter(w => w.isActive).length, cls: "text-emerald-600" },
+          { title: "داواکاری لە ڕێگەی کۆگا", value: orders.filter(o => o.warehouseId).length, cls: "text-violet-600" },
+        ].map(k => (
+          <Card key={k.title} className="card-interactive">
+            <CardContent className="p-4">
+              <p className={`text-2xl font-black ${k.cls}`}>{k.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{k.title}</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: 16 }}>
+      {/* ── Warehouse Cards ── */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] gap-4">
         {loading ? (
-          [0,1,2].map(i => <SkeletonKPI key={i} />)
+          [0, 1, 2].map(i => (
+            <Card key={i}><CardContent className="p-6"><Skeleton className="h-6 w-3/4 mb-3" /><Skeleton className="h-4 w-1/2 mb-6" /><Skeleton className="h-20" /></CardContent></Card>
+          ))
         ) : warehouses.map(w => {
           const rules = w.bonusRules || [];
           return (
-            <div key={w.id} style={{ background: "white", borderRadius: 14, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                <div>
-                  <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{w.name}</h3>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#6C757D" }}><MapPin size={12} />{w.city} — {w.address}</div>
-                </div>
-                <div style={{ background: "linear-gradient(135deg, #7C5CFC, #4263EB)", color: "white", padding: "6px 14px", borderRadius: 8, fontSize: 18, fontWeight: 800, display: "flex", alignItems: "center", gap: 4 }}>{w.bonusPct}<Percent size={14} /></div>
-              </div>
-              <div style={{ display: "flex", gap: 16, marginBottom: 16, fontSize: 13, color: "#6C757D" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Phone size={12} /> {w.phone}</div>
-                <div>پەیوەندی: {w.contact}</div>
-              </div>
-
-              {/* Custom bonus rules preview */}
-              {rules.length > 0 && (
-                <div style={{ marginBottom: 14, padding: "10px 12px", background: "#F8F4FF", borderRadius: 8, border: "1px solid #E9D7FF" }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#7C5CFC", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
-                    <Tag size={11} /> یاسای تایبەت ({rules.length})
+            <Card key={w.id} className="card-interactive">
+              <CardContent className="p-6">
+                {/* Header */}
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-base font-bold mb-1">{w.name}</h3>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <MapPin className="size-3" />{w.city} — {w.address}
+                    </div>
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {rules.map((r, i) => (
-                      <span key={i} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, background: "#7C5CFC", color: "white", fontWeight: 600 }}>
-                        {r.productName}: {r.percent}٪
-                      </span>
-                    ))}
+                  <div className="gradient-primary text-white px-3 py-1.5 rounded-lg text-lg font-black flex items-center gap-1">
+                    {w.bonusPct}<Percent className="size-3.5" />
                   </div>
                 </div>
-              )}
 
-              <div style={{ display: "flex", gap: 12, padding: 12, background: "#F8F9FA", borderRadius: 8, marginBottom: 16 }}>
-                <div style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 800, color: "#4263EB" }}>{getWarehouseOrders(w.id).length}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>داواکاری</div></div>
-                <div style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 800, color: "#7C5CFC" }}>{w.bonusPct}٪</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>بۆنەسی بنەڕەت</div></div>
-                {rules.length > 0 && <div style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 800, color: "#F47B35" }}>{rules.length}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>یاسای تایبەت</div></div>}
-              </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button onClick={() => openEdit(w)} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #DEE2E6", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}><Edit3 size={12} /> دەستکاری</button>
-                <button onClick={() => setDeleteId(w.id)} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #FFC9C9", background: "#FFF5F5", fontSize: 12, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4, color: "#FA5252" }}><Trash2 size={12} /> سڕینەوە</button>
-              </div>
-            </div>
+                {/* Contact */}
+                <div className="flex gap-4 mb-4 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1"><Phone className="size-3" /> {w.phone}</div>
+                  <div>پەیوەندی: {w.contact}</div>
+                </div>
+
+                {/* Bonus Rules */}
+                {rules.length > 0 && (
+                  <div className="mb-4 p-3 bg-primary/5 rounded-lg border border-primary/10">
+                    <p className="text-[11px] font-bold text-primary mb-2 flex items-center gap-1">
+                      <Tag className="size-3" /> یاسای تایبەت ({rules.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {rules.map((r, i) => (
+                        <Badge key={i} className="text-[10px] font-semibold">
+                          {r.productName}: {r.percent}قۆ
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-2 p-3 bg-muted/50 rounded-lg mb-4">
+                  <div className="text-center">
+                    <p className="text-xl font-black text-primary">{getWarehouseOrders(w.id).length}</p>
+                    <p className="text-[10px] text-muted-foreground">داواکاری</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xl font-black text-violet-600">{w.bonusPct}قۆ</p>
+                    <p className="text-[10px] text-muted-foreground">بۆنەسی بنەڕەت</p>
+                  </div>
+                  {rules.length > 0 && (
+                    <div className="text-center">
+                      <p className="text-xl font-black text-orange-500">{rules.length}</p>
+                      <p className="text-[10px] text-muted-foreground">یاسای تایبەت</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openEdit(w)}>
+                    <Edit3 className="size-3 me-1" /> دەستکاری
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-xs h-7 text-destructive border-destructive/40 hover:bg-destructive/5" onClick={() => setDeleteId(w.id)}>
+                    <Trash2 className="size-3 me-1" /> سڕینەوە
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "دەستکاری کۆگا" : "کۆگای نوێ"} width={620}>
-        <form onSubmit={handleSubmit}>
-          <FormGrid>
-            <FormField label="ناوی کۆگا" required><input style={inputStyle} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
-            <FormField label="شار"><select style={selectStyle} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })}>{cities.map(c => <option key={c} value={c}>{c}</option>)}</select></FormField>
-            <FormField label="ناونیشان"><input style={inputStyle} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></FormField>
-            <FormField label="پەیوەندیدار"><input style={inputStyle} value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} /></FormField>
-            <FormField label="تەلەفۆن"><input style={inputStyle} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></FormField>
-            <FormField label="ڕێژەی بۆنەسی بنەڕەت (٪)" required>
-              <input style={inputStyle} type="number" min="0" max="100" required value={form.bonusPct} onChange={(e) => setForm({ ...form, bonusPct: e.target.value })} />
-            </FormField>
-          </FormGrid>
+      {/* ═══════════════════════════════════════════════════════════
+          ADD / EDIT DIALOG (replaces custom Modal)
+      ═══════════════════════════════════════════════════════════ */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="sm:max-w-[620px]" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{editing ? "دەستکاری کۆگا" : "کۆگای نوێ"}</DialogTitle>
+            <DialogDescription>زانیاری کۆگا و ڕێژەی بۆنەس پڕبکەوە</DialogDescription>
+          </DialogHeader>
 
-          {/* Custom product bonus rules */}
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #E9ECEF" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><Tag size={14} color="#7C5CFC" /> یاسای بۆنەسی تایبەت بە بەرهەم</div>
-                <div style={{ fontSize: 11, color: "#ADB5BD", marginTop: 2 }}>هەر بەرهەمێک دەتوانێت ڕێژەی بۆنەسی خۆی هەبێت کە جیاوازە لە ڕێژەی بنەڕەت</div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="wh-name">ناوی کۆگا *</Label>
+                <Input id="wh-name" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="ناوی کۆگا" />
               </div>
-              <button type="button" onClick={addRule} style={{ padding: "5px 12px", borderRadius: 6, border: "1px dashed #7C5CFC", background: "#F8F4FF", fontSize: 11, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4, color: "#7C5CFC", fontWeight: 600 }}>
-                <Plus size={12} /> بەرهەمی تایبەت
-              </button>
+              <div className="space-y-2">
+                <Label htmlFor="wh-city">شار</Label>
+                <Select value={form.city || cities[0]} onValueChange={(v: string | null) => v && setForm({ ...form, city: v })}>
+                  <SelectTrigger id="wh-city"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {cities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wh-address">ناونیشان</Label>
+                <Input id="wh-address" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="ناونیشان" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wh-contact">پەیوەندیدار</Label>
+                <Input id="wh-contact" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} placeholder="ناوی پەیوەندیدار" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wh-phone">تەلەفۆن</Label>
+                <Input id="wh-phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="07XX XXX XXXX" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wh-bonus">ڕێژەی بۆنەسی بنەڕەت (٪) *</Label>
+                <Input id="wh-bonus" type="number" min={0} max={100} required value={form.bonusPct} onChange={e => setForm({ ...form, bonusPct: e.target.value })} />
+              </div>
             </div>
 
-            {bonusRules.length === 0 ? (
-              <div style={{ padding: "14px", textAlign: "center", color: "#ADB5BD", fontSize: 12, background: "#F8F9FA", borderRadius: 8, border: "1px dashed #DEE2E6" }}>
-                هیچ یاسایەکی تایبەت نەهاتووە — هەموو بەرهەمەکان ڕێژەی بنەڕەت ({form.bonusPct}٪) بەکاردەهێنن
+            {/* ── Product-specific bonus rules ── */}
+            <div className="pt-4 border-t">
+              <div className="flex justify-between items-center mb-3">
+                <div>
+                  <p className="text-sm font-bold flex items-center gap-1.5"><Tag className="size-3.5 text-primary" /> یاسای بۆنەسی تایبەت بە بەرهەم</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">هەر بەرهەمێک دەتوانێت ڕێژەی بۆنەسی خۆی هەبێت کە جیاوازە لە ڕێژەی بنەڕەت</p>
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={addRule} className="text-primary border-dashed border-primary/30 hover:bg-primary/5 text-xs h-7">
+                  <Plus className="size-3 me-1" /> بەرهەمی تایبەت
+                </Button>
               </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {bonusRules.map((rule, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 12px", background: "#F8F4FF", borderRadius: 8, border: "1px solid #E9D7FF" }}>
-                    <select
-                      style={{ ...selectStyle, flex: 2, background: "white" }}
-                      value={rule.productId}
-                      onChange={e => updateRule(i, e.target.value)}
-                    >
-                      <option value="">بەرهەم هەڵبژێرە...</option>
-                      {products.filter(p => p.isActive).map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <input
-                        type="number" min="0" max="100"
-                        value={rule.percent || ""}
-                        onChange={e => updateRulePct(i, Number(e.target.value))}
-                        placeholder="٪"
-                        style={{ ...inputStyle, width: 70, background: "white", textAlign: "center" }}
-                      />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#7C5CFC" }}>٪</span>
+              {bonusRules.length === 0 ? (
+                <div className="py-3.5 text-center text-xs text-muted-foreground bg-muted/50 rounded-lg border border-dashed">
+                  هیچ یاسایەکی تایبەت نەهاتووە — هەموو بەرهەمەکان ڕێژەی بنەڕەت ({form.bonusPct}٪) بەکاردەهێنن
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {bonusRules.map((rule, i) => (
+                    <div key={i} className="flex gap-2 items-center p-2.5 bg-primary/5 rounded-lg border border-primary/10">
+                      <Select value={rule.productId || ""} onValueChange={(v: string | null) => v && updateRule(i, v)}>
+                        <SelectTrigger className="flex-[2]"><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
+                        <SelectContent>
+                          {products.filter(p => p.isActive).map(p => (
+                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number" min={0} max={100}
+                          value={rule.percent || ""}
+                          onChange={e => updateRulePct(i, Number(e.target.value))}
+                          placeholder="٪"
+                          className="w-[70px] text-center"
+                        />
+                        <span className="text-sm font-bold text-primary">٪</span>
+                      </div>
+                      {rule.productId && rule.percent > 0 && (
+                        <Badge className="text-[10px] whitespace-nowrap">
+                          بۆ {rule.productName}: {rule.percent}٪
+                        </Badge>
+                      )}
+                      <Button type="button" variant="ghost" size="icon" className="size-6 text-destructive shrink-0" onClick={() => removeRule(i)}>
+                        <X className="size-3.5" />
+                      </Button>
                     </div>
-                    {rule.productId && rule.percent > 0 && (
-                      <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 5, background: "#7C5CFC", color: "white", fontWeight: 600, whiteSpace: "nowrap" }}>
-                        بۆ {rule.productName}: {rule.percent}٪
-                      </span>
-                    )}
-                    <button type="button" onClick={() => removeRule(i)} style={{ padding: 4, color: "#FA5252", background: "none", border: "none", cursor: "pointer" }}>
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          <FormActions onCancel={() => setModalOpen(false)} isEdit={!!editing} />
-        </form>
-      </Modal>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>پاشگەزبوونەوە</Button>
+              <Button type="submit">{editing ? "نوێکردنەوە" : "زیادکردن"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={() => { if (deleteId) deleteWarehouse(deleteId); setDeleteId(null); }} message="ئایا دڵنیایت لە سڕینەوەی ئەم کۆگایە؟" />
-    </>
+      {/* ═══════════════════════════════════════════════════════════
+          DELETE CONFIRM (replaces custom ConfirmDialog)
+      ═══════════════════════════════════════════════════════════ */}
+      <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>سڕینەوەی کۆگا</AlertDialogTitle>
+            <AlertDialogDescription>ئایا دڵنیایت لە سڕینەوەی ئەم کۆگایە؟ ئەم کردارە ناگەڕێتەوە.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>پاشگەزبوونەوە</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteId) deleteWarehouse(deleteId); setDeleteId(null); }}>
+              سڕینەوە
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }

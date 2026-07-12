@@ -61,7 +61,7 @@ export default function DoctorMap({ doctors, selectedId, onSelect }: Props) {
   const selected = doctors.find(d => d.id === selectedId);
 
   return (
-    <div style={{ flex: 1, borderRadius: 16, overflow: "hidden", border: "1px solid #E9ECEF", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+    <div style={{ flex: 1, borderRadius: 16, overflow: "hidden", border: "1px solid hsl(var(--border))", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
       <MapContainer
         center={center}
         zoom={doctors.length > 0 ? 12 : 8}
@@ -85,7 +85,7 @@ export default function DoctorMap({ doctors, selectedId, onSelect }: Props) {
           >
             <Popup>
               <div style={{ direction: "rtl", fontFamily: "Noto Sans Arabic, sans-serif", minWidth: 180 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4, color: "#1A1A2E" }}>{d.name}</div>
+                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4, color: "hsl(var(--foreground))" }}>{d.name}</div>
                 {d.specialty && <div style={{ fontSize: 11, background: "#EDF2FF", color: "#4263EB", padding: "2px 7px", borderRadius: 5, display: "inline-block", marginBottom: 6, fontWeight: 600 }}>{d.specialty}</div>}
                 {d.clinic_name && <div style={{ fontSize: 12, marginBottom: 3 }}>🏥 {d.clinic_name}</div>}
                 {d.city && <div style={{ fontSize: 12, marginBottom: 3 }}>📍 {d.city}{d.address ? ` — ${d.address}` : ""}</div>}

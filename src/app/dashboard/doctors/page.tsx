@@ -5,25 +5,38 @@ import {
   Stethoscope, Plus, Search, Edit3, Trash2, Phone, MapPin,
   X, Save, Building2, User, FileText, Map, List, RefreshCw,
 } from "lucide-react";
-import Modal from "@/components/ui/Modal";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { FormField, FormGrid, inputStyle, selectStyle } from "@/components/ui/FormField";
-import { SkeletonTableRows } from "@/components/ui/Skeleton";
 import { supabase } from "@/lib/supabase";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
-// ── Dynamic map import (SSR-safe) ─────────────────────────────────────────────
-const DoctorMap = dynamic(() => import("./DoctorMap"), { ssr: false, loading: () => (
-  <div style={{ flex: 1, background: "#F0F4F8", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 16 }}>
-    <div style={{ textAlign: "center", color: "#ADB5BD" }}>
-      <Map size={32} style={{ marginBottom: 8, opacity: 0.4 }} />
-      <div style={{ fontSize: 13 }}>نەخشەکە بارئەکرێت...</div>
+const DoctorMap = dynamic(() => import("./DoctorMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 bg-muted/50 flex items-center justify-center rounded-2xl">
+      <div className="text-center text-muted-foreground">
+        <Map className="size-8 mb-2 opacity-30 mx-auto" />
+        <p className="text-sm">نەخشەکە بارئەکرێت...</p>
+      </div>
     </div>
-  </div>
-)});
+  ),
+});
 
-// ── Types ──────────────────────────────────────────────────────────────────────
 interface Doctor {
   id: string;
   name: string;
@@ -53,20 +66,21 @@ const EMPTY: Omit<Doctor, "id" | "created_at"> = {
   latitude: null, longitude: null, rep_id: "", notes: "",
 };
 
+const AVATAR_COLORS = ["#6D28D9", "#7C5CFC", "#F47B35", "#2F9E44", "#1098AD", "#E67700"];
+
 function DoctorAvatar({ name, size = 40 }: { name: string; size?: number }) {
   const initials = name.split(" ").map(w => w[0]).join("").slice(0, 2) || "؟";
-  const colors = ["#4263EB", "#7950F2", "#F47B35", "#2F9E44", "#1098AD", "#E67700"];
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
-  const color = colors[Math.abs(h) % colors.length];
+  const color = AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: size * 0.32, fontWeight: 800, flexShrink: 0 }}>
+    <div className="rounded-full flex items-center justify-center text-white font-black shrink-0"
+      style={{ width: size, height: size, background: color, fontSize: size * 0.32 }}>
       {initials}
     </div>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function DoctorsPage() {
   const { reps } = useData();
   const { currentUser } = useLayout();
@@ -78,7 +92,6 @@ export default function DoctorsPage() {
   const [view, setView] = useState<"list" | "map">("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Modal states
   const [addOpen, setAddOpen] = useState(false);
   const [editDoctor, setEditDoctor] = useState<Doctor | null>(null);
   const [deleteDoctor, setDeleteDoctor] = useState<Doctor | null>(null);
@@ -92,7 +105,6 @@ export default function DoctorsPage() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchDoctors = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase.from("doctors").select("*").order("name");
@@ -102,7 +114,6 @@ export default function DoctorsPage() {
 
   useEffect(() => { fetchDoctors(); }, [fetchDoctors]);
 
-  // ── Filter ────────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return doctors.filter(d =>
@@ -115,7 +126,6 @@ export default function DoctorsPage() {
 
   const withCoords = useMemo(() => filtered.filter(d => d.latitude && d.longitude), [filtered]);
 
-  // ── Geocode address → lat/lng via free Nominatim ──────────────────────────
   const geocodeAddress = async () => {
     const query = [form.clinic_name, form.address, form.city, "Iraq"].filter(Boolean).join(", ");
     if (!query.trim()) { showToast("ناونیشان داخڵ بکە", false); return; }
@@ -133,7 +143,6 @@ export default function DoctorsPage() {
     setGeocoding(false);
   };
 
-  // ── Save (add) ────────────────────────────────────────────────────────────
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.name) { showToast("ناو پێویستە", false); return; }
@@ -147,7 +156,6 @@ export default function DoctorsPage() {
     fetchDoctors();
   };
 
-  // ── Save (edit) ────────────────────────────────────────────────────────────
   const handleEdit = async (e: FormEvent) => {
     e.preventDefault();
     if (!editDoctor) return;
@@ -160,7 +168,6 @@ export default function DoctorsPage() {
     fetchDoctors();
   };
 
-  // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async () => {
     if (!deleteDoctor) return;
     await supabase.from("doctors").delete().eq("id", deleteDoctor.id);
@@ -180,207 +187,233 @@ export default function DoctorsPage() {
     });
   };
 
-  const selectedDoctor = doctors.find(d => d.id === selectedId) || null;
   const repName = (id: string) => reps.find(r => r.id === id)?.name || "";
 
-  // ── Styles ────────────────────────────────────────────────────────────────
-  const btn = (color: string, bg: string): React.CSSProperties => ({
-    display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px",
-    borderRadius: 10, border: "none", background: bg, color, fontWeight: 700,
-    fontSize: 13, cursor: "pointer", fontFamily: "inherit", transition: "opacity .15s",
-  });
-  const iS = inputStyle;
-
+  // ── Shared Doctor Form (used in both add & edit dialogs) ──
   const DoctorForm = () => (
-    <form onSubmit={editDoctor ? handleEdit : handleAdd} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <FormGrid cols={2}>
-        <FormField label="ناوی پزیشک *">
-          <input style={iS} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="د. ئەحمەد..." required />
-        </FormField>
-        <FormField label="پسپۆڕی">
-          <select style={selectStyle} value={form.specialty} onChange={e => setForm(f => ({ ...f, specialty: e.target.value }))}>
-            <option value="">— هەڵبژێرە —</option>
-            {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </FormField>
-        <FormField label="ژمارەی تەلەفۆن">
-          <input style={iS} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="07XX XXX XXXX" />
-        </FormField>
-        <FormField label="ژمارەی منشی">
-          <input style={iS} value={form.secretary_phone} onChange={e => setForm(f => ({ ...f, secretary_phone: e.target.value }))} placeholder="07XX XXX XXXX" />
-        </FormField>
-        <FormField label="ناوی کلینیک / نەخۆشخانە">
-          <input style={iS} value={form.clinic_name} onChange={e => setForm(f => ({ ...f, clinic_name: e.target.value }))} placeholder="کلینیکی..." />
-        </FormField>
-        <FormField label="شار">
-          <input style={iS} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="هەولێر، سلێمانی..." />
-        </FormField>
-      </FormGrid>
-      <FormField label="ناونیشان">
-        <input style={iS} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="ناونیشانی تەواو..." />
-      </FormField>
-
-      {/* Location */}
-      <div style={{ background: "#F8F9FA", borderRadius: 12, padding: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#6C757D", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}><MapPin size={13} /> شوێن لەسەر نەخشە</div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-          <button type="button" onClick={geocodeAddress} disabled={geocoding}
-            style={{ ...btn("#fff", "#4263EB"), flex: 1, justifyContent: "center", opacity: geocoding ? 0.6 : 1 }}>
-            {geocoding ? "🔍 دەگەڕێت..." : "🔍 شوێن بدۆزەوە"}
-          </button>
+    <form onSubmit={editDoctor ? handleEdit : handleAdd} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="doc-name">ناوی پزیشک *</Label>
+          <Input id="doc-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="د. ئەحمەد..." required />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <FormField label="Latitude">
-            <input style={iS} type="number" step="any" value={form.latitude ?? ""} onChange={e => setForm(f => ({ ...f, latitude: e.target.value ? parseFloat(e.target.value) : null }))} placeholder="36.19..." />
-          </FormField>
-          <FormField label="Longitude">
-            <input style={iS} type="number" step="any" value={form.longitude ?? ""} onChange={e => setForm(f => ({ ...f, longitude: e.target.value ? parseFloat(e.target.value) : null }))} placeholder="44.00..." />
-          </FormField>
+        <div className="space-y-2">
+          <Label htmlFor="doc-spec">پسپۆڕی</Label>
+          <Select value={form.specialty || null} onValueChange={(v: string | null) => v && setForm(f => ({ ...f, specialty: v }))}>
+            <SelectTrigger id="doc-spec"><SelectValue placeholder="— هەڵبژێرە —" /></SelectTrigger>
+            <SelectContent>
+              {SPECIALTIES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="doc-phone">ژمارەی تەلەفۆن</Label>
+          <Input id="doc-phone" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="07XX XXX XXXX" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="doc-sec">ژمارەی منشی</Label>
+          <Input id="doc-sec" value={form.secretary_phone} onChange={e => setForm(f => ({ ...f, secretary_phone: e.target.value }))} placeholder="07XX XXX XXXX" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="doc-clinic">ناوی کلینیک / نەخۆشخانە</Label>
+          <Input id="doc-clinic" value={form.clinic_name} onChange={e => setForm(f => ({ ...f, clinic_name: e.target.value }))} placeholder="کلینیکی..." />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="doc-city">شار</Label>
+          <Input id="doc-city" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="هەولێر، سلێمانی..." />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="doc-addr">ناونیشان</Label>
+        <Input id="doc-addr" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="ناونیشانی تەواو..." />
+      </div>
+
+      {/* Location block */}
+      <div className="bg-muted/50 rounded-xl p-3.5">
+        <p className="text-xs font-bold text-muted-foreground mb-2.5 flex items-center gap-1.5">
+          <MapPin className="size-3" /> شوێن لەسەر نەخشە
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={geocodeAddress} disabled={geocoding} className="w-full mb-2.5 gap-2">
+          {geocoding ? "🔍 دەگەڕێت..." : "🔍 شوێن بدۆزەوە"}
+        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Latitude</Label>
+            <Input type="number" step="any" value={form.latitude ?? ""} onChange={e => setForm(f => ({ ...f, latitude: e.target.value ? parseFloat(e.target.value) : null }))} placeholder="36.19..." />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Longitude</Label>
+            <Input type="number" step="any" value={form.longitude ?? ""} onChange={e => setForm(f => ({ ...f, longitude: e.target.value ? parseFloat(e.target.value) : null }))} placeholder="44.00..." />
+          </div>
         </div>
         {form.latitude && form.longitude && (
-          <div style={{ fontSize: 11, color: "#2F9E44", marginTop: 6, fontWeight: 600 }}>✓ شوێن دیاریکراوە ({form.latitude.toFixed(4)}, {form.longitude.toFixed(4)})</div>
+          <p className="text-[11px] text-emerald-600 font-semibold mt-1.5">✓ شوێن دیاریکراوە ({form.latitude.toFixed(4)}, {form.longitude.toFixed(4)})</p>
         )}
       </div>
 
-      {/* Rep */}
-      <FormGrid cols={2}>
-        <FormField label="نوێنەری پەیوەندیدار">
-          <select style={selectStyle} value={form.rep_id} onChange={e => setForm(f => ({ ...f, rep_id: e.target.value }))}>
-            <option value="">— هیچ —</option>
-            {reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
-        </FormField>
-      </FormGrid>
-
-      <FormField label="تێبینی">
-        <textarea style={{ ...iS, minHeight: 72, resize: "vertical" }} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="هەر زانیارییەکی تر..." />
-      </FormField>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        <button type="button" onClick={() => { setAddOpen(false); setEditDoctor(null); }}
-          style={{ ...btn("#6C757D", "#F1F3F5") }}><X size={14} /> پاشگەزبوونەوە</button>
-        <button type="submit" disabled={saving}
-          style={{ ...btn("#fff", "#4263EB"), opacity: saving ? 0.6 : 1 }}><Save size={14} /> {saving ? "پاشەکەوتکردن..." : "پاشەکەوتکردن"}</button>
+      <div className="space-y-2">
+        <Label htmlFor="doc-rep">نوێنەری پەیوەندیدار</Label>
+        <Select value={form.rep_id || null} onValueChange={(v: string | null) => setForm(f => ({ ...f, rep_id: v || "" }))}>
+          <SelectTrigger id="doc-rep"><SelectValue placeholder="— هیچ —" /></SelectTrigger>
+          <SelectContent>
+            {reps.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="doc-notes">تێبینی</Label>
+        <Textarea id="doc-notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="هەر زانیارییەکی تر..." className="min-h-[72px]" />
+      </div>
+
+      <DialogFooter className="gap-2 sm:gap-0">
+        <Button type="button" variant="outline" onClick={() => { setAddOpen(false); setEditDoctor(null); }}>
+          <X className="size-3.5 me-1" /> پاشگەزبوونەوە
+        </Button>
+        <Button type="submit" disabled={saving}>
+          <Save className="size-3.5 me-1" /> {saving ? "پاشەکەوتکردن..." : "پاشەکەوتکردن"}
+        </Button>
+      </DialogFooter>
     </form>
   );
 
   return (
-    <div style={{ padding: 24, direction: "rtl", height: "calc(100vh - 64px)", display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="flex flex-col gap-4 h-[calc(100vh-64px)] page-stagger" dir="rtl">
       {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: toast.ok ? "#2F9E44" : "#E03131", color: "white", padding: "10px 20px", borderRadius: 10, fontWeight: 700, fontSize: 13, zIndex: 9999, boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>
+        <div className={cn("fixed top-5 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-xl text-white font-bold text-sm z-[9999] shadow-lg",
+          toast.ok ? "bg-emerald-600" : "bg-red-600")}>
           {toast.msg}
         </div>
       )}
 
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#1A1A2E", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-            <Stethoscope size={22} color="#4263EB" /> پزیشکەکان
-          </h1>
-          <p style={{ color: "#6C757D", fontSize: 13, margin: "4px 0 0" }}>{doctors.length} پزیشک تۆمارکراوە</p>
+      {/* ── Page Header ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="size-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+            <Stethoscope className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">پزیشکەکان</h1>
+            <p className="text-sm text-muted-foreground">{doctors.length} پزیشک تۆمارکراوە</p>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {/* View toggle */}
-          <div style={{ display: "flex", background: "#F1F3F5", borderRadius: 10, padding: 3, gap: 2 }}>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex bg-muted p-1 rounded-xl gap-1">
             {(["list", "map"] as const).map(v => (
-              <button key={v} onClick={() => setView(v)}
-                style={{ padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: view === v ? "white" : "transparent", color: view === v ? "#4263EB" : "#6C757D", boxShadow: view === v ? "0 1px 4px rgba(0,0,0,0.08)" : "none", display: "flex", alignItems: "center", gap: 5, transition: "all .15s" }}>
-                {v === "list" ? <><List size={13} /> لیست</> : <><Map size={13} /> نەخشە</>}
-              </button>
+              <Button key={v} variant={view === v ? "secondary" : "ghost"} size="sm"
+                onClick={() => setView(v)}
+                className={cn("px-3.5 rounded-lg text-xs font-bold gap-1.5",
+                  view === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+                {v === "list" ? <><List className="size-3" />لیست</> : <><Map className="size-3" />نەخشە</>}
+              </Button>
             ))}
           </div>
-          <button onClick={fetchDoctors} style={{ ...btn("#6C757D", "#F1F3F5"), padding: "8px 12px" }}><RefreshCw size={14} /></button>
-          <button onClick={() => { setForm(EMPTY); setAddOpen(true); }} style={btn("#fff", "#4263EB")}><Plus size={14} /> پزیشکی نوێ</button>
+          <Button variant="outline" size="icon" onClick={fetchDoctors} className="size-9">
+            <RefreshCw className="size-3.5" />
+          </Button>
+          <Button onClick={() => { setForm(EMPTY); setAddOpen(true); }}>
+            <Plus className="size-4 me-1" /> پزیشکی نوێ
+          </Button>
         </div>
       </div>
 
-      {/* Search */}
-      <div style={{ position: "relative", maxWidth: 380 }}>
-        <Search size={15} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="گەڕان بە ناو، پسپۆڕی، شار..."
-          style={{ ...iS, paddingRight: 36, paddingLeft: 12 }} />
+      {/* ── Search ── */}
+      <div className="relative max-w-sm">
+        <Search className="size-3.5 absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="گەڕان بە ناو، پسپۆڕی، شار..." className="ps-3 pe-9" />
       </div>
 
-      {/* Content */}
+      {/* ── Content ── */}
       {view === "list" ? (
-        /* ── LIST VIEW ── */
-        <div style={{ flex: 1, overflow: "auto" }}>
+        <div className="flex-1 overflow-auto">
           {loading ? (
-            <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "0 6px" }}>
-              <tbody><SkeletonTableRows rows={6} cols={5} /></tbody>
-            </table>
+            <div className="grid gap-3.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+              {[0,1,2,3,4,5].map(i => <Skeleton key={i} className="h-36 rounded-xl" />)}
+            </div>
           ) : filtered.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 60, background: "#F8F9FA", borderRadius: 16 }}>
-              <Stethoscope size={40} style={{ opacity: 0.2, marginBottom: 12 }} />
-              <div style={{ color: "#ADB5BD", fontSize: 13 }}>{search ? "هیچ پزیشکێک نەدۆزرایەوە" : "هێشتا هیچ پزیشکێک زیاد نەکراوە"}</div>
+            <div className="flex flex-col items-center justify-center py-16 bg-muted/30 rounded-2xl">
+              <Stethoscope className="size-10 opacity-20 mb-3" />
+              <p className="text-sm text-muted-foreground">{search ? "هیچ پزیشکێک نەدۆزرایەوە" : "هێشتا هیچ پزیشکێک زیاد نەکراوە"}</p>
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
+            <div className="grid gap-3.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
               {filtered.map(d => (
-                <div key={d.id} onClick={() => setSelectedId(d.id === selectedId ? null : d.id)}
-                  style={{ background: "white", borderRadius: 16, border: selectedId === d.id ? "2px solid #4263EB" : "1px solid #E9ECEF", padding: 18, cursor: "pointer", boxShadow: selectedId === d.id ? "0 0 0 4px #EDF2FF" : "0 1px 4px rgba(0,0,0,0.06)", transition: "all .15s" }}>
-                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <DoctorAvatar name={d.name} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, fontSize: 14, color: "#1A1A2E", marginBottom: 3 }}>{d.name}</div>
-                      {d.specialty && <div style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: "#EDF2FF", color: "#4263EB", fontWeight: 600, display: "inline-block", marginBottom: 6 }}>{d.specialty}</div>}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        {d.clinic_name && <div style={{ fontSize: 12, color: "#495057", display: "flex", alignItems: "center", gap: 5 }}><Building2 size={11} color="#ADB5BD" />{d.clinic_name}</div>}
-                        {d.city && <div style={{ fontSize: 12, color: "#495057", display: "flex", alignItems: "center", gap: 5 }}><MapPin size={11} color="#ADB5BD" />{d.city}{d.address ? ` — ${d.address}` : ""}</div>}
-                        {d.phone && <div style={{ fontSize: 12, color: "#495057", display: "flex", alignItems: "center", gap: 5 }}><Phone size={11} color="#ADB5BD" />{d.phone}</div>}
-                        {d.secretary_phone && <div style={{ fontSize: 12, color: "#6C757D", display: "flex", alignItems: "center", gap: 5 }}><User size={11} color="#ADB5BD" />منشی: {d.secretary_phone}</div>}
-                        {d.rep_id && repName(d.rep_id) && <div style={{ fontSize: 11, padding: "1px 7px", borderRadius: 5, background: "#D3F9D8", color: "#2B8A3E", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4, marginTop: 2 }}><User size={9} />{repName(d.rep_id)}</div>}
-                        {d.latitude && d.longitude && <div style={{ fontSize: 10, color: "#ADB5BD", display: "flex", alignItems: "center", gap: 4 }}><MapPin size={9} />📍 شوێن ئامادەیە</div>}
+                <Card key={d.id}
+                  onClick={() => setSelectedId(d.id === selectedId ? null : d.id)}
+                  className={cn("card-interactive cursor-pointer",
+                    selectedId === d.id ? "border-primary ring-4 ring-primary/10" : "")}>
+                  <CardContent className="p-4">
+                    <div className="flex gap-3 items-start">
+                      <DoctorAvatar name={d.name} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-sm mb-1">{d.name}</p>
+                        {d.specialty && (
+                          <Badge variant="secondary" className="text-[10px] mb-1.5 bg-primary/10 text-primary hover:bg-primary/15">{d.specialty}</Badge>
+                        )}
+                        <div className="flex flex-col gap-1">
+                          {d.clinic_name && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Building2 className="size-2.5" />{d.clinic_name}</p>}
+                          {d.city && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><MapPin className="size-2.5" />{d.city}{d.address ? ` — ${d.address}` : ""}</p>}
+                          {d.phone && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Phone className="size-2.5" />{d.phone}</p>}
+                          {d.secretary_phone && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><User className="size-2.5" />منشی: {d.secretary_phone}</p>}
+                          {d.rep_id && repName(d.rep_id) && (
+                            <Badge variant="outline" className="text-[10px] w-fit mt-0.5 border-emerald-300 text-emerald-700 bg-emerald-50">
+                              <User className="size-2 me-1" />{repName(d.rep_id)}
+                            </Badge>
+                          )}
+                          {d.latitude && d.longitude && (
+                            <p className="text-[10px] text-muted-foreground flex items-center gap-1">📍 شوێن ئامادەیە</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Button variant="outline" size="icon" className="size-7" onClick={e => { e.stopPropagation(); openEdit(d); }}>
+                          <Edit3 className="size-3" />
+                        </Button>
+                        {isManager && (
+                          <Button variant="outline" size="icon" className="size-7 text-destructive border-destructive/30 hover:bg-destructive/5" onClick={e => { e.stopPropagation(); setDeleteDoctor(d); }}>
+                            <Trash2 className="size-3" />
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <button onClick={e => { e.stopPropagation(); openEdit(d); }}
-                        style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #DEE2E6", background: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#4263EB" }}>
-                        <Edit3 size={12} />
-                      </button>
-                      {isManager && (
-                        <button onClick={e => { e.stopPropagation(); setDeleteDoctor(d); }}
-                          style={{ width: 28, height: 28, borderRadius: 7, border: "1px solid #FFE3E3", background: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#FA5252" }}>
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {d.notes && <div style={{ marginTop: 10, fontSize: 11, color: "#6C757D", background: "#F8F9FA", borderRadius: 7, padding: "6px 10px", display: "flex", gap: 5 }}><FileText size={10} style={{ flexShrink: 0, marginTop: 1 }} />{d.notes}</div>}
-                </div>
+                    {d.notes && (
+                      <div className="mt-3 text-[11px] text-muted-foreground bg-muted/50 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5">
+                        <FileText className="size-2.5 shrink-0 mt-0.5" />{d.notes}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
         </div>
       ) : (
-        /* ── MAP VIEW ── */
-        <div style={{ flex: 1, display: "flex", gap: 14, minHeight: 0 }}>
-          {/* Side list */}
-          <div style={{ width: 280, display: "flex", flexDirection: "column", gap: 6, overflow: "auto", flexShrink: 0 }}>
+        <div className="flex-1 flex gap-3.5 min-h-0">
+          <div className="w-72 flex flex-col gap-1.5 overflow-auto shrink-0">
             {withCoords.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 24, color: "#ADB5BD", fontSize: 12 }}>
+              <div className="text-center py-6 text-muted-foreground text-xs">
                 هیچ پزیشکێک شوێنی نییە<br />
-                <span style={{ fontSize: 11 }}>لە فۆرمەکەدا "شوێن بدۆزەوە" بکە</span>
+                <span className="text-[11px]">لە فۆرمەکەدا &quot;شوێن بدۆزەوە&quot; بکە</span>
               </div>
             ) : withCoords.map(d => (
               <div key={d.id} onClick={() => setSelectedId(d.id === selectedId ? null : d.id)}
-                style={{ background: "white", borderRadius: 12, border: selectedId === d.id ? "2px solid #4263EB" : "1px solid #E9ECEF", padding: "10px 12px", cursor: "pointer", transition: "all .15s" }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                className={cn("bg-background rounded-xl border p-2.5 cursor-pointer transition-all",
+                  selectedId === d.id ? "border-primary shadow-sm" : "border-border hover:border-primary/40")}>
+                <div className="flex items-center gap-2">
                   <DoctorAvatar name={d.name} size={32} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 12, color: "#1A1A2E", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.name}</div>
-                    {d.specialty && <div style={{ fontSize: 10, color: "#7950F2" }}>{d.specialty}</div>}
-                    {d.city && <div style={{ fontSize: 10, color: "#ADB5BD" }}>{d.city}</div>}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-xs truncate">{d.name}</p>
+                    {d.specialty && <p className="text-[10px] text-primary">{d.specialty}</p>}
+                    {d.city && <p className="text-[10px] text-muted-foreground">{d.city}</p>}
                   </div>
                 </div>
               </div>
             ))}
           </div>
-          {/* Map */}
           <DoctorMap
             doctors={withCoords as { id: string; name: string; specialty: string; clinic_name: string; city: string; address: string; phone: string; latitude: number; longitude: number }[]}
             selectedId={selectedId}
@@ -389,24 +422,49 @@ export default function DoctorsPage() {
         </div>
       )}
 
-      {/* Add Modal */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="زیادکردنی پزیشکی نوێ" width={660}>
-        <DoctorForm />
-      </Modal>
+      {/* ═══════════════════════════════════════════════════════════
+          ADD DIALOG
+      ═══════════════════════════════════════════════════════════ */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-[660px] max-h-[85vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>زیادکردنی پزیشکی نوێ</DialogTitle>
+            <DialogDescription>زانیاری پزیشک پڕبکەوە</DialogDescription>
+          </DialogHeader>
+          <DoctorForm />
+        </DialogContent>
+      </Dialog>
 
-      {/* Edit Modal */}
-      <Modal open={!!editDoctor} onClose={() => setEditDoctor(null)} title={`دەستکاریکردنی — ${editDoctor?.name || ""}`} width={660}>
-        <DoctorForm />
-      </Modal>
+      {/* ═══════════════════════════════════════════════════════════
+          EDIT DIALOG
+      ═══════════════════════════════════════════════════════════ */}
+      <Dialog open={!!editDoctor} onOpenChange={open => !open && setEditDoctor(null)}>
+        <DialogContent className="sm:max-w-[660px] max-h-[85vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>دەستکاریکردنی — {editDoctor?.name || ""}</DialogTitle>
+            <DialogDescription>زانیاری پزیشک نوێ بکەرەوە</DialogDescription>
+          </DialogHeader>
+          <DoctorForm />
+        </DialogContent>
+      </Dialog>
 
-      {/* Delete Confirm */}
-      <ConfirmDialog
-        open={!!deleteDoctor}
-        onClose={() => setDeleteDoctor(null)}
-        title="سڕینەوەی پزیشک"
-        message={`دڵنیایت لە سڕینەوەی ${deleteDoctor?.name}؟`}
-        onConfirm={handleDelete}
-      />
+      {/* ═══════════════════════════════════════════════════════════
+          DELETE CONFIRM
+      ═══════════════════════════════════════════════════════════ */}
+      <AlertDialog open={!!deleteDoctor} onOpenChange={open => !open && setDeleteDoctor(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>سڕینەوەی پزیشک</AlertDialogTitle>
+            <AlertDialogDescription>دڵنیایت لە سڕینەوەی {deleteDoctor?.name}؟ ئەم کردارە ناگەڕێتەوە.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>پاشگەزبوونەوە</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDelete}>
+              سڕینەوە
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

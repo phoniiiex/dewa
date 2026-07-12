@@ -6,10 +6,22 @@ import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
 import { buildDebtReceiptHTML } from "@/lib/debtReceipt";
 import type { Client, ClientType, PaymentTerms, Order } from "@/lib/types";
-import Modal from "@/components/ui/Modal";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
-import ExportButton from "@/components/ui/ExportButton";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import ExportButton from "@/components/custom/ExportButton";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 const clientExportCols = [
   { key: "name", label: "ناو" }, { key: "owner", label: "خاوەن" },
@@ -208,215 +220,309 @@ export default function ClientsPage() {
 
   return (
     <>
-      {/* ── Header ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, background: "#EDF2FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#4263EB" }}><Users size={20} /></div>
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <div className="size-10 bg-blue-50 dark:bg-blue-950/40 rounded-xl flex items-center justify-center text-primary">
+            <Users className="size-5" />
+          </div>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700 }}>کڕیارەکان و مەخزەنەکان</h1>
-            <p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی کڕیارەکان و مەخزەنەکان</p>
+            <h1 className="text-xl font-bold">کڕیارەکان و مەخزەنەکان</h1>
+            <p className="text-sm text-muted-foreground">بەڕێوەبردنی کڕیارەکان و مەخزەنەکان</p>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="flex items-center gap-2">
           {tab === "clients" && (
             <>
               <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={clientExportCols} filename="clients" title="کڕیارەکان" />
-              <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>کڕیاری نوێ</span></button>
+              <Button onClick={openAdd}><Plus className="size-4 me-1" />کڕیاری نوێ</Button>
             </>
           )}
           {tab === "requests" && (
-            <div style={{ display: "flex", gap: 8 }}>
+            <div className="flex gap-2">
               {requests.filter(r => r.status !== "PENDING").length > 0 && (
-                <button onClick={() => setShowClearConfirm(true)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 8, border: "1px solid #FFE3E3", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#C92A2A", fontWeight: 600 }}>
-                  <History size={13} /> سڕینەوەی مێژوو
-                </button>
+                <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/5 text-xs" onClick={() => setShowClearConfirm(true)}>
+                  <History className="size-3.5 me-1" /> سڕینەوەی مێژوو
+                </Button>
               )}
-              <button onClick={loadRequests} style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#6C757D" }}>
-                <RefreshCw size={13} /> نوێکردنەوە
-              </button>
+              <Button variant="outline" size="sm" className="text-xs" onClick={loadRequests}>
+                <RefreshCw className="size-3.5 me-1" /> نوێکردنەوە
+              </Button>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── KPIs ── */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
+      {/* KPIs */}
+      <div className="grid grid-cols-4 gap-3 mb-6">
         {[
-          { title: "کۆی کڕیارەکان",  value: String(clients.length),                        icon: <Users size={18} />,    color: "#4263EB", bg: "#EDF2FF" },
-          { title: "مەخزەنەکان",     value: String((warehouses || []).length),              icon: <Warehouse size={18} />, color: "#7950F2", bg: "#F3F0FF" },
-          { title: "قەرزی کۆ",       value: formatIQD(totalDebt),                          icon: <TrendingUp size={18} />,color: "#FA5252", bg: "#FFE3E3" },
-          { title: "داواکاری کۆ",    value: String(orders.length),                         icon: <Package size={18} />,  color: "#059669", bg: "#D1FAE5" },
-        ].map((k, i) => (
-          <div className="kpi-card" key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 40, height: 40, background: k.bg, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: k.color, flexShrink: 0 }}>{k.icon}</div>
-            <div>
-              <div className="kpi-card-title" style={{ marginBottom: 2 }}>{k.title}</div>
-              <div className="kpi-card-value" style={{ fontSize: "1.2rem" }}>{k.value}</div>
-            </div>
-          </div>
+          { title: "کۆی کڕیارەکان",  value: clients.length,               icon: <Users className="size-4" />,      cls: "bg-blue-50 dark:bg-blue-950/40 text-primary" },
+          { title: "مەخزەنەکان",     value: (warehouses || []).length,     icon: <Warehouse className="size-4" />,  cls: "bg-violet-50 dark:bg-violet-950/40 text-violet-600" },
+          { title: "قەرزی کۆ",       value: formatIQD(totalDebt),           icon: <TrendingUp className="size-4" />, cls: "bg-red-50 dark:bg-red-950/40 text-destructive" },
+          { title: "داواکاری کۆ",    value: orders.length,                  icon: <Package className="size-4" />,    cls: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600" },
+        ].map(k => (
+          <Card key={k.title}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={cn("size-10 rounded-xl flex items-center justify-center shrink-0", k.cls)}>{k.icon}</div>
+              <div>
+                <p className="text-xs text-muted-foreground">{k.title}</p>
+                <p className="text-base font-black">{k.value}</p>
+              </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
-      {/* ── Tab Bar ── */}
-      <div style={{ display: "flex", gap: 0, background: "#F1F3F5", borderRadius: 10, padding: 4, marginBottom: 20, width: "fit-content" }}>
-        <button onClick={() => setTab("clients")} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: tab === "clients" ? "white" : "transparent", color: tab === "clients" ? "#1A1A2E" : "#6C757D", boxShadow: tab === "clients" ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>
+      {/* Tab Bar */}
+      <div className="flex gap-1 bg-muted p-1 rounded-xl mb-5 w-fit">
+        <Button variant={tab === "clients" ? "secondary" : "ghost"} size="sm"
+          onClick={() => setTab("clients")}
+          className={cn("px-5 rounded-lg text-sm font-semibold",
+            tab === "clients" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
           کڕیارەکان و مەخزەنەکان
-        </button>
+        </Button>
         {isManager && (
-          <button onClick={() => setTab("requests")} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: tab === "requests" ? "white" : "transparent", color: tab === "requests" ? "#1A1A2E" : "#6C757D", boxShadow: tab === "requests" ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s", display: "flex", alignItems: "center", gap: 6 }}>
+          <Button variant={tab === "requests" ? "secondary" : "ghost"} size="sm"
+            onClick={() => setTab("requests")}
+            className={cn("px-5 rounded-lg text-sm font-semibold gap-2",
+              tab === "requests" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
             داواکارییەکان
-            {pendingCount > 0 && <span style={{ padding: "1px 7px", borderRadius: 10, background: "#FA5252", color: "white", fontSize: 11, fontWeight: 700 }}>{pendingCount}</span>}
-          </button>
+            {pendingCount > 0 && <span className="px-1.5 py-0.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">{pendingCount}</span>}
+          </Button>
         )}
       </div>
 
-      {/* ── CLIENTS TAB ── */}
+      {/* CLIENTS TAB */}
       {tab === "clients" && (
         <>
           {/* Filters */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-            <div style={{ position: "relative" }}>
-              <Search size={15} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
-              <input type="text" placeholder="گەڕان بە ناو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                style={{ width: 240, padding: "8px 34px 8px 12px", border: "1px solid #DEE2E6", borderRadius: 8, fontSize: 13, background: "#F8F9FA", fontFamily: "inherit" }} />
+          <div className="flex gap-2.5 mb-4 flex-wrap items-center">
+            <div className="relative">
+              <Search className="size-3.5 absolute end-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input type="text" placeholder="گەڕان بە ناو..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-56 h-9 pe-8 text-sm" />
             </div>
-            {/* City filter */}
-            <div style={{ display: "flex", gap: 4, background: "#F1F3F5", borderRadius: 8, padding: 2 }}>
-              {["هەموو", ...cities].map(c => (
-                <button key={c} onClick={() => setCityFilter(c)} style={{ padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 500, background: cityFilter === c ? "white" : "transparent", color: cityFilter === c ? "#1A1A2E" : "#6C757D", boxShadow: cityFilter === c ? "0 1px 2px rgba(0,0,0,.05)" : "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>{c}</button>
+            <div className="flex gap-1 bg-muted p-0.5 rounded-lg">
+              {["\u0647ەموو", ...cities].map(c => (
+                <Button key={c} variant={cityFilter === c ? "secondary" : "ghost"} size="sm"
+                  onClick={() => setCityFilter(c)}
+                  className={cn("px-2.5 h-7 rounded-md text-[11px] font-medium",
+                    cityFilter === c ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>{c}</Button>
               ))}
             </div>
-            {/* Type filter */}
-            <div style={{ display: "flex", gap: 4, background: "#F1F3F5", borderRadius: 8, padding: 2 }}>
+            <div className="flex gap-1 bg-muted p-0.5 rounded-lg">
               {["هەموو", "PHARMACY", "HOSPITAL", "CLINIC", "WAREHOUSE"].map(t => (
-                <button key={t} onClick={() => setTypeFilter(t)} style={{ padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 500, background: typeFilter === t ? "white" : "transparent", color: typeFilter === t ? "#1A1A2E" : "#6C757D", boxShadow: typeFilter === t ? "0 1px 2px rgba(0,0,0,.05)" : "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                  {t === "هەموو" ? "هەموو" : typeDisplayNames[t]}
-                </button>
+                <Button key={t} variant={typeFilter === t ? "secondary" : "ghost"} size="sm"
+                  onClick={() => setTypeFilter(t)}
+                  className={cn("px-2.5 h-7 rounded-md text-[11px] font-medium",
+                    typeFilter === t ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>{t === "هەموو" ? "هەموو" : typeDisplayNames[t]}</Button>
               ))}
             </div>
           </div>
 
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead><tr><th>ناو</th><th>خاوەن / پەیوەندی</th><th>تەلەفۆن</th><th>شار</th><th>جۆر</th><th>نوێنەر</th><th>قەرز</th><th>بارودۆخ</th><th></th></tr></thead>
-              <tbody>
-                {filtered.map(row => (
-                  <tr key={row.id}>
-                    <td style={{ fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
-                      {row.entityType === "WAREHOUSE" && <Warehouse size={14} style={{ color: "#7950F2", flexShrink: 0 }} />}
-                      {row.name}
-                    </td>
-                    <td style={{ fontSize: 13, color: "#6C757D" }}>{row.owner}</td>
-                    <td style={{ fontSize: 12, color: "#6C757D", direction: "ltr", textAlign: "right" }}>{row.phone}</td>
-                    <td><span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}><MapPin size={12} color="#ADB5BD" />{row.city}</span></td>
-                    <td>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: typeColors[row.displayType]?.bg || "#F1F3F5", color: typeColors[row.displayType]?.color || "#6C757D" }}>
-                        {typeIcons[row.displayType]} {typeDisplayNames[row.displayType] || row.displayType}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: 13, color: "#6C757D" }}>{getRepName(row.repId)}</td>
-                    <td style={{ fontWeight: 600, fontSize: 13, color: row.balance > 0 ? "#FA5252" : "#ADB5BD" }}>
-                      {row.balance > 0 ? formatIQD(row.balance) : "—"}
-                    </td>
-                    <td><span className={`status-badge ${row.isActive ? "paid" : "cancelled"}`}>{row.isActive ? "چالاک" : "ناچالاک"}</span></td>
-                    <td>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={() => setDetailRow(row)} style={{ padding: "5px 8px", color: "#4263EB", background: "#EDF2FF", border: "none", borderRadius: 7, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600 }}>
-                          <Eye size={13} /> بینین
-                        </button>
-                        {row.entityType === "CLIENT" && row.clientRef && (
-                          <>
-                            <button onClick={() => openEdit(row.clientRef!)} style={{ padding: "5px 7px", color: "#6C757D", background: "#F1F3F5", border: "none", borderRadius: 7, cursor: "pointer", display: "flex" }}><Edit3 size={13} /></button>
-                            <button onClick={() => setDeleteId(row.clientRef!.id)} style={{ padding: "5px 7px", color: "#FA5252", background: "#FFE3E3", border: "none", borderRadius: 7, cursor: "pointer", display: "flex" }}><Trash2 size={13} /></button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="pagination"><span className="pagination-info">{filtered.length} تۆمار</span></div>
-          </div>
+          <Card>
+            <CardContent className="p-0 overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {["ناو","خاوەن / پەیوەندی","تەلەفۆن","شار","جۆر","نوێنەر","قەرز","بارودۆخ",""].map(h => (
+                        <TableHead key={h}>{h}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map(row => (
+                      <TableRow key={row.id}>
+                        <TableCell className="font-semibold">
+                          <div className="flex items-center gap-2">
+                            {row.entityType === "WAREHOUSE" && <Warehouse className="size-3.5 text-violet-600 shrink-0" />}
+                            {row.name}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{row.owner}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground ltr text-right">{row.phone}</TableCell>
+                        <TableCell><span className="flex items-center gap-1 text-sm"><MapPin className="size-3 text-muted-foreground" />{row.city}</span></TableCell>
+                        <TableCell>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                            style={{ background: typeColors[row.displayType]?.bg || "#F1F3F5", color: typeColors[row.displayType]?.color || "#6C757D" }}>
+                            {typeIcons[row.displayType]} {typeDisplayNames[row.displayType] || row.displayType}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{getRepName(row.repId)}</TableCell>
+                        <TableCell className={cn("font-semibold", row.balance > 0 ? "text-destructive" : "text-muted-foreground")}>
+                          {row.balance > 0 ? formatIQD(row.balance) : "\u2014"}
+                        </TableCell>
+                        <TableCell>
+                          <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold",
+                            row.isActive ? "text-emerald-600" : "text-muted-foreground")}>
+                            <span className={cn("size-1.5 rounded-full", row.isActive ? "bg-emerald-500" : "bg-muted-foreground/50")} />
+                            {row.isActive ? "چالاک" : "ناچالاک"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="secondary" className="h-7 px-2 text-xs text-primary" onClick={() => setDetailRow(row)}>
+                              <Eye className="size-3 me-1" /> بینین
+                            </Button>
+                            {row.entityType === "CLIENT" && row.clientRef && (
+                              <>
+                                <Button size="icon" variant="ghost" className="size-7 text-muted-foreground" onClick={() => openEdit(row.clientRef!)}><Edit3 className="size-3.5" /></Button>
+                                <Button size="icon" variant="ghost" className="size-7 text-destructive hover:bg-destructive/5" onClick={() => setDeleteId(row.clientRef!.id)}><Trash2 className="size-3.5" /></Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="px-4 py-2.5 border-t bg-muted/20 text-xs text-muted-foreground">{filtered.length} تۆمار</div>
+            </CardContent>
+          </Card>
         </>
       )}
 
-      {/* ── REQUESTS TAB ── */}
+      {/* REQUESTS TAB */}
       {tab === "requests" && isManager && (
-        <div className="data-table-wrapper">
+        <Card>
+          <CardContent className="p-0 overflow-hidden">
           {reqLoading ? (
-            <div style={{ padding: 40, textAlign: "center", color: "#ADB5BD" }}>بارکردن...</div>
+            <div className="p-10 text-center text-muted-foreground text-sm">بارکردن...</div>
           ) : requests.length === 0 ? (
-            <div style={{ padding: 48, textAlign: "center" }}>
-              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#F1F3F5", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: "#ADB5BD" }}><CheckCircle size={24} /></div>
-              <p style={{ fontSize: 14, color: "#6C757D", fontWeight: 600 }}>هیچ داواکارییەک نییە</p>
+            <div className="p-12 text-center">
+              <div className="size-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4 text-muted-foreground">
+                <CheckCircle className="size-6" />
+              </div>
+              <p className="text-sm font-semibold text-muted-foreground">هیچ داواکارییەک نییە</p>
             </div>
           ) : (
-            <table className="data-table">
-              <thead><tr><th>ناوی فرۆشگا</th><th>خاوەن</th><th>تەلەفۆن</th><th>شار</th><th>جۆر</th><th>داواکار</th><th>بارودۆخ</th><th>کات</th><th></th></tr></thead>
-              <tbody>
+            <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {["ناوی فرۆشگا","خاوەن","تەلەفۆن","شار","جۆر","داواکار","بارودۆخ","کات",""].map(h => (
+                    <TableHead key={h}>{h}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {requests.map(r => {
                   const badge = statusBadge(r.status);
                   const BadgeIcon = badge.Icon;
                   return (
-                    <tr key={r.id}>
-                      <td style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</td>
-                      <td style={{ fontSize: 13, color: "#6C757D" }}>{r.owner || "—"}</td>
-                      <td style={{ fontSize: 12, color: "#6C757D", direction: "ltr", textAlign: "right" }}>{r.phone || "—"}</td>
-                      <td style={{ fontSize: 13 }}>{r.city || "—"}</td>
-                      <td><span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: typeColors[r.type]?.bg || "#F1F3F5", color: typeColors[r.type]?.color || "#6C757D" }}>{typeDisplayNames[r.type] || r.type}</span></td>
-                      <td style={{ fontSize: 13, color: "#6C757D" }}>{r.requested_by || "—"}</td>
-                      <td><span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: badge.bg, color: badge.color }}><BadgeIcon size={11} /> {badge.label}</span></td>
-                      <td style={{ fontSize: 11, color: "#ADB5BD" }}>{new Date(r.created_at).toLocaleDateString("ckb", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</td>
-                      <td>
+                    <TableRow key={r.id}>
+                      <TableCell className="font-semibold">{r.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{r.owner || "\u2014"}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground ltr text-right">{r.phone || "\u2014"}</TableCell>
+                      <TableCell>{r.city || "\u2014"}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                          style={{ background: typeColors[r.type]?.bg || "#F1F3F5", color: typeColors[r.type]?.color || "#6C757D" }}>
+                          {typeDisplayNames[r.type] || r.type}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{r.requested_by || "\u2014"}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                          style={{ background: badge.bg, color: badge.color }}>
+                          <BadgeIcon className="size-3" /> {badge.label}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-[11px] text-muted-foreground">
+                        {new Date(r.created_at).toLocaleDateString("ckb", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </TableCell>
+                      <TableCell>
                         {r.status === "PENDING" ? (
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button disabled={actionId === r.id} onClick={() => handleAction(r.id, "APPROVE")} style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 12px", borderRadius: 6, background: "#D3F9D8", color: "#2B8A3E", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit", opacity: actionId === r.id ? 0.6 : 1 }}><CheckCircle size={12} /> پەسەند</button>
-                            <button disabled={actionId === r.id} onClick={() => handleAction(r.id, "REJECT")} style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 12px", borderRadius: 6, background: "#FFE3E3", color: "#C92A2A", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit", opacity: actionId === r.id ? 0.6 : 1 }}><XCircle size={12} /> ڕەت</button>
-                            <button disabled={deleteReqId === r.id} onClick={() => handleDeleteRequest(r.id)} style={{ width: 28, height: 28, borderRadius: 6, background: "#F1F3F5", color: "#ADB5BD", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: deleteReqId === r.id ? 0.5 : 1 }}><Trash2 size={11} /></button>
+                          <div className="flex gap-1.5">
+                            <Button size="sm" disabled={actionId === r.id} onClick={() => handleAction(r.id, "APPROVE")}
+                              className="h-7 px-2.5 text-[11px] bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400">
+                              <CheckCircle className="size-3 me-1" /> پەسەند
+                            </Button>
+                            <Button size="sm" disabled={actionId === r.id} onClick={() => handleAction(r.id, "REJECT")}
+                              className="h-7 px-2.5 text-[11px] bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-950/40 dark:text-red-400">
+                              <XCircle className="size-3 me-1" /> ڕەت
+                            </Button>
+                            <Button size="icon" variant="ghost" className="size-7 text-muted-foreground" disabled={deleteReqId === r.id} onClick={() => handleDeleteRequest(r.id)}>
+                              <Trash2 className="size-3" />
+                            </Button>
                           </div>
                         ) : (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 11, color: "#ADB5BD" }}>تێپەڕاوە</span>
-                            <button disabled={deleteReqId === r.id} onClick={() => handleDeleteRequest(r.id)} style={{ width: 26, height: 26, borderRadius: 6, background: "#FFE3E3", color: "#C92A2A", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: deleteReqId === r.id ? 0.5 : 1 }}><Trash2 size={11} /></button>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-muted-foreground">تێپەڕاوە</span>
+                            <Button size="icon" variant="ghost" className="size-6 text-destructive hover:bg-destructive/5" disabled={deleteReqId === r.id} onClick={() => handleDeleteRequest(r.id)}>
+                              <Trash2 className="size-3" />
+                            </Button>
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
+            </div>
           )}
-          <div style={{ padding: "12px 16px", borderTop: "1px solid #F1F3F5", display: "flex", gap: 16, fontSize: 12, color: "#6C757D" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Clock size={12} color="#E67700" /> {requests.filter(r => r.status === "PENDING").length} چاوەڕوان</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><CheckCircle size={12} color="#2B8A3E" /> {requests.filter(r => r.status === "APPROVED").length} پەسەندکرا</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><XCircle size={12} color="#C92A2A" /> {requests.filter(r => r.status === "REJECTED").length} ڕەتکرایەوە</span>
+          <div className="border-t border-border px-4 py-3 flex gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1"><Clock className="size-3 text-amber-500" /> {requests.filter(r => r.status === "PENDING").length} چاوەڕوان</span>
+            <span className="flex items-center gap-1"><CheckCircle className="size-3 text-emerald-600" /> {requests.filter(r => r.status === "APPROVED").length} پەسەندکرا</span>
+            <span className="flex items-center gap-1"><XCircle className="size-3 text-destructive" /> {requests.filter(r => r.status === "REJECTED").length} ڕەتکرایەوە</span>
           </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* ── Add/Edit Modal ── */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "دەستکاری کڕیار" : "کڕیاری نوێ"}>
+      {/* Add/Edit Modal */}
+      <Dialog open={modalOpen} onOpenChange={open => !open && setModalOpen(false)}>
+        <DialogContent className="sm:max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{editing ? "دەستکاری کڕیار" : "کڕیاری نوێ"}</DialogTitle>
+            <DialogDescription>زانیاری کڕیار پڕبکەوە</DialogDescription>
+          </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <FormGrid>
-            <FormField label="ناوی کڕیار" required><input style={inputStyle} required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></FormField>
-            <FormField label="خاوەن" required><input style={inputStyle} required value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })} /></FormField>
-            <FormField label="تەلەفۆن" required><input style={inputStyle} required value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></FormField>
-            <FormField label="شار"><select style={selectStyle} value={form.city} onChange={e => setForm({ ...form, city: e.target.value })}>{cities.map(c => <option key={c} value={c}>{c}</option>)}</select></FormField>
-            <FormField label="جۆر"><select style={selectStyle} value={form.type} onChange={e => setForm({ ...form, type: e.target.value as ClientType })}>{Object.entries(typeLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></FormField>
-            <FormField label="نوێنەر"><select style={selectStyle} value={form.repId} onChange={e => setForm({ ...form, repId: e.target.value })}><option value="">هەڵبژاردن...</option>{reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select></FormField>
-            <FormField label="مەرجی پارەدان"><select style={selectStyle} value={form.paymentTerms} onChange={e => setForm({ ...form, paymentTerms: e.target.value as PaymentTerms })}>{Object.entries(paymentLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></FormField>
-            <FormField label="قەرز (د.ع)"><input style={inputStyle} type="number" value={form.balance} onChange={e => setForm({ ...form, balance: e.target.value })} /></FormField>
-          </FormGrid>
-          <FormActions onCancel={() => setModalOpen(false)} isEdit={!!editing} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2"><Label>ناوی کڕیار *</Label><Input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+            <div className="space-y-2"><Label>خاوەن *</Label><Input required value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })} /></div>
+            <div className="space-y-2"><Label>تەلەفۆن *</Label><Input required value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+            <div className="space-y-2">
+              <Label>شار</Label>
+              <Select value={form.city} onValueChange={(v: string | null) => v && setForm({ ...form, city: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{cities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>جۆر</Label>
+              <Select value={form.type} onValueChange={(v: string | null) => v && setForm({ ...form, type: v as ClientType })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(typeLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>نوێنەر</Label>
+              <Select value={form.repId || "__none__"} onValueChange={(v: string | null) => setForm({ ...form, repId: v === "__none__" ? "" : (v || "") })}>
+                <SelectTrigger><SelectValue placeholder="هەڵبژاردن..." /></SelectTrigger>
+                <SelectContent><SelectItem value="__none__">هەڵبژاردن...</SelectItem>{reps.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>مەرجی پارەدان</Label>
+              <Select value={form.paymentTerms} onValueChange={(v: string | null) => v && setForm({ ...form, paymentTerms: v as PaymentTerms })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{Object.entries(paymentLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2"><Label>قەرز (د.ع)</Label><Input type="number" value={form.balance} onChange={e => setForm({ ...form, balance: e.target.value })} /></div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>پاشگەزبوونەوە</Button>
+            <Button type="submit">{editing ? "پاشەکەوتکردن" : "تۆمارکردن"}</Button>
+          </DialogFooter>
         </form>
-      </Modal>
+        </DialogContent>
+      </Dialog>
 
-      {/* ════════════════════════════════════════════════════════════════
-      {/* ════════════════════════════════════════════════════════════════
-          DETAIL MODAL
-      ════════════════════════════════════════════════════════════════ */}
+      {/* DETAIL MODAL */}
       {detailRow && (() => {
         const isWH     = detailRow.entityType === "WAREHOUSE";
         const realWHId = isWH ? detailRow.id.replace("wh_", "") : "";
@@ -425,163 +531,182 @@ export default function ClientsPage() {
         const paid      = rowOrders.filter(o => o.status === "PAID");
         const totalPaid = paid.reduce((s, o) => s + o.totalAmount, 0);
         const totalDebt = delivered.reduce((s, o) => s + o.totalAmount, 0);
-        const tc        = typeColors[detailRow.displayType] || { bg: "#F1F3F5", color: "#6C757D" };
+        const tc        = typeColors[detailRow.displayType] || { bg: "#F1F3F5", color: "hsl(var(--muted-foreground))" };
 
         const modalTitle = (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="flex items-center gap-2">
             <span>{detailRow.name}</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: tc.bg, color: tc.color }}>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
+              style={{ background: tc.bg, color: tc.color }}>
               {typeIcons[detailRow.displayType]} {typeDisplayNames[detailRow.displayType]}
             </span>
-            <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: detailRow.isActive ? "#D1FAE5" : "#FFE3E3", color: detailRow.isActive ? "#059669" : "#C92A2A" }}>
+            <span className={cn("inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold",
+              detailRow.isActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400")}>
               {detailRow.isActive ? "چالاک" : "ناچالاک"}
             </span>
           </div>
         );
 
         return (
-          <Modal open={true} onClose={() => setDetailRow(null)} title={modalTitle as unknown as string} width={600}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-
-              {/* Edit button row */}
+          <Dialog open={true} onOpenChange={open => !open && setDetailRow(null)}>
+            <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto" dir="rtl">
+              <DialogHeader><DialogTitle>{modalTitle}</DialogTitle><DialogDescription>وردەکاری کڕیار</DialogDescription></DialogHeader>
+            <div className="flex flex-col gap-4">
               {!isWH && detailRow.clientRef && (
-                <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                  <button onClick={() => { openEdit(detailRow.clientRef!); setDetailRow(null); }}
-                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "#EDF2FF", border: "none", borderRadius: 8, cursor: "pointer", color: "#4263EB", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}>
-                    <Edit3 size={14} /> دەستکاریکردن
-                  </button>
-                </div>
+                <Button size="sm" variant="secondary" className="w-fit text-primary" onClick={() => { openEdit(detailRow.clientRef!); setDetailRow(null); }}>
+                  <Edit3 className="size-3.5 me-1.5" /> دەستکاریکردن
+                </Button>
               )}
 
               {/* Info grid */}
-              <div style={{ background: "#F8F9FA", borderRadius: 12, padding: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#ADB5BD", marginBottom: 12, letterSpacing: 0.8 }}>زانیاری سەرەکی</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <div className="bg-muted/50 rounded-xl p-4">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3">زانیاری سەرەکی</p>
+                <div className="grid grid-cols-2 gap-3.5">
                   {[
-                    { icon: <Users size={14} />,  label: isWH ? "پەیوەندیکەر" : "خاوەن",      value: detailRow.owner },
-                    { icon: <Phone size={14} />,  label: "تەلەفۆن",                             value: detailRow.phone },
-                    { icon: <MapPin size={14} />, label: "شار",                                 value: detailRow.city },
+                    { icon: <Users className="size-3.5" />,  label: isWH ? "پەیوەندیکەر" : "خاوەن",      value: detailRow.owner },
+                    { icon: <Phone className="size-3.5" />,  label: "تەلەفۆن",                             value: detailRow.phone },
+                    { icon: <MapPin className="size-3.5" />, label: "شار",                                 value: detailRow.city },
                     ...(!isWH ? [
-                      { icon: <Users size={14} />, label: "نوێنەر",         value: getRepName(detailRow.repId) },
-                      { icon: <Clock size={14} />, label: "مەرجی پارەدان",  value: paymentLabels[detailRow.paymentTerms] },
+                      { icon: <Users className="size-3.5" />, label: "نوێنەر",         value: getRepName(detailRow.repId) },
+                      { icon: <Clock className="size-3.5" />, label: "مەرجی پارەدان",  value: paymentLabels[detailRow.paymentTerms] },
                     ] : []),
                   ].map((item, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                      <div style={{ width: 30, height: 30, background: "#fff", borderRadius: 8, border: "1px solid #E9ECEF", display: "flex", alignItems: "center", justifyContent: "center", color: "#6C757D", flexShrink: 0 }}>{item.icon}</div>
+                    <div key={i} className="flex items-start gap-2">
+                      <div className="size-7 bg-background rounded-lg border border-border flex items-center justify-center text-muted-foreground shrink-0">{item.icon}</div>
                       <div>
-                        <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 1 }}>{item.label}</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#1A1A2E" }}>{item.value || "—"}</div>
+                        <p className="text-[11px] text-muted-foreground">{item.label}</p>
+                        <p className="text-[13px] font-semibold">{item.value || "\u2014"}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Financial summary cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              {/* Financial summary */}
+              <div className="grid grid-cols-3 gap-2.5">
                 {[
-                  { label: "کۆی داواکارییەکان", value: String(rowOrders.length),                                  color: "#4263EB", bg: "#EDF2FF", icon: <Package size={16} /> },
-                  { label: "پارەدراوە",          value: formatIQD(totalPaid),                                     color: "#059669", bg: "#D1FAE5", icon: <CheckCircle size={16} /> },
-                  { label: "قەرز",               value: totalDebt > 0 ? formatIQD(totalDebt) : "نییە",           color: totalDebt > 0 ? "#FA5252" : "#059669", bg: totalDebt > 0 ? "#FFE3E3" : "#D1FAE5", icon: <DollarSign size={16} /> },
+                  { label: "کۆی داواکارییەکان", value: String(rowOrders.length), icon: <Package className="size-4" />, cls: "bg-blue-50 dark:bg-blue-950/40 text-primary" },
+                  { label: "پارەدراوە",          value: formatIQD(totalPaid), icon: <CheckCircle className="size-4" />, cls: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600" },
+                  { label: "قەرز",               value: totalDebt > 0 ? formatIQD(totalDebt) : "نییە", icon: <DollarSign className="size-4" />, cls: totalDebt > 0 ? "bg-red-50 dark:bg-red-950/40 text-destructive" : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600" },
                 ].map((s, i) => (
-                  <div key={i} style={{ background: "#F8F9FA", borderRadius: 12, padding: "12px 14px" }}>
-                    <div style={{ width: 32, height: 32, background: s.bg, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: s.color, marginBottom: 8 }}>{s.icon}</div>
-                    <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 2 }}>{s.label}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: s.color }}>{s.value}</div>
+                  <div key={i} className="bg-muted/50 rounded-xl p-3.5">
+                    <div className={cn("size-8 rounded-lg flex items-center justify-center mb-2", s.cls)}>{s.icon}</div>
+                    <p className="text-[11px] text-muted-foreground mb-0.5">{s.label}</p>
+                    <p className={cn("text-sm font-bold", s.cls.includes("destructive") ? "text-destructive" : s.cls.includes("emerald") ? "text-emerald-600" : "text-primary")}>{s.value}</p>
                   </div>
                 ))}
               </div>
 
               {/* Payment CTA */}
               {!isWH && delivered.length > 0 && detailRow.clientRef && (
-                <button
-                  onClick={() => { setPaymentClient(detailRow.clientRef!); setPaymentMode("all"); setSelectedOrderIds([]); setReceiptFile(null); setPaymentStep("select"); setDetailRow(null); }}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 20px", background: "linear-gradient(135deg, #059669, #10B981)", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 14, fontFamily: "inherit", boxShadow: "0 4px 14px rgba(5,150,105,.25)" }}>
-                  <CreditCard size={18} /> پارەدانی {delivered.length} داواکاری گەیشتووە
-                </button>
+                <Button className="w-full justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20"
+                  onClick={() => { setPaymentClient(detailRow.clientRef!); setPaymentMode("all"); setSelectedOrderIds([]); setReceiptFile(null); setPaymentStep("select"); setDetailRow(null); }}>
+                  <CreditCard className="size-4" /> پارەدانی {delivered.length} داواکاری گەیشتووە
+                </Button>
               )}
 
               {/* Order history */}
-              <div style={{ background: "#F8F9FA", borderRadius: 12, overflow: "hidden" }}>
-                <div style={{ padding: "12px 16px", borderBottom: "1px solid #E9ECEF", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E" }}>مێژووی داواکارییەکان</span>
-                  <span style={{ fontSize: 12, color: "#ADB5BD" }}>{rowOrders.length} داواکاری</span>
+              <div className="bg-muted/50 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-border flex justify-between items-center">
+                  <span className="text-sm font-bold">مێژووی داواکارییەکان</span>
+                  <span className="text-xs text-muted-foreground">{rowOrders.length} داواکاری</span>
                 </div>
                 {rowOrders.length === 0 ? (
-                  <div style={{ padding: 28, textAlign: "center", color: "#ADB5BD", fontSize: 13 }}>هیچ داواکارییەک نییە</div>
+                  <div className="p-7 text-center text-sm text-muted-foreground">هیچ داواکارییەک نییە</div>
                 ) : (
-                  <div style={{ maxHeight: 280, overflowY: "auto" }}>
+                  <div className="max-h-72 overflow-y-auto">
                     {rowOrders.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(o => {
-                      const st = STATUS_LABELS[o.status] || { label: o.status, bg: "#F1F3F5", color: "#6C757D" };
+                      const st = STATUS_LABELS[o.status] || { label: o.status, bg: "#F1F3F5", color: "hsl(var(--muted-foreground))" };
                       return (
-                        <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderBottom: "1px solid #E9ECEF", background: "#fff" }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E" }}>{o.orderNumber}</div>
-                            <div style={{ fontSize: 11, color: "#ADB5BD", marginTop: 1 }}>{new Date(o.createdAt).toLocaleDateString("ku")}</div>
+                        <div key={o.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-border bg-background">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-bold">{o.orderNumber}</p>
+                            <p className="text-[11px] text-muted-foreground">{new Date(o.createdAt).toLocaleDateString("ku")}</p>
                           </div>
-                          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20, background: st.bg, color: st.color, whiteSpace: "nowrap" }}>{st.label}</span>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A2E", minWidth: 90, textAlign: "left", whiteSpace: "nowrap" }}>{formatIQD(o.totalAmount)}</div>
+                          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap"
+                            style={{ background: st.bg, color: st.color }}>{st.label}</span>
+                          <p className="text-[13px] font-bold min-w-[90px] text-left whitespace-nowrap">{formatIQD(o.totalAmount)}</p>
                         </div>
                       );
                     })}
                   </div>
                 )}
               </div>
-
             </div>
-          </Modal>
+            </DialogContent>
+          </Dialog>
         );
       })()}
 
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={() => { if (deleteId) deleteClient(deleteId); setDeleteId(null); }} message="ئایا دڵنیایت لە سڕینەوەی ئەم کڕیارە؟" />
+      <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>سڕینەوەی کڕیار</AlertDialogTitle>
+            <AlertDialogDescription>ئایا دڵنیایت لە سڕینەوەی ئەم کڕیارە؟</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>پاشگەزبوونەوە</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteId) deleteClient(deleteId); setDeleteId(null); }}>سڕینەوە</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      {/* ════════ PAYMENT MODAL ════════ */}
+      {/* PAYMENT MODAL */}
       {paymentClient && (() => {
         const deliveredOrders = getDeliveredOrders(paymentClient.id);
         const targetOrders: Order[] = paymentMode === "all" ? deliveredOrders : deliveredOrders.filter(o => selectedOrderIds.includes(o.id));
         const totalToPay = targetOrders.reduce((s, o) => s + o.totalAmount, 0);
         return (
-          <Modal open={true} onClose={() => setPaymentClient(null)} title={`پارەدانی — ${paymentClient.name}`}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <Dialog open={true} onOpenChange={open => !open && setPaymentClient(null)}>
+            <DialogContent className="sm:max-w-lg" dir="rtl">
+              <DialogHeader><DialogTitle>{`پارەدانی — ${paymentClient.name}`}</DialogTitle><DialogDescription>داواکارییەکان هەڵبژێرە بۆ پارەدان</DialogDescription></DialogHeader>
+            <div className="flex flex-col gap-4">
               {paymentStep === "select" && (
                 <>
-                  <div style={{ display: "flex", gap: 0, background: "#F1F3F5", borderRadius: 10, padding: 4 }}>
+                  <div className="flex gap-0 bg-muted p-1 rounded-xl">
                     {(["all", "select"] as const).map(m => (
-                      <button key={m} onClick={() => { setPaymentMode(m); setSelectedOrderIds([]); }}
-                        style={{ flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: paymentMode === m ? "white" : "transparent", color: paymentMode === m ? "#059669" : "#6C757D", boxShadow: paymentMode === m ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .15s" }}>
+                      <Button key={m} variant={paymentMode === m ? "secondary" : "ghost"} size="sm"
+                        onClick={() => { setPaymentMode(m); setSelectedOrderIds([]); }}
+                        className={cn("flex-1 rounded-lg text-sm font-semibold",
+                          paymentMode === m ? "bg-background text-emerald-600 shadow-sm" : "text-muted-foreground")}>
                         {m === "all" ? "پارەدانی هەموو" : "هەڵبژاردنی داواکاری"}
-                      </button>
+                      </Button>
                     ))}
                   </div>
-                  <div style={{ border: "1px solid #F1F3F5", borderRadius: 10, overflow: "hidden" }}>
+                  <div className="border border-border rounded-xl overflow-hidden">
                     {deliveredOrders.length === 0 ? (
-                      <div style={{ padding: 24, textAlign: "center", color: "#ADB5BD" }}>هیچ داواکارییەکی گەیشتووە نییە</div>
+                      <div className="p-6 text-center text-sm text-muted-foreground">هیچ داواکارییەکی گەیشتووە نییە</div>
                     ) : deliveredOrders.map(o => {
                       const checked = paymentMode === "all" || selectedOrderIds.includes(o.id);
                       return (
-                        <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid #F8F9FA", background: checked ? "#F0FDF4" : "white", cursor: paymentMode === "select" ? "pointer" : "default" }}
+                        <div key={o.id}
+                          className={cn("flex items-center gap-3 px-4 py-3 border-b border-border transition-colors",
+                            checked ? "bg-emerald-50 dark:bg-emerald-950/20" : "bg-background",
+                            paymentMode === "select" && "cursor-pointer")}
                           onClick={() => { if (paymentMode !== "select") return; setSelectedOrderIds(prev => prev.includes(o.id) ? prev.filter(id => id !== o.id) : [...prev, o.id]); }}>
                           {paymentMode === "select" && (
-                            <div style={{ width: 18, height: 18, borderRadius: 4, border: `2px solid ${checked ? "#059669" : "#DEE2E6"}`, background: checked ? "#059669" : "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                              {checked && <CheckCircle size={12} color="white" />}
+                            <div className={cn("size-5 rounded border-2 flex items-center justify-center shrink-0 transition-all",
+                              checked ? "bg-emerald-600 border-emerald-600" : "bg-background border-border")}>
+                              {checked && <CheckCircle className="size-3 text-white" />}
                             </div>
                           )}
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 700, fontSize: 14 }}>{o.orderNumber}</div>
-                            <div style={{ fontSize: 12, color: "#6C757D" }}>{new Date(o.createdAt).toLocaleDateString("ku")}</div>
+                          <div className="flex-1">
+                            <p className="font-bold text-sm">{o.orderNumber}</p>
+                            <p className="text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleDateString("ku")}</p>
                           </div>
-                          <div style={{ fontWeight: 700, color: "#059669", fontSize: 15 }}>{formatIQD(o.totalAmount)}</div>
+                          <p className="font-bold text-emerald-600 text-[15px]">{formatIQD(o.totalAmount)}</p>
                         </div>
                       );
                     })}
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", background: "#F0FDF4", borderRadius: 10, border: "1px solid #BBF7D0" }}>
-                    <span style={{ fontWeight: 600 }}>کۆی پارەدان</span>
-                    <span style={{ fontWeight: 800, fontSize: 20, color: "#059669" }}>{formatIQD(totalToPay)}</span>
+                  <div className="flex justify-between items-center px-4 py-3.5 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800/40">
+                    <span className="font-semibold text-sm">کۆی پارەدان</span>
+                    <span className="font-black text-xl text-emerald-600">{formatIQD(totalToPay)}</span>
                   </div>
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                    <button onClick={() => setPaymentClient(null)} style={{ padding: "10px 20px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer", fontFamily: "inherit" }}>پاشگەزبوونەوە</button>
-                    <button disabled={targetOrders.length === 0} onClick={() => setPaymentStep("receipt")} style={{ padding: "10px 20px", background: "#059669", color: "#fff", border: "none", borderRadius: 10, cursor: targetOrders.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", fontWeight: 700, opacity: targetOrders.length === 0 ? 0.5 : 1 }}>پێشکەوتن ←</button>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" onClick={() => setPaymentClient(null)}>پاشگەزبوونەوە</Button>
+                    <Button disabled={targetOrders.length === 0} className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={() => setPaymentStep("receipt")}>پێشکەوتن ←</Button>
                   </div>
                 </>
               )}
@@ -590,130 +715,109 @@ export default function ClientsPage() {
                 const afterDiscount = totalToPay - discountAmt;
                 return (
                   <>
-                    {/* Summary bar */}
-                    <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-xl px-4 py-3 flex justify-between items-center">
                       <div>
-                        <div style={{ fontSize: 12, color: "#6C757D" }}>{targetOrders.length} داواکاری — کۆی گشتی</div>
-                        <div style={{ fontWeight: 800, fontSize: 20, color: "#059669" }}>{formatIQD(totalToPay)}</div>
+                        <p className="text-xs text-muted-foreground">{targetOrders.length} داواکاری — کۆی گشتی</p>
+                        <p className="font-black text-xl text-emerald-600">{formatIQD(totalToPay)}</p>
                       </div>
                       {discountAmt > 0 && (
-                        <div style={{ textAlign: "left" }}>
-                          <div style={{ fontSize: 12, color: "#6C757D" }}>دوای داشکاندن</div>
-                          <div style={{ fontWeight: 800, fontSize: 20, color: "#2563EB" }}>{formatIQD(afterDiscount)}</div>
+                        <div className="text-left">
+                          <p className="text-xs text-muted-foreground">دوای داشکاندن</p>
+                          <p className="font-black text-xl text-primary">{formatIQD(afterDiscount)}</p>
                         </div>
                       )}
                     </div>
-
-                    {/* Discount + Receiver */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "#495057", marginBottom: 6 }}>داشکاندن (د.ع)</div>
-                        <input type="number" min={0} value={discount} onChange={e => setDiscount(e.target.value)}
-                          style={{ ...inputStyle, width: "100%" }} placeholder="0" />
+                        <label className="text-xs font-semibold text-muted-foreground block mb-1.5">داشکاندن (د.ع)</label>
+                        <Input type="number" min={0} value={discount} onChange={e => setDiscount(e.target.value)} className="w-full" placeholder="0" />
                       </div>
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "#495057", marginBottom: 6 }}>وەرگیراوە لە لایەن *</div>
-                        <input type="text" value={receiverName} onChange={e => setReceiverName(e.target.value)}
-                          style={{ ...inputStyle, width: "100%" }} placeholder="ناوی وەرگر..." />
+                        <label className="text-xs font-semibold text-muted-foreground block mb-1.5">وەرگیراوە لە لایەن *</label>
+                        <Input type="text" value={receiverName} onChange={e => setReceiverName(e.target.value)} className="w-full" placeholder="ناوی وەرگر..." />
                       </div>
                     </div>
-
-                    {/* Order numbers preview */}
-                    <div style={{ background: "#EEF2FF", border: "1px solid #C7D7FD", borderRadius: 10, padding: "10px 14px" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4263EB", marginBottom: 4 }}>داواکارییەکانی پارەدراو</div>
-                      <div style={{ fontSize: 12, color: "#1A1A2E", lineHeight: 1.8 }}>
-                        {targetOrders.map(o => o.orderNumber).join("  |  ")}
-                      </div>
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5">
+                      <p className="text-[11px] font-bold text-primary mb-1">داواکارییەکانی پارەدراو</p>
+                      <p className="text-xs text-foreground leading-relaxed">{targetOrders.map(o => o.orderNumber).join("  |  ")}</p>
                     </div>
-
-                    {/* Upload signed receipt */}
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#495057", marginBottom: 6 }}>بارکردنی پسوولەی واژووکراو (ئەگەر هەبوو)</div>
-                      <div style={{ border: "1.5px dashed #DEE2E6", borderRadius: 10, padding: "14px 16px", textAlign: "center", cursor: "pointer", background: receiptFile ? "#F0FDF4" : "#FAFAFA" }}
+                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">بارکردنی پسووڵەی واژووکراو (ئەگەر هەبوو)</p>
+                      <div className={cn("border-2 border-dashed rounded-xl py-4 px-4 text-center cursor-pointer transition-colors",
+                        receiptFile ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20" : "border-border bg-muted/30")}
                         onClick={() => receiptInputRef.current?.click()}>
-                        <Upload size={20} style={{ color: "#ADB5BD", display: "block", margin: "0 auto 6px" }} />
-                        <div style={{ fontSize: 12, color: receiptFile ? "#059669" : "#6C757D", fontWeight: receiptFile ? 600 : 400 }}>
+                        <Upload className="size-5 text-muted-foreground mx-auto mb-1.5" />
+                        <p className={cn("text-xs", receiptFile ? "text-emerald-600 font-semibold" : "text-muted-foreground")}>
                           {receiptFile ? `✓ ${receiptFile.name}` : "کرتە بکە یان فایل بخشێنە"}
-                        </div>
-                        <input ref={receiptInputRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => setReceiptFile(e.target.files?.[0] || null)} />
+                        </p>
+                        <input ref={receiptInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setReceiptFile(e.target.files?.[0] || null)} />
                       </div>
                     </div>
-
-                    {/* Action row */}
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => setPaymentStep("select")}
-                        style={{ padding: "10px 16px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 13 }}>
-                        ← گەڕانەوە
-                      </button>
-
-                      {/* Print receipt */}
-                      <button onClick={() => {
-                        const html = buildDebtReceiptHTML(
-                          paymentClient!.name,
-                          targetOrders,
-                          totalToPay,
-                          discountAmt,
-                          receiverName,
-                          settings ?? null
-                        );
-                        const w = window.open("", "_blank");
-                        if (!w) return;
-                        w.document.write(html);
-                        w.document.close();
-                      }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 16px", background: "#EEF2FF", border: "1px solid #C7D7FD", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 13, color: "#4263EB" }}>
-                        <Printer size={15} /> پرینتی وەسڵ
-                      </button>
-
-                      {/* Confirm payment */}
-                      <button disabled={paymentUploading} onClick={async () => {
-                        setPaymentUploading(true);
-                        let receiptUrl = "";
-                        if (receiptFile) {
-                          const { supabase } = await import("@/lib/supabase");
-                          const { data, error } = await supabase.storage.from("order-docs").upload(`receipts/${Date.now()}_${receiptFile.name}`, receiptFile, { upsert: true });
-                          if (error) { showToast("هەڵە لە بارکردن: " + error.message, "error"); setPaymentUploading(false); return; }
-                          const { data: urlData } = supabase.storage.from("order-docs").getPublicUrl(data.path);
-                          receiptUrl = urlData.publicUrl;
-                        }
-                        await markOrdersAsPaid(targetOrders.map(o => o.id), receiptUrl);
-                        setPaymentClient(null);
-                        setDiscount("0");
-                        setReceiverName("");
-                        setPaymentUploading(false);
-                      }} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 16px", background: "#059669", color: "#fff", border: "none", borderRadius: 10, cursor: paymentUploading ? "not-allowed" : "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 13, opacity: paymentUploading ? 0.7 : 1 }}>
-                        <CheckCircle size={15} />
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => setPaymentStep("select")}>\u2190 گەڕانەوە</Button>
+                      <Button variant="outline" className="text-primary border-primary/30"
+                        onClick={() => {
+                          const html = buildDebtReceiptHTML(paymentClient!.name, targetOrders, totalToPay, discountAmt, receiverName, settings ?? null);
+                          const w = window.open("", "_blank");
+                          if (!w) return;
+                          w.document.write(html);
+                          w.document.close();
+                        }}>
+                        <Printer className="size-3.5 me-1" /> پرینتی وەسڵ
+                      </Button>
+                      <Button disabled={paymentUploading} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white justify-center"
+                        onClick={async () => {
+                          setPaymentUploading(true);
+                          let receiptUrl = "";
+                          if (receiptFile) {
+                            const { supabase } = await import("@/lib/supabase");
+                            const { data, error } = await supabase.storage.from("order-docs").upload(`receipts/${Date.now()}_${receiptFile.name}`, receiptFile, { upsert: true });
+                            if (error) { showToast("هەڵە لە بارکردن: " + error.message, "error"); setPaymentUploading(false); return; }
+                            const { data: urlData } = supabase.storage.from("order-docs").getPublicUrl(data.path);
+                            receiptUrl = urlData.publicUrl;
+                          }
+                          await markOrdersAsPaid(targetOrders.map(o => o.id), receiptUrl);
+                          setPaymentClient(null);
+                          setDiscount("0");
+                          setReceiverName("");
+                          setPaymentUploading(false);
+                        }}>
+                        <CheckCircle className="size-4 me-1" />
                         {paymentUploading ? "تۆمارکردن..." : "پارەدان دڵنیاکردنەوە"}
-                      </button>
+                      </Button>
                     </div>
                   </>
                 );
               })()}
             </div>
-          </Modal>
+            </DialogContent>
+          </Dialog>
         );
       })()}
 
       {/* Clear history confirm */}
       {showClearConfirm && (
-        <div onClick={() => setShowClearConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "white", borderRadius: 16, padding: 28, width: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: "#FFE3E3", display: "flex", alignItems: "center", justifyContent: "center", color: "#C92A2A", flexShrink: 0 }}><History size={20} /></div>
+        <div onClick={() => setShowClearConfirm(false)}
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[600]">
+          <div onClick={e => e.stopPropagation()}
+            className="bg-background rounded-2xl p-7 w-96 shadow-2xl border border-border">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="size-11 rounded-xl bg-red-100 dark:bg-red-950/40 flex items-center justify-center text-destructive shrink-0">
+                <History className="size-5" />
+              </div>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>سڕینەوەی مێژووی داواکارییەکان</div>
-                <div style={{ fontSize: 12, color: "#6C757D", marginTop: 2 }}>هەموو داواکارییەکانی پەسەندکراو و ڕەتکراوەیەوە دەسڕێتەوە</div>
+                <p className="text-[15px] font-bold">سڕینەوەی مێژووی داواکارییەکان</p>
+                <p className="text-xs text-muted-foreground mt-1">هەموو داواکارییەکانی پەسەندکراو و ڕەتکراوەیەوە دەسڕێتەوە</p>
               </div>
             </div>
-            <div style={{ padding: "12px 14px", background: "#FFF8DB", borderRadius: 8, fontSize: 12, color: "#856404", marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
-              <AlertCircle size={14} /> داواکارییەکانی چاوەڕوان دەمێننەوە — تەنها مێژوو دەسڕێتەوە
+            <div className="px-3.5 py-2.5 bg-amber-50 dark:bg-amber-950/30 rounded-lg text-xs text-amber-800 dark:text-amber-400 mb-5 flex items-center gap-2">
+              <AlertCircle className="size-3.5 shrink-0" /> داواکارییەکانی چاوەڕوان دەمێننەوە — تەنها مێژوو دەسڕێتەوە
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={handleClearHistory} disabled={clearingHistory} style={{ flex: 1, padding: "10px 0", borderRadius: 9, background: "#C92A2A", color: "white", fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit", opacity: clearingHistory ? 0.7 : 1 }}>
+            <div className="flex gap-2.5">
+              <Button className="flex-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={clearingHistory} onClick={handleClearHistory}>
                 {clearingHistory ? "بارکردن..." : "بەڵێ، بیسڕەوە"}
-              </button>
-              <button onClick={() => setShowClearConfirm(false)} style={{ flex: 1, padding: "10px 0", borderRadius: 9, background: "#F1F3F5", color: "#495057", fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                پاشگەزبوونەوە
-              </button>
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setShowClearConfirm(false)}>پاشگەزبوونەوە</Button>
             </div>
           </div>
         </div>

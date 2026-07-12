@@ -1,14 +1,19 @@
 "use client";
 import { useState, useEffect, FormEvent, useRef } from "react";
+import { useTheme } from "next-themes";
 import {
   Settings2, Building2, Save, RefreshCw, Camera, Upload, Users, ArrowLeft,
-  Sun, Moon, AlignRight, AlignLeft, AlignCenter, Check,
-  Trash2, Download, AlertTriangle, Shield, User, Phone, Mail, BadgeCheck,
+  Sun, Moon, Trash2, Download, AlertTriangle, Shield, User, Phone, Mail, BadgeCheck,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
-import { FormField, FormGrid, inputStyle } from "@/components/ui/FormField";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import Link from "next/link";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 function ImageUploader({ value, onChange, label, shape }: { value?: string; onChange: (v: string) => void; label: string; shape: "square" | "circle" }) {
   const ref = useRef<HTMLInputElement>(null);
@@ -21,54 +26,31 @@ function ImageUploader({ value, onChange, label, shape }: { value?: string; onCh
     reader.readAsDataURL(file);
   };
   const sz = shape === "circle" ? 100 : 80;
+  const radius = shape === "circle" ? "50%" : "14px";
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-      <div onClick={() => ref.current?.click()} style={{
-        width: sz, height: sz, borderRadius: shape === "circle" ? "50%" : 14,
-        border: "2px dashed #DEE2E6", overflow: "hidden", cursor: "pointer", position: "relative",
-        background: value ? `url(${value}) center/cover no-repeat` : "linear-gradient(135deg, #F1F3F5, #E9ECEF)",
-        display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s",
-      }}>
-        {!value && <Upload size={20} color="#ADB5BD" />}
-        <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", opacity: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "opacity 0.2s", borderRadius: shape === "circle" ? "50%" : 14 }}
-          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
-          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}>
-          <Camera size={20} color="white" />
+    <div className="flex flex-col items-center gap-2">
+      <div onClick={() => ref.current?.click()} className="cursor-pointer relative overflow-hidden border-2 border-dashed border-border transition-all hover:border-primary"
+        style={{ width: sz, height: sz, borderRadius: radius, background: value ? `url(${value}) center/cover no-repeat` : "linear-gradient(135deg,#F1F3F5,#E9ECEF)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {!value && <Upload className="size-5 text-muted-foreground" />}
+        <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center" style={{ borderRadius: radius }}>
+          <Camera className="size-5 text-white" />
         </div>
       </div>
-      <span style={{ fontSize: 11, fontWeight: 600, color: "#6C757D" }}>{label}</span>
-      <input ref={ref} type="file" accept="image/*" onChange={handleFile} style={{ display: "none" }} />
-      {value && <button onClick={() => onChange("")} style={{ fontSize: 10, color: "#FA5252", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>سڕینەوە</button>}
+      <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>
+      <input ref={ref} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+      {value && <Button variant="link" size="sm" onClick={() => onChange("")} className="text-[10px] text-destructive h-auto p-0">سڕینەوە</Button>}
     </div>
   );
 }
 
-// Toggle switch component
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      onClick={() => onChange(!value)}
-      style={{
-        width: 48, height: 26, borderRadius: 13, border: "none", cursor: "pointer",
-        background: value ? "linear-gradient(135deg, #4263EB, #7C5CFC)" : "#DEE2E6",
-        position: "relative", transition: "background 0.2s", flexShrink: 0,
-      }}
-    >
-      <div style={{
-        position: "absolute", top: 3, right: value ? 3 : undefined, left: value ? undefined : 3,
-        width: 20, height: 20, borderRadius: "50%", background: "white",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.2)", transition: "all 0.2s",
-      }} />
-    </button>
-  );
-}
 
 export default function SettingsPage() {
   const { settings, updateSettings, showToast } = useData();
-  const { darkMode, toggleDarkMode, sidebarPosition, setSidebarPosition, currentUser, updateCurrentUserProfile } = useLayout();
+  const { currentUser, updateCurrentUserProfile } = useLayout();
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [companyForm, setCompanyForm] = useState(settings);
 
-  // ── My Profile state ────────────────────────────────────
   const profileFileRef = useRef<HTMLInputElement>(null);
   const [profileForm, setProfileForm] = useState({
     name: currentUser?.name || "",
@@ -77,7 +59,6 @@ export default function SettingsPage() {
   });
   const [profileSaving, setProfileSaving] = useState(false);
 
-  // sync profileForm whenever currentUser changes (handles async load)
   useEffect(() => {
     if (currentUser) {
       setProfileForm(p => ({
@@ -86,9 +67,8 @@ export default function SettingsPage() {
         avatar: p.avatar || currentUser.avatarUrl || "",
       }));
     }
-  }, [currentUser?.id]); // only re-sync when user changes, not on every render
+  }, [currentUser?.id]);
 
-  // Resize image to max 200×200 before storing — keeps base64 under ~30KB
   const resizeImage = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -149,14 +129,8 @@ export default function SettingsPage() {
     const log = (msg: string) => setDeleteLog(prev => [...prev, msg]);
     try {
       const { supabase } = await import("@/lib/supabase");
-
-      // ── 1. Fetch all data for backup ──────────────────────────────
       log("داتا هێنانی باکئەپ...");
-      const tables = [
-        "products", "clients", "reps", "warehouses", "suppliers",
-        "orders", "drivers", "transactions", "invoice_templates",
-        "price_types", "sample_requests",
-      ];
+      const tables = ["products","clients","reps","warehouses","suppliers","orders","drivers","transactions","invoice_templates","price_types","sample_requests"];
       const backup: Record<string, unknown[]> = {};
       for (const table of tables) {
         const { data } = await supabase.from(table).select("*");
@@ -164,8 +138,6 @@ export default function SettingsPage() {
         log(`✓ ${table} (${backup[table].length} ڕیکۆرد)`);
       }
       backup._backup_date = [new Date().toISOString()];
-
-      // ── 2. Trigger JSON download ───────────────────────────────────
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
@@ -176,23 +148,11 @@ export default function SettingsPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       log("⬇ باکئەپ دابەزاند");
-
-      // ── 3. Delete all rows from each table ────────────────────────
-      // Order matters: orders before clients (FK), transactions before orders, etc.
-      const deleteOrder = [
-        "transactions", "sample_requests", "orders",
-        "clients", "products", "reps", "warehouses",
-        "suppliers", "drivers", "invoice_templates", "price_types",
-      ];
+      const deleteOrder = ["transactions","sample_requests","orders","clients","products","reps","warehouses","suppliers","drivers","invoice_templates","price_types"];
       for (const table of deleteOrder) {
         const { error } = await supabase.from(table).delete().neq("id", "__never__");
-        if (error) {
-          log(`✗ ${table}: ${error.message}`);
-        } else {
-          log(`🗑 ${table} سڕایەوە`);
-        }
+        if (error) { log(`✗ ${table}: ${error.message}`); } else { log(`🗑 ${table} سڕایەوە`); }
       }
-
       log("✅ هەموو داتاکان سڕانەوە!");
       setDeleteStep("done");
       showToast("داتاکان سڕانەوە و باکئەپ داونلۆدکرا", "success");
@@ -204,351 +164,251 @@ export default function SettingsPage() {
     }
   };
 
-  const sidebarOptions: { value: "right" | "left" | "top"; label: string; icon: React.ReactNode; desc: string }[] = [
-    { value: "right", label: "ڕاست", icon: <AlignRight size={20} />, desc: "ئەستانداردی کوردی (RTL)" },
-    { value: "left",  label: "چەپ",  icon: <AlignLeft size={20} />,  desc: "چەپی پەیجی" },
-    { value: "top",   label: "سەرەوە", icon: <AlignCenter size={20} />, desc: "ناڤیگەیشنی ئاسۆیی" },
-  ];
-
-  const cardStyle: React.CSSProperties = {
-    background: "var(--color-bg-card)",
-    borderRadius: 14,
-    padding: 28,
-    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-    border: "1px solid var(--color-border-light)",
-    marginBottom: 24,
-  };
-
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-        <div style={{ width: 40, height: 40, background: "var(--color-bg-hover)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-secondary)" }}>
-          <Settings2 size={20} />
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <div className="size-10 bg-muted rounded-xl flex items-center justify-center text-muted-foreground">
+          <Settings2 className="size-5" />
         </div>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700 }}>ڕێکخستنەکان</h1>
-          <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>ڕێکخستنی سیستەم و جوانکاری</p>
+          <h1 className="text-xl font-bold">ڕێکخستنەکان</h1>
+          <p className="text-sm text-muted-foreground">ڕێکخستنی سیستەم و جوانکاری</p>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 24 }}>
-        <div style={{ flex: 1, maxWidth: 700 }}>
+      <div className="flex gap-6">
+        <div className="flex-1 max-w-2xl">
 
-        {/* ─── My Profile Card ─── */}
-          <div style={cardStyle}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>
-              <User size={18} color="#4263EB" /> پرۆفایلی من
-            </h3>
-
-            <form onSubmit={handleProfileSave}>
-              {/* Avatar picker row */}
-              <div style={{ display: "flex", alignItems: "center", gap: 24, padding: "20px", background: "var(--color-bg)", borderRadius: 14, marginBottom: 24 }}>
-                {/* Avatar */}
-                <div style={{ position: "relative", flexShrink: 0 }}>
-                  <div
-                    onClick={() => profileFileRef.current?.click()}
-                    style={{ width: 88, height: 88, borderRadius: "50%", cursor: "pointer", overflow: "hidden", border: "3px solid #4263EB", position: "relative" }}
-                  >
-                    {profileForm.avatar ? (
-                      <img src={profileForm.avatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                      <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 800, color: "white" }}>
-                        {profileForm.name?.[0] || currentUser?.name?.[0] || "؟"}
+          {/* My Profile Card */}
+          <Card className="mb-6">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base flex items-center gap-2">
+                <User className="size-4 text-primary" /> پرۆفایلی من
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleProfileSave}>
+                {/* Avatar picker row */}
+                <div className="flex items-center gap-6 p-5 bg-muted/50 rounded-xl mb-6">
+                  <div className="relative shrink-0">
+                    <div onClick={() => profileFileRef.current?.click()}
+                      className="size-[88px] rounded-full cursor-pointer overflow-hidden border-2 border-primary relative">
+                      {profileForm.avatar ? (
+                        <img src={profileForm.avatar} alt="avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-primary to-violet-400 flex items-center justify-center text-3xl font-black text-white">
+                          {profileForm.name?.[0] || currentUser?.name?.[0] || "؟"}
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/35 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        <Camera className="size-5 text-white" />
                       </div>
-                    )}
-                    {/* hover overlay */}
-                    <div
-                      style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.2s" }}
-                      onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-                      onMouseLeave={e => (e.currentTarget.style.opacity = "0")}
-                    >
-                      <Camera size={20} color="white" />
+                    </div>
+                    <input ref={profileFileRef} type="file" accept="image/*" className="hidden" onChange={handleProfileAvatarFile} />
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="text-[17px] font-black mb-1 flex items-center gap-1.5">
+                      {currentUser?.name || "بەکارهێنەر"}
+                      <BadgeCheck className="size-4" style={{ color: roleColor }} />
+                    </div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-md"
+                        style={{ background: `${roleColor}18`, color: roleColor }}>{roleLabel}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{currentUser?.email}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">کلیک لەسەر وێنەکە بکە بۆ گۆڕینی</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>ناو</Label>
+                    <div className="relative">
+                      <User className="size-3.5 absolute end-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Input className="pe-8" value={profileForm.name}
+                        onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} placeholder="ناوی خۆت بنووسە" />
                     </div>
                   </div>
-                  <input ref={profileFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleProfileAvatarFile} />
+
+                  <div className="space-y-2">
+                    <Label>ژمارەی مۆبایل</Label>
+                    <div className="relative">
+                      <Phone className="size-3.5 absolute end-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Input className="pe-8" value={profileForm.phone}
+                        onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))} placeholder="07XX XXX XXXX" type="tel" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>ئیمەیڵ (ناگۆڕدرێت)</Label>
+                    <div className="relative">
+                      <Mail className="size-3.5 absolute end-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                      <Input className="pe-8 opacity-60 cursor-not-allowed"
+                        value={currentUser?.email || ""} readOnly />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>ئەندازە (ناگۆڕدرێت)</Label>
+                    <Input className="opacity-60 cursor-not-allowed" value={roleLabel} readOnly />
+                  </div>
                 </div>
 
-                {/* Info beside avatar */}
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 17, fontWeight: 800, color: "var(--color-text-primary)", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                    {currentUser?.name || "بەکارهێنەر"}
-                    <BadgeCheck size={16} color={roleColor} />
+                {profileForm.avatar && (
+                  <Button type="button" variant="link" size="sm" onClick={() => setProfileForm(p => ({ ...p, avatar: "" }))}
+                    className="mt-3 text-[11px] text-destructive h-auto p-0">
+                    سڕینەوەی وێنەی پڕۆفایل
+                  </Button>
+                )}
+
+                <div className="mt-5">
+                  <Button type="submit" disabled={profileSaving || !profileForm.name.trim()} className="gap-2">
+                    <Save className="size-3.5" /> {profileSaving ? "پاشەکەوتکردن..." : "پاشەکەوتکردنی پرۆفایل"}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Appearance Card */}
+          <Card className="mb-6">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base flex items-center gap-2">
+                {isDark ? <Moon className="size-4 text-violet-500" /> : <Sun className="size-4 text-amber-500" />}
+                دیداری سیستەم
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl">
+                <div className="flex items-center gap-3.5">
+                  <div className={cn("size-11 rounded-xl flex items-center justify-center",
+                    isDark ? "bg-gradient-to-br from-slate-800 to-violet-950" : "bg-gradient-to-br from-amber-50 to-orange-100")}>
+                    {isDark ? <Moon className="size-5 text-violet-400" /> : <Sun className="size-5 text-amber-500" />}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: `${roleColor}15`, color: roleColor }}>{roleLabel}</span>
+                  <div>
+                    <p className="text-sm font-bold">{isDark ? "دۆخی تاریک" : "دۆخی ڕووناک"}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {isDark ? "دیدارێکی تاریک بۆ کارکردن لە شەو" : "دیدارێکی ڕووناک بۆ رۆژانە"}
+                    </p>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{currentUser?.email}</div>
-                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)", marginTop: 4 }}>کلیک لەسەر وێنەکە بکە بۆ گۆڕینی</div>
+                </div>
+                <Switch checked={isDark} onCheckedChange={() => setTheme(isDark ? "light" : "dark")} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Company Info Card */}
+          <Card className="mb-6">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Building2 className="size-4" /> زانیاری کۆمپانیا
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-8 mb-7 p-5 bg-muted/50 rounded-xl justify-center">
+                <ImageUploader value={companyForm.logo} onChange={(v) => setCompanyForm({ ...companyForm, logo: v })} label="لۆگۆی کۆمپانیا" shape="square" />
+                <div className="flex flex-col justify-center gap-1">
+                  <span className="text-sm font-semibold">لۆگۆی کۆمپانیا</span>
+                  <span className="text-[11px] text-muted-foreground">وێنەیەک بۆ پسوولەکان و سایدبار</span>
+                  <span className="text-[11px] text-muted-foreground">وێنەی پرۆفایل: کلیک بکە لەسەر وێنەکەت لە سایدبار</span>
                 </div>
               </div>
+              <form onSubmit={handleCompanySave}>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2"><Label>ناوی کۆمپانیا (کوردی)</Label><Input value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>ناوی کۆمپانیا (ئینگلیزی)</Label><Input value={companyForm.nameEn} onChange={(e) => setCompanyForm({ ...companyForm, nameEn: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>تەلەفۆن</Label><Input value={companyForm.phone} onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>ئیمەیڵ</Label><Input type="email" value={companyForm.email} onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>شار</Label><Input value={companyForm.city} onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>دراو</Label><Input value={companyForm.currency} onChange={(e) => setCompanyForm({ ...companyForm, currency: e.target.value })} /></div>
+                </div>
+                <div className="space-y-2 mt-4"><Label>ناونیشان</Label><Input value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} /></div>
+                <div className="mt-6">
+                  <Button type="submit" className="gap-2"><Save className="size-3.5" /> پاشەکەوتکردن</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
 
-              {/* Fields */}
-              <FormGrid>
-                <FormField label="ناو">
-                  <div style={{ position: "relative" }}>
-                    <User size={13} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }} />
-                    <input
-                      style={{ ...inputStyle, paddingRight: 30 }}
-                      value={profileForm.name}
-                      onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))}
-                      placeholder="ناوی خۆت بنووسە"
-                    />
+          {/* Users shortcut */}
+          <Card className="mb-6">
+            <CardContent className="p-5">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 bg-violet-50 dark:bg-violet-950/40 rounded-xl flex items-center justify-center text-violet-600">
+                    <Users className="size-5" />
                   </div>
-                </FormField>
-
-                <FormField label="ژمارەی مۆبایل">
-                  <div style={{ position: "relative" }}>
-                    <Phone size={13} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }} />
-                    <input
-                      style={{ ...inputStyle, paddingRight: 30 }}
-                      value={profileForm.phone}
-                      onChange={e => setProfileForm(p => ({ ...p, phone: e.target.value }))}
-                      placeholder="07XX XXX XXXX"
-                      type="tel"
-                    />
+                  <div>
+                    <p className="font-bold text-sm">بەڕێوەبردنی بەکارهێنەران</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">زیادکردن، دەستکاری، و مۆڵەتدانی بەکارهێنەران</p>
                   </div>
-                </FormField>
+                </div>
+                <Link href="/dashboard/users">
+                  <Button variant="outline" className="gap-2 text-violet-600 border-violet-200 hover:bg-violet-50 dark:border-violet-800 dark:hover:bg-violet-950/30">
+                    <ArrowLeft className="size-3.5" /> بچۆ بۆ بەکارهێنەران
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
 
-                <FormField label="ئیمەیڵ (ناگۆڕدرێت)">
-                  <div style={{ position: "relative" }}>
-                    <Mail size={13} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-secondary)" }} />
-                    <input
-                      style={{ ...inputStyle, paddingRight: 30, opacity: 0.6, cursor: "not-allowed" }}
-                      value={currentUser?.email || ""}
-                      readOnly
-                    />
+          {/* Danger Zone */}
+          <Card className="mb-6 border-destructive/40">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base flex items-center gap-2 text-destructive">
+                <AlertTriangle className="size-4" /> ناوچەی مەترسیدار
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-5">سڕینەوەی هەموو داتاکان لە سوپابەیس. پێش سڕینەوە باکئەپی خۆکار داونلۆد دەکرێت.</p>
+
+              {deleteStep === "idle" && (
+                <Button variant="destructive" onClick={() => setDeleteStep("confirm")} className="gap-2">
+                  <Trash2 className="size-3.5" /> سڕینەوەی هەموو داتاکان
+                </Button>
+              )}
+
+              {deleteStep === "confirm" && (
+                <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 rounded-xl p-5">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <Shield className="size-5 text-destructive" />
+                    <span className="font-bold text-destructive text-sm">دڵنیابووەیت؟ ئەم کردارە ناگەڕێتەوە</span>
                   </div>
-                </FormField>
-
-                <FormField label="ئەندازە (ناگۆڕدرێت)">
-                  <input
-                    style={{ ...inputStyle, opacity: 0.6, cursor: "not-allowed" }}
-                    value={roleLabel}
-                    readOnly
-                  />
-                </FormField>
-              </FormGrid>
-
-              {profileForm.avatar && (
-                <div style={{ marginTop: 12 }}>
-                  <button type="button" onClick={() => setProfileForm(p => ({ ...p, avatar: "" }))} style={{ fontSize: 11, color: "#FA5252", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                    سڕینەوەی وێنەی پرۆفایل
-                  </button>
+                  <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                    هەموو داتاکانت (داواکاری، کڕیار، بەرهەم، ...) دەسڕێنەوە.<br />
+                    <strong>باکئەپی JSON خۆکار داونلۆد دەکرێت پێش سڕینەوە.</strong>
+                  </p>
+                  <div className="flex gap-2.5">
+                    <Button variant="destructive" onClick={handleResetData} className="gap-2">
+                      <Download className="size-3.5" /> باکئەپ بکە و بیسڕەوە
+                    </Button>
+                    <Button variant="outline" onClick={() => setDeleteStep("idle")}>پاشگەزبوونەوە</Button>
+                  </div>
                 </div>
               )}
 
-              <div style={{ marginTop: 20 }}>
-                <button
-                  type="submit"
-                  disabled={profileSaving || !profileForm.name.trim()}
-                  style={{ padding: "10px 28px", borderRadius: 8, background: profileSaving ? "#ADB5BD" : "linear-gradient(135deg,#4263EB,#7C5CFC)", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: profileSaving ? "default" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}
-                >
-                  <Save size={14} /> {profileSaving ? "پاشەکەوتکردن..." : "پاشەکەوتکردنی پرۆفایل"}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* ─── Appearance Card ─── */}
-          <div style={cardStyle}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>
-              {darkMode ? <Moon size={18} color="#7C5CFC" /> : <Sun size={18} color="#F47B35" />}
-              دیداری سیستەم
-            </h3>
-
-            {/* Dark mode row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", background: "var(--color-bg)", borderRadius: 12, marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: darkMode ? "linear-gradient(135deg, #1A1A2E, #2D2B55)" : "linear-gradient(135deg, #FEF3EB, #FFD6A5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {darkMode ? <Moon size={20} color="#7C5CFC" /> : <Sun size={20} color="#F47B35" />}
-                </div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>{darkMode ? "دۆخی تاریک" : "دۆخی ڕووناک"}</div>
-                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>
-                    {darkMode ? "دیدارێکی تاریک بۆ کارکردن لە شەو" : "دیدارێکی ڕووناک بۆ رۆژانە"}
+              {deleteStep === "working" && (
+                <div className="bg-muted/50 border border-border rounded-xl p-5">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <RefreshCw className="size-4 animate-spin" />
+                    <span className="font-semibold text-sm">کارەکە بەردەوامە...</span>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto font-mono text-xs text-muted-foreground flex flex-col gap-1">
+                    {deleteLog.map((line, i) => <div key={i}>{line}</div>)}
                   </div>
                 </div>
-              </div>
-              <Toggle value={darkMode} onChange={toggleDarkMode} />
-            </div>
+              )}
 
-            {/* Sidebar position */}
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: 12 }}>شوێنی سایدبار</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-                {sidebarOptions.map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setSidebarPosition(opt.value)}
-                    style={{
-                      padding: "14px 12px",
-                      borderRadius: 12,
-                      border: sidebarPosition === opt.value ? "2px solid #4263EB" : "2px solid var(--color-border)",
-                      background: sidebarPosition === opt.value ? "linear-gradient(135deg, #EDF2FF, #F3F0FF)" : "var(--color-bg)",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 8,
-                      position: "relative",
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    {sidebarPosition === opt.value && (
-                      <div style={{ position: "absolute", top: 6, left: 6, width: 18, height: 18, borderRadius: "50%", background: "#4263EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Check size={10} color="white" strokeWidth={3} />
-                      </div>
-                    )}
-                    {/* Mini layout preview */}
-                    <div style={{ width: 64, height: 40, borderRadius: 6, border: "1px solid var(--color-border)", overflow: "hidden", background: "var(--color-bg-card)", display: "flex", position: "relative" }}>
-                      {opt.value === "right" && (
-                        <>
-                          <div style={{ width: 16, height: "100%", background: "#4263EB15", borderRight: "1px solid #4263EB30", position: "absolute", right: 0 }} />
-                          <div style={{ flex: 1, marginRight: 16, padding: 4 }}>
-                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, marginBottom: 3 }} />
-                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, width: "70%" }} />
-                          </div>
-                        </>
-                      )}
-                      {opt.value === "left" && (
-                        <>
-                          <div style={{ width: 16, height: "100%", background: "#4263EB15", borderLeft: "1px solid #4263EB30", position: "absolute", left: 0 }} />
-                          <div style={{ flex: 1, marginLeft: 16, padding: 4 }}>
-                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, marginBottom: 3 }} />
-                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, width: "70%" }} />
-                          </div>
-                        </>
-                      )}
-                      {opt.value === "top" && (
-                        <>
-                          <div style={{ height: 10, width: "100%", background: "#4263EB15", borderBottom: "1px solid #4263EB30", position: "absolute", top: 0 }} />
-                          <div style={{ flex: 1, marginTop: 10, padding: 4 }}>
-                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, marginBottom: 3 }} />
-                            <div style={{ height: 4, background: "#DEE2E6", borderRadius: 2, width: "70%" }} />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: sidebarPosition === opt.value ? "#4263EB" : "var(--color-text-primary)" }}>
-                      {opt.label}
-                    </div>
-                    <div style={{ fontSize: 10, color: "var(--color-text-secondary)", textAlign: "center" }}>{opt.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* ─── Company Info Card ─── */}
-          <div style={cardStyle}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
-              <Building2 size={18} /> زانیاری کۆمپانیا
-            </h3>
-
-            <div style={{ display: "flex", gap: 32, marginBottom: 28, padding: 20, background: "var(--color-bg)", borderRadius: 12, justifyContent: "center" }}>
-              <ImageUploader value={companyForm.logo} onChange={(v) => setCompanyForm({ ...companyForm, logo: v })} label="لۆگۆی کۆمپانیا" shape="square" />
-              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>لۆگۆی کۆمپانیا</span>
-                <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>وێنەیەک بۆ پسوولەکان و سایدبار</span>
-                <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>وێنەی پرۆفایل: کلیک بکە لەسەر وێنەکەت لە سایدبار</span>
-              </div>
-            </div>
-
-            <form onSubmit={handleCompanySave}>
-              <FormGrid>
-                <FormField label="ناوی کۆمپانیا (کوردی)"><input style={inputStyle} value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} /></FormField>
-                <FormField label="ناوی کۆمپانیا (ئینگلیزی)"><input style={inputStyle} value={companyForm.nameEn} onChange={(e) => setCompanyForm({ ...companyForm, nameEn: e.target.value })} /></FormField>
-                <FormField label="تەلەفۆن"><input style={inputStyle} value={companyForm.phone} onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })} /></FormField>
-                <FormField label="ئیمەیڵ"><input style={inputStyle} type="email" value={companyForm.email} onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })} /></FormField>
-                <FormField label="شار"><input style={inputStyle} value={companyForm.city} onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })} /></FormField>
-                <FormField label="دراو"><input style={inputStyle} value={companyForm.currency} onChange={(e) => setCompanyForm({ ...companyForm, currency: e.target.value })} /></FormField>
-              </FormGrid>
-              <FormField label="ناونیشان"><input style={{ ...inputStyle, marginTop: 16 }} value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} /></FormField>
-              <div style={{ marginTop: 24 }}>
-                <button type="submit" style={{ padding: "10px 28px", borderRadius: 8, background: "#4263EB", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-                  <Save size={14} /> پاشەکەوتکردن
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* ─── Users shortcut ─── */}
-          <div style={cardStyle}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 40, height: 40, background: "#F3F0FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#7C5CFC" }}><Users size={20} /></div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>بەڕێوەبردنی بەکارهێنەران</div>
-                  <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 2 }}>زیادکردن، دەستکاری، و مۆڵەتدانی بەکارهێنەران</div>
+              {deleteStep === "done" && (
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800/40 rounded-xl p-4 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                  ✅ هەموو داتاکان سڕانەوە. لاپەڕەکە نوێ دەبێتەوە...
                 </div>
-              </div>
-              <Link href="/dashboard/users" style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8, background: "#F3F0FF", color: "#7C5CFC", fontSize: 13, fontWeight: 600, textDecoration: "none", border: "1px solid #E5DBFF" }}>
-                <ArrowLeft size={14} /> بچۆ بۆ بەکارهێنەران
-              </Link>
-            </div>
-          </div>
+              )}
+            </CardContent>
+          </Card>
 
-          {/* ─── Danger Zone ─── */}
-          <div style={{ ...cardStyle, border: "1px solid #FFC9C9" }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: "#FA5252", display: "flex", alignItems: "center", gap: 8 }}>
-              <AlertTriangle size={18} /> ناوچەی مەترسیدار
-            </h3>
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 20 }}>سڕینەوەی هەموو داتاکان لە سوپابەیس. پێش سڕینەوە باکئەپی خۆکار داونلۆد دەکرێت.</p>
-
-            {deleteStep === "idle" && (
-              <button
-                onClick={() => setDeleteStep("confirm")}
-                style={{ padding: "10px 24px", borderRadius: 8, background: "#FA5252", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-                <Trash2 size={14} /> سڕینەوەی هەموو داتاکان
-              </button>
-            )}
-
-            {deleteStep === "confirm" && (
-              <div style={{ background: "#FFF5F5", border: "1px solid #FFC9C9", borderRadius: 12, padding: 20 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                  <Shield size={20} color="#FA5252" />
-                  <span style={{ fontWeight: 700, color: "#FA5252", fontSize: 14 }}>دڵنیابووەیت؟ ئەم کردارە ناگەڕێتەوە</span>
-                </div>
-                <p style={{ fontSize: 12, color: "#6C757D", marginBottom: 16, lineHeight: 1.6 }}>
-                  هەموو داتاکانت (داواکاری، کڕیار، بەرهەم، ...) دەسڕێنەوە.<br/>
-                  <strong>باکئەپی JSON خۆکار داونلۆد دەکرێت پێش سڕینەوە.</strong>
-                </p>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    onClick={handleResetData}
-                    style={{ padding: "10px 20px", borderRadius: 8, background: "#FA5252", color: "white", fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
-                    <Download size={14} /> باکئەپ بکە و بیسڕەوە
-                  </button>
-                  <button
-                    onClick={() => setDeleteStep("idle")}
-                    style={{ padding: "10px 20px", borderRadius: 8, background: "var(--color-bg-hover)", color: "var(--color-text-primary)", fontSize: 13, fontWeight: 600, border: "1px solid var(--color-border)", cursor: "pointer", fontFamily: "inherit" }}>
-                    پاشگەزبوونەوە
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {deleteStep === "working" && (
-              <div style={{ background: "#F8F9FA", border: "1px solid var(--color-border)", borderRadius: 12, padding: 20 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                  <RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} />
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>کارەکە بەردەوامە...</span>
-                </div>
-                <div style={{ maxHeight: 180, overflowY: "auto", fontFamily: "monospace", fontSize: 12, color: "var(--color-text-secondary)", display: "flex", flexDirection: "column", gap: 3 }}>
-                  {deleteLog.map((line, i) => (
-                    <div key={i}>{line}</div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {deleteStep === "done" && (
-              <div style={{ background: "#D1FAE5", border: "1px solid #6EE7B7", borderRadius: 12, padding: 16, fontSize: 13, fontWeight: 600, color: "#059669" }}>
-                ✅ هەموو داتاکان سڕانەوە. لاپەڕەکە نوێ دەبێتەوە...
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </>

@@ -5,12 +5,26 @@ import {
   Mail, Phone, MapPin, RefreshCw, Shield, AlertCircle, Lock, Key, Camera,
   UserCheck,
 } from "lucide-react";
-import Modal from "@/components/ui/Modal";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { FormField, FormGrid, inputStyle, selectStyle } from "@/components/ui/FormField";
-import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
 import { supabase } from "@/lib/supabase";
 import type { Rep } from "@/lib/types";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 const ALL_PERMISSIONS = [
   { key: "dashboard", label: "پێشانگا", group: "سەرەکی" },
@@ -42,39 +56,37 @@ function isOnline(lastSeen: string): boolean {
   return (Date.now() - new Date(lastSeen).getTime()) < 3 * 60 * 1000;
 }
 
-const roleStyle: Record<string, { label: string; bg: string; color: string }> = {
-  ADMIN:   { label: "ئەدمین",    bg: "#FFE3E3", color: "#C92A2A" },
-  MANAGER: { label: "بەڕێوەبەر", bg: "#EDF2FF", color: "#4263EB" },
-  REP:     { label: "نوێنەر",    bg: "#D3F9D8", color: "#2B8A3E" },
+const roleBadgeCls: Record<string, string> = {
+  ADMIN:   "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  MANAGER: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  REP:     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
 };
+const roleLabel: Record<string, string> = { ADMIN: "ئەدمین", MANAGER: "بەڕێوەبەر", REP: "نوێنەر" };
 
 function PermissionGrid({ permissions, onChange }: { permissions: string[]; onChange: (p: string[]) => void }) {
   const groups = [...new Set(ALL_PERMISSIONS.map(p => p.group))];
   const toggle = (key: string) =>
     onChange(permissions.includes(key) ? permissions.filter(p => p !== key) : [...permissions, key]);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" onClick={() => onChange(ALL_PERMISSIONS.map(p => p.key))}
-          style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #4263EB", background: "#EDF2FF", fontSize: 11, cursor: "pointer", fontFamily: "inherit", color: "#4263EB", fontWeight: 600 }}>
-          هەموو هەڵبژێرە
-        </button>
-        <button type="button" onClick={() => onChange([])}
-          style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #DEE2E6", background: "white", fontSize: 11, cursor: "pointer", fontFamily: "inherit", color: "#6C757D", fontWeight: 600 }}>
-          هەموو لابە
-        </button>
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" size="sm" className="text-xs h-7"
+          onClick={() => onChange(ALL_PERMISSIONS.map(p => p.key))}>هەموو هەڵبژێرە</Button>
+        <Button type="button" variant="outline" size="sm" className="text-xs h-7"
+          onClick={() => onChange([])}>هەموو لابە</Button>
       </div>
       {groups.map(g => (
         <div key={g}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "#ADB5BD", marginBottom: 6, letterSpacing: 1 }}>{g.toUpperCase()}</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <p className="text-[10px] font-bold text-muted-foreground mb-2 tracking-wide uppercase">{g}</p>
+          <div className="flex flex-wrap gap-1.5">
             {ALL_PERMISSIONS.filter(p => p.group === g).map(p => {
               const active = permissions.includes(p.key);
               return (
-                <button key={p.key} type="button" onClick={() => toggle(p.key)}
-                  style={{ padding: "5px 13px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", border: active ? "none" : "1px solid #DEE2E6", background: active ? "#4263EB" : "white", color: active ? "white" : "#6C757D", transition: "all 0.15s" }}>
+                <Button key={p.key} type="button" variant={active ? "default" : "outline"} size="sm"
+                  onClick={() => toggle(p.key)}
+                  className="rounded-full text-xs font-semibold">
                   {p.label}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -108,7 +120,6 @@ export default function UsersPage() {
   const [editLoading, setEditLoading] = useState(false);
   const editAvatarRef = useRef<HTMLInputElement>(null);
 
-  // ── Disable / Reactivate (soft — bans login, data stays) ──
   const [disableId, setDisableId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -218,7 +229,6 @@ export default function UsersPage() {
     setEditLoading(false); setEditUser(null); await loadUsers();
   };
 
-  // Disable = ban from Auth (can't log in) + is_active=false. Data stays untouched.
   const handleDisable = async () => {
     if (!disableId) return;
     setActionLoading(true);
@@ -232,7 +242,6 @@ export default function UsersPage() {
     setDisableId(null); await loadUsers();
   };
 
-  // Reactivate = unban
   const handleReactivate = async (id: string) => {
     setActionLoading(true);
     const res = await fetch("/api/auth/delete-user", {
@@ -249,329 +258,434 @@ export default function UsersPage() {
   const adminCount  = users.filter(u => u.role === "ADMIN").length;
   const repsWithoutAccount = reps.filter(r => !r.email || !repAuthMap.has(r.email));
 
-  const tabBtn = (active: boolean): React.CSSProperties => ({
-    display: "flex", alignItems: "center", gap: 6, padding: "9px 18px",
-    borderRadius: 9, border: "none", cursor: "pointer", fontWeight: 700,
-    fontSize: 13, fontFamily: "inherit", transition: "all .15s",
-    background: active ? "white" : "transparent",
-    color: active ? "#4263EB" : "#6C757D",
-    boxShadow: active ? "0 1px 4px rgba(0,0,0,0.1)" : "none",
-  });
-
   return (
-    <>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, background: "#F3F0FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#7C5CFC" }}><Users size={20} /></div>
-          <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>بەکارهێنەران</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی هەموو بەکارهێنەران و مۆڵەتەکان</p></div>
+    <div className="page-stagger">
+      {/* ── Page Header ── */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <div className="size-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+            <Users className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">بەکارهێنەران</h1>
+            <p className="text-sm text-muted-foreground">بەڕێوەبردنی هەموو بەکارهێنەران و مۆڵەتەکان</p>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => { loadUsers(); loadReps(); }} style={{ display: "flex", alignItems: "center", gap: 5, padding: "9px 14px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#6C757D" }}>
-            <RefreshCw size={13} /> نوێکردنەوە
-          </button>
-          <button onClick={openAdd} style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", borderRadius: 10, background: "#4263EB", color: "white", fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(66,99,235,0.3)" }}>
-            <Plus size={16} /> زیادکردنی بەکارهێنەر
-          </button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { loadUsers(); loadReps(); }}>
+            <RefreshCw className="size-3.5" /> نوێکردنەوە
+          </Button>
+          <Button onClick={openAdd}><Plus className="size-4 me-1" />زیادکردنی بەکارهێنەر</Button>
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {loading ? (
-          <>{[0,1,2,3].map(i => <SkeletonKPI key={i} />)}</>
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><Skeleton className="h-6 w-12 mb-2" /><Skeleton className="h-3 w-20" /></CardContent></Card>
+          ))
         ) : (
           <>
-            <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>کۆی بەکارهێنەران</div><div className="kpi-card-value" style={{ fontSize: "1.4rem" }}>{users.length}</div></div>
-            <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>چالاک</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#40C057" }}>{activeCount}</div></div>
-            <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>ئەدمین</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#C92A2A" }}>{adminCount}</div></div>
-            <div className="kpi-card"><div className="kpi-card-title" style={{ marginBottom: 8 }}>نوێنەران</div><div className="kpi-card-value" style={{ fontSize: "1.4rem", color: "#2B8A3E" }}>{reps.length} <span style={{ fontSize: "0.8rem", color: "#E67700" }}>({repsWithoutAccount.length} بێ ئەکاونت)</span></div></div>
+            <Card className="card-interactive"><CardContent className="p-4"><p className="text-xl font-black text-primary">{users.length}</p><p className="text-xs text-muted-foreground mt-1">کۆی بەکارهێنەران</p></CardContent></Card>
+            <Card className="card-interactive"><CardContent className="p-4"><p className="text-xl font-black text-emerald-600">{activeCount}</p><p className="text-xs text-muted-foreground mt-1">چالاک</p></CardContent></Card>
+            <Card className="card-interactive"><CardContent className="p-4"><p className="text-xl font-black text-red-600">{adminCount}</p><p className="text-xs text-muted-foreground mt-1">ئەدمین</p></CardContent></Card>
+            <Card className="card-interactive"><CardContent className="p-4">
+              <p className="text-xl font-black text-emerald-600">{reps.length} <span className="text-sm text-amber-500">({repsWithoutAccount.length} بێ ئەکاونت)</span></p>
+              <p className="text-xs text-muted-foreground mt-1">نوێنەران</p>
+            </CardContent></Card>
           </>
         )}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, background: "#F1F3F5", borderRadius: 12, padding: 4, width: "fit-content", marginBottom: 20 }}>
-        <button style={tabBtn(tab === "auth")} onClick={() => setTab("auth")}><Shield size={14} /> بەکارهێنەرانی سیستەم ({users.length})</button>
-        <button style={tabBtn(tab === "reps")} onClick={() => setTab("reps")}>
-          <UserCheck size={14} /> نوێنەرانی پزیشکی ({reps.length})
-          {repsWithoutAccount.length > 0 && <span style={{ background: "#E67700", color: "white", borderRadius: 10, padding: "1px 6px", fontSize: 10 }}>{repsWithoutAccount.length}</span>}
-        </button>
+      {/* ── Tabs ── */}
+      <div className="flex bg-muted p-1 rounded-xl gap-1 w-fit mb-5">
+        <Button variant={tab === "auth" ? "secondary" : "ghost"} size="sm"
+          onClick={() => setTab("auth")}
+          className={cn("gap-1.5 px-4 rounded-lg text-sm font-bold",
+            tab === "auth" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+          <Shield className="size-3.5" /> بەکارهێنەرانی سیستەم ({users.length})
+        </Button>
+        <Button variant={tab === "reps" ? "secondary" : "ghost"} size="sm"
+          onClick={() => setTab("reps")}
+          className={cn("gap-1.5 px-4 rounded-lg text-sm font-bold",
+            tab === "reps" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+          <UserCheck className="size-3.5" /> نوێنەرانی پزیشکی ({reps.length})
+          {repsWithoutAccount.length > 0 && (
+            <span className="bg-amber-500 text-white rounded-full px-1.5 text-[10px] font-bold">{repsWithoutAccount.length}</span>
+          )}
+        </Button>
       </div>
 
       {error && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", background: "#FFE3E3", borderRadius: 10, marginBottom: 16, color: "#C92A2A", fontSize: 13 }}>
-          <AlertCircle size={16} /> {error}
+        <div className="flex items-center gap-2 px-4 py-3 bg-destructive/10 text-destructive rounded-xl mb-4 text-sm">
+          <AlertCircle className="size-4" /> {error}
         </div>
       )}
 
       {/* ── AUTH USERS TAB ── */}
       {tab === "auth" && (
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr><th>بەکارهێنەر</th><th>ئیمەیل</th><th>ڕۆڵ</th><th>مۆڵەتەکان</th><th>بارودۆخ</th><th></th></tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <SkeletonTableRows rows={5} cols={6} />
-              ) : users.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: "center", padding: 40, color: "#ADB5BD" }}>هیچ بەکارهێنەرێک نییە</td></tr>
-              ) : users.map(u => {
-                const r = roleStyle[u.role] || roleStyle.REP;
-                const initials = u.name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2) || u.email?.[0]?.toUpperCase() || "؟";
-                return (
-                  <tr key={u.id} style={{ opacity: u.is_active ? 1 : 0.55 }}>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ position: "relative", flexShrink: 0 }}>
-                          {u.avatar_url ? (
-                            <img src={u.avatar_url} alt={u.name} style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", border: "2px solid #EDF2FF" }} />
-                          ) : (
-                            <div style={{ width: 38, height: 38, borderRadius: "50%", background: u.is_active ? "linear-gradient(135deg, #4263EB, #7C5CFC)" : "#CED4DA", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 13, fontWeight: 700 }}>
-                              {initials}
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40">
+                  <TableHead className="text-right">بەکارهێنەر</TableHead>
+                  <TableHead className="text-right">ئیمەیل</TableHead>
+                  <TableHead className="text-right">ڕۆڵ</TableHead>
+                  <TableHead className="text-right">مۆڵەتەکان</TableHead>
+                  <TableHead className="text-right">بارودۆخ</TableHead>
+                  <TableHead className="w-[140px]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>{Array.from({ length: 6 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}</TableRow>
+                  ))
+                ) : users.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="py-12 text-center text-muted-foreground">هیچ بەکارهێنەرێک نییە</TableCell></TableRow>
+                ) : users.map(u => {
+                  const initials = u.name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2) || u.email?.[0]?.toUpperCase() || "؟";
+                  return (
+                    <TableRow key={u.id} className={cn(!u.is_active && "opacity-50")}>
+                      <TableCell>
+                        <div className="flex items-center gap-2.5">
+                          <div className="relative shrink-0">
+                            {u.avatar_url ? (
+                              <img src={u.avatar_url} alt={u.name} className="size-9 rounded-full object-cover border-2 border-primary/20" />
+                            ) : (
+                              <div className={cn("size-9 rounded-full flex items-center justify-center text-white text-xs font-bold",
+                                u.is_active ? "bg-gradient-to-br from-primary to-violet-500" : "bg-muted-foreground/40")}>
+                                {initials}
+                              </div>
+                            )}
+                            <div className={cn("absolute bottom-0 end-0 size-2.5 rounded-full border-2 border-background",
+                              isOnline(u.last_seen) ? "bg-emerald-500" : "bg-muted-foreground/50")} />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm">{u.name}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {u.phone && <span className="text-[11px] text-muted-foreground flex items-center gap-0.5"><Phone className="size-2" />{u.phone}</span>}
+                              {u.city && <span className="text-[11px] text-muted-foreground flex items-center gap-0.5"><MapPin className="size-2" />{u.city}</span>}
+                              {!u.has_profile && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 font-bold">بێ پرۆفایل</span>}
                             </div>
-                          )}
-                          <div style={{ position: "absolute", bottom: 1, right: 1, width: 10, height: 10, borderRadius: "50%", background: isOnline(u.last_seen) ? "#2F9E44" : "#CED4DA", border: "2px solid white" }} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 600 }}>{u.name}</div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
-                            {u.phone && <span style={{ fontSize: 11, color: "#ADB5BD", display: "flex", alignItems: "center", gap: 3 }}><Phone size={9} />{u.phone}</span>}
-                            {u.city && <span style={{ fontSize: 11, color: "#ADB5BD", display: "flex", alignItems: "center", gap: 3 }}><MapPin size={9} />{u.city}</span>}
-                            {!u.has_profile && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: "#FFF3BF", color: "#E67700", fontWeight: 600 }}>بێ پرۆفایل</span>}
                           </div>
                         </div>
-                      </div>
-                    </td>
-                    <td style={{ fontSize: 12, color: "#6C757D", direction: "ltr", textAlign: "right" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Mail size={11} />{u.email}</div>
-                    </td>
-                    <td><span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: r.bg, color: r.color }}>{r.label}</span></td>
-                    <td style={{ maxWidth: 200 }}>
-                      {(u.permissions || []).length > 0 ? (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                          {(u.permissions || []).slice(0, 3).map((perm: string) => (
-                            <span key={perm} style={{ padding: "2px 7px", borderRadius: 4, background: "#F1F3F5", fontSize: 10, fontWeight: 600 }}>
-                              {ALL_PERMISSIONS.find(ap => ap.key === perm)?.label || perm}
-                            </span>
-                          ))}
-                          {(u.permissions || []).length > 3 && <span style={{ fontSize: 10, color: "#ADB5BD" }}>+{(u.permissions || []).length - 3}</span>}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1 ltr"><Mail className="size-2.5" />{u.email}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={cn("text-[11px]", roleBadgeCls[u.role] || roleBadgeCls.REP)}>
+                          {roleLabel[u.role] || u.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell style={{ maxWidth: 200 }}>
+                        {(u.permissions || []).length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {(u.permissions || []).slice(0, 3).map((perm: string) => (
+                              <span key={perm} className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-semibold">
+                                {ALL_PERMISSIONS.find(ap => ap.key === perm)?.label || perm}
+                              </span>
+                            ))}
+                            {(u.permissions || []).length > 3 && <span className="text-[10px] text-muted-foreground">+{(u.permissions || []).length - 3}</span>}
+                          </div>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold", u.is_active ? "text-emerald-600" : "text-destructive")}>
+                          <span className={cn("size-1.5 rounded-full", u.is_active ? "bg-emerald-500" : "bg-destructive")} />
+                          {u.is_active ? "چالاک" : "بەندکراو"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-primary" onClick={() => openEdit(u)}>
+                            <Edit3 className="size-3" /> دەستکاری
+                          </Button>
+                          {u.is_active ? (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-destructive hover:bg-destructive/5"
+                              onClick={() => setDisableId(u.id)} disabled={actionLoading}>
+                              <Trash2 className="size-3" /> ناچالاككردن
+                            </Button>
+                          ) : (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                              onClick={() => handleReactivate(u.id)} disabled={actionLoading}>
+                              <Check className="size-3" /> چالاككردنەوە
+                            </Button>
+                          )}
                         </div>
-                      ) : <span style={{ color: "#ADB5BD", fontSize: 11 }}>—</span>}
-                    </td>
-                    <td>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: u.is_active ? "#2B8A3E" : "#FA5252" }}>
-                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: u.is_active ? "#40C057" : "#FA5252", display: "inline-block" }} />
-                        {u.is_active ? "چالاک" : "بەندکراو"}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={() => openEdit(u)}
-                          style={{ padding: "5px 10px", borderRadius: 6, background: "#EDF2FF", color: "#4263EB", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 3 }}>
-                          <Edit3 size={11} /> دەستکاری
-                        </button>
-                        {u.is_active ? (
-                          <button onClick={() => setDisableId(u.id)} disabled={actionLoading}
-                            style={{ padding: "5px 10px", borderRadius: 6, background: "#FFE3E3", color: "#FA5252", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 600 }}>
-                            <Trash2 size={11} /> ناچالاككردن
-                          </button>
-                        ) : (
-                          <button onClick={() => handleReactivate(u.id)} disabled={actionLoading}
-                            style={{ padding: "5px 10px", borderRadius: 6, background: "#D3F9D8", color: "#2B8A3E", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 600 }}>
-                            <Check size={11} /> چالاككردنەوە
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div style={{ padding: "12px 16px", borderTop: "1px solid #F1F3F5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span className="pagination-info">{users.length} بەکارهێنەر · {activeCount} چالاک</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#ADB5BD" }}>
-              <Shield size={11} /> Supabase Auth
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <div className="px-4 py-2.5 border-t bg-muted/20 flex justify-between items-center text-xs text-muted-foreground">
+              <span>{users.length} بەکارهێنەر · {activeCount} چالاک</span>
+              <span className="flex items-center gap-1"><Shield className="size-3" /> Supabase Auth</span>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* ── REPS TAB ── */}
       {tab === "reps" && (
-        <div className="data-table-wrapper">
-          {repsWithoutAccount.length > 0 && (
-            <div style={{ padding: "12px 16px", background: "#FFF9DB", borderBottom: "1px solid #FFE066", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#E67700" }}>
-              <AlertCircle size={15} /> {repsWithoutAccount.length} نوێنەر ئەکاونتی نییە — کلیک لەسەر «دروستکردنی ئەکاونت» بکە
-            </div>
-          )}
-          <table className="data-table">
-            <thead>
-              <tr><th>نوێنەر</th><th>ئیمەیل / تەلەفۆن</th><th>شار</th><th>بارودۆخ</th><th>ئەکاونت</th><th></th></tr>
-            </thead>
-            <tbody>
-              {repsLoading ? (
-                <SkeletonTableRows rows={5} cols={6} />
-              ) : reps.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: "center", padding: 40, color: "#ADB5BD" }}>هیچ نوێنەرێک نییە — لە پەڕەی نوێنەران زیادیان بکە</td></tr>
-              ) : reps.map(r => {
-                const hasAccount = !!(r.email && repAuthMap.has(r.email));
-                return (
-                  <tr key={r.id}>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 38, height: 38, borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {r.profilePic
-                            ? <img src={r.profilePic} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                            : <span style={{ color: "white", fontSize: 14, fontWeight: 800 }}>{r.name.charAt(0)}</span>
-                          }
+        <Card>
+          <CardContent className="p-0">
+            {repsWithoutAccount.length > 0 && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-950/30 border-b text-amber-700 dark:text-amber-400 text-sm">
+                <AlertCircle className="size-4 shrink-0" /> {repsWithoutAccount.length} نوێنەر ئەکاونتی نییە — کلیک لەسەر «دروستکردنی ئەکاونت» بکە
+              </div>
+            )}
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40">
+                  <TableHead className="text-right">نوێنەر</TableHead>
+                  <TableHead className="text-right">ئیمەیل / تەلەفۆن</TableHead>
+                  <TableHead className="text-right">شار</TableHead>
+                  <TableHead className="text-right">بارودۆخ</TableHead>
+                  <TableHead className="text-right">ئەکاونت</TableHead>
+                  <TableHead className="w-[120px]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {repsLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>{Array.from({ length: 6 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}</TableRow>
+                  ))
+                ) : reps.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="py-12 text-center text-muted-foreground">هیچ نوێنەرێک نییە — لە پەڕەی نوێنەران زیادیان بکە</TableCell></TableRow>
+                ) : reps.map(r => {
+                  const hasAccount = !!(r.email && repAuthMap.has(r.email));
+                  return (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2.5">
+                          <div className="size-9 rounded-full overflow-hidden shrink-0 bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center">
+                            {r.profilePic
+                              ? <img src={r.profilePic} className="w-full h-full object-cover" alt={r.name} />
+                              : <span className="text-white text-sm font-black">{r.name.charAt(0)}</span>
+                            }
+                          </div>
+                          <p className="font-semibold text-sm">{r.name}</p>
                         </div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</div>
-                      </div>
-                    </td>
-                    <td style={{ fontSize: 12, color: "#6C757D" }}>
-                      {r.email && <div style={{ direction: "ltr", display: "flex", alignItems: "center", gap: 4 }}><Mail size={10} />{r.email}</div>}
-                      {r.phone && <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Phone size={10} />{r.phone}</div>}
-                    </td>
-                    <td style={{ fontSize: 13 }}><MapPin size={11} style={{ verticalAlign: "middle", marginLeft: 3 }} />{r.city}</td>
-                    <td>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, color: r.isActive ? "#2B8A3E" : "#ADB5BD" }}>
-                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: r.isActive ? "#40C057" : "#DEE2E6", display: "inline-block" }} />
-                        {r.isActive ? "چالاک" : "ناچالاک"}
-                      </span>
-                    </td>
-                    <td>
-                      {hasAccount
-                        ? <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "#D3F9D8", color: "#2B8A3E" }}>✅ ئەکاونتی هەیە</span>
-                        : <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "#FFF3BF", color: "#E67700" }}>⚠️ بێ ئەکاونت</span>
-                      }
-                    </td>
-                    <td>
-                      {!hasAccount && (
-                        <button onClick={() => openAddFromRep(r)}
-                          style={{ padding: "5px 12px", borderRadius: 6, background: "#4263EB", color: "white", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}>
-                          <Key size={11} /> دروستکردنی ئەکاونت
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div style={{ padding: "12px 16px", borderTop: "1px solid #F1F3F5" }}>
-            <span className="pagination-info">{reps.length} نوێنەر · {reps.filter(r => r.email && repAuthMap.has(r.email)).length} ئەکاونتیان هەیە</span>
-          </div>
-        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {r.email && <div className="flex items-center gap-1 ltr"><Mail className="size-2.5" />{r.email}</div>}
+                        {r.phone && <div className="flex items-center gap-1"><Phone className="size-2.5" />{r.phone}</div>}
+                      </TableCell>
+                      <TableCell><span className="flex items-center gap-1 text-sm"><MapPin className="size-3 text-muted-foreground" />{r.city}</span></TableCell>
+                      <TableCell>
+                        <span className={cn("inline-flex items-center gap-1.5 text-xs font-semibold", r.isActive ? "text-emerald-600" : "text-muted-foreground")}>
+                          <span className={cn("size-1.5 rounded-full", r.isActive ? "bg-emerald-500" : "bg-muted-foreground/50")} />
+                          {r.isActive ? "چالاک" : "ناچالاک"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {hasAccount
+                          ? <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[11px]">✅ ئەکاونتی هەیە</Badge>
+                          : <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[11px]">⚠️ بێ ئەکاونت</Badge>}
+                      </TableCell>
+                      <TableCell>
+                        {!hasAccount && (
+                          <Button size="sm" className="h-7 text-xs gap-1" onClick={() => openAddFromRep(r)}>
+                            <Key className="size-3" /> دروستکردنی ئەکاونت
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <div className="px-4 py-2.5 border-t bg-muted/20 text-xs text-muted-foreground">
+              {reps.length} نوێنەر · {reps.filter(r => r.email && repAuthMap.has(r.email)).length} ئەکاونتیان هەیە
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* ══ ADD USER MODAL ══ */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="زیادکردنی بەکارهێنەری نوێ" width={580}>
-        {!inviteUrl ? (
-          <>
-            <div style={{ display: "flex", gap: 0, marginBottom: 24, background: "#F1F3F5", borderRadius: 10, padding: 4 }}>
-              <button type="button" onClick={() => setAddMode("direct")}
-                style={{ flex: 1, padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: addMode === "direct" ? "white" : "transparent", color: addMode === "direct" ? "#1A1A2E" : "#6C757D", boxShadow: addMode === "direct" ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.2s" }}>
-                <Lock size={14} /> وشەی نهێنی دابنێ
-              </button>
-              <button type="button" onClick={() => setAddMode("invite")}
-                style={{ flex: 1, padding: "10px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: addMode === "invite" ? "white" : "transparent", color: addMode === "invite" ? "#1A1A2E" : "#6C757D", boxShadow: addMode === "invite" ? "0 1px 4px rgba(0,0,0,0.08)" : "none", transition: "all 0.2s" }}>
-                <Link2 size={14} /> بانگهێشت بە لینک
-              </button>
-            </div>
-            <div style={{ padding: "10px 14px", borderRadius: 8, marginBottom: 20, fontSize: 12, color: "#495057", background: addMode === "direct" ? "#EDF2FF" : "#F3F0FF", borderLeft: `3px solid ${addMode === "direct" ? "#4263EB" : "#7C5CFC"}` }}>
-              {addMode === "direct" ? "بەکارهێنەر دروست دەکرێت و تۆ خۆت وشەی نهێنی دادەنێی." : "لینکێکی تایبەت دروست دەکرێت. بەکارهێنەرەکە کلیک لە لینکەکە دەکات و خۆی زانیاری و وشەی نهێنی دادەنێت."}
-            </div>
-            <form onSubmit={addMode === "direct" ? handleDirectAdd : (e) => { e.preventDefault(); handleInvite(); }}>
-              <FormGrid>
-                <FormField label="ئیمەیل" required><input style={inputStyle} type="email" required value={addForm.email} onChange={e => setAddForm({ ...addForm, email: e.target.value })} placeholder="user@example.com" /></FormField>
-                <FormField label="ڕۆڵ"><select style={selectStyle} value={addForm.role} onChange={e => setAddForm({ ...addForm, role: e.target.value })}><option value="REP">نوێنەر</option><option value="MANAGER">بەڕێوەبەر</option><option value="ADMIN">ئەدمین</option></select></FormField>
-              </FormGrid>
-              {addMode === "direct" && (
-                <>
-                  <div style={{ marginTop: 12 }}><FormGrid><FormField label="ناو" required><input style={inputStyle} required value={addForm.name} onChange={e => setAddForm({ ...addForm, name: e.target.value })} /></FormField><FormField label="وشەی نهێنی" required><input style={inputStyle} type="password" required value={addForm.password} onChange={e => setAddForm({ ...addForm, password: e.target.value })} /></FormField></FormGrid></div>
-                  <div style={{ marginTop: 12 }}><FormGrid><FormField label="تەلەفۆن"><input style={inputStyle} value={addForm.phone} onChange={e => setAddForm({ ...addForm, phone: e.target.value })} /></FormField><FormField label="شار"><input style={inputStyle} value={addForm.city} onChange={e => setAddForm({ ...addForm, city: e.target.value })} /></FormField></FormGrid></div>
-                </>
-              )}
-              <div style={{ marginTop: 20 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 10 }}>مۆڵەتەکان</label>
-                <PermissionGrid permissions={addForm.permissions} onChange={p => setAddForm({ ...addForm, permissions: p })} />
+      {/* ═══════════════════════════════════════════════════════════
+          ADD USER DIALOG
+      ═══════════════════════════════════════════════════════════ */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-[580px] max-h-[85vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>زیادکردنی بەکارهێنەری نوێ</DialogTitle>
+            <DialogDescription>بەکارهێنەرێکی نوێ بۆ سیستەمەکە زیاد بکە</DialogDescription>
+          </DialogHeader>
+          {!inviteUrl ? (
+            <>
+              <div className="flex bg-muted p-1 rounded-xl gap-1 mb-4">
+                {(["direct", "invite"] as const).map(m => (
+                  <Button key={m} type="button" variant={addMode === m ? "secondary" : "ghost"} size="sm"
+                    onClick={() => setAddMode(m)}
+                    className={cn("flex-1 gap-2 px-4 rounded-lg text-sm font-bold",
+                      addMode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+                    {m === "direct" ? <><Lock className="size-3.5" /> وشەی نهێنی دابنێ</> : <><Link2 className="size-3.5" /> بانگهێشت بە لینک</>}
+                  </Button>
+                ))}
               </div>
-              <div style={{ display: "flex", gap: 12, marginTop: 24, paddingTop: 16, borderTop: "1px solid #E9ECEF" }}>
-                <button type="submit" disabled={addLoading} style={{ flex: 1, padding: "11px 0", borderRadius: 8, background: addMode === "direct" ? "#4263EB" : "#7C5CFC", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", opacity: addLoading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-                  {addLoading ? "..." : addMode === "direct" ? (<><Key size={15} /> زیادکردن</>) : (<><Link2 size={15} /> دروستکردنی لینک</>)}
-                </button>
-                <button type="button" onClick={() => setAddOpen(false)} style={{ padding: "11px 24px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#6C757D" }}>پاشگەزبوونەوە</button>
+              <div className={cn("px-4 py-3 rounded-xl border-s-4 text-sm text-foreground/80 mb-4",
+                addMode === "direct" ? "bg-primary/5 border-primary" : "bg-violet-50 dark:bg-violet-950/20 border-violet-500")}>
+                {addMode === "direct" ? "بەکارهێنەر دروست دەکرێت و تۆ خۆت وشەی نهێنی دادەنێی." : "لینکێکی تایبەت دروست دەکرێت. بەکارهێنەرەکە کلیک لە لینکەکە دەکات و خۆی زانیاری و وشەی نهێنی دادەنێت."}
               </div>
-            </form>
-          </>
-        ) : (
-          <div style={{ textAlign: "center", padding: "8px 0" }}>
-            <div style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg, #EBFBEE, #D3F9D8)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: "#40C057" }}><Link2 size={26} /></div>
-            <h3 style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>لینکی بانگهێشت ئامادەیە! 🎉</h3>
-            <p style={{ fontSize: 12, color: "#6C757D", marginBottom: 20 }}>ئەم لینکە بنێرە بۆ بەکارهێشت بکرێ</p>
-            <div style={{ background: "#F8F9FA", borderRadius: 10, padding: "14px 18px", fontSize: 12, fontFamily: "monospace", wordBreak: "break-all", direction: "ltr", textAlign: "left", border: "1px solid #DEE2E6", marginBottom: 20 }}>{inviteUrl}</div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-              <button onClick={handleCopy} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 28px", borderRadius: 8, background: copied ? "#40C057" : "#4263EB", color: "white", fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s" }}>
-                {copied ? <><Check size={15} /> کۆپیکرا!</> : <><Copy size={15} /> کۆپیکردن</>}
-              </button>
-              <button onClick={() => { setInviteUrl(""); setAddOpen(false); loadUsers(); }} style={{ padding: "11px 22px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#6C757D" }}>داخستن</button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* ══ EDIT MODAL ══ */}
-      <Modal open={!!editUser} onClose={() => setEditUser(null)} title={`دەستکاری: ${editUser?.name || editUser?.email || ""}`} width={560}>
-        {editUser && (
-          <>
-            <div style={{ padding: "14px 16px", background: "var(--color-bg,#F8F9FA)", borderRadius: 12, marginBottom: 20, display: "flex", alignItems: "center", gap: 16 }}>
-              <div onClick={() => editAvatarRef.current?.click()} style={{ width: 64, height: 64, borderRadius: "50%", cursor: "pointer", overflow: "hidden", border: "3px solid #4263EB", flexShrink: 0, position: "relative" }}>
-                {editAvatar ? (
-                  <img src={editAvatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <div style={{ width: "100%", height: "100%", background: "linear-gradient(135deg, #4263EB, #7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 22, fontWeight: 800 }}>
-                    {editUser.name?.[0] || editUser.email?.[0] || "؟"}
+              <form onSubmit={addMode === "direct" ? handleDirectAdd : (e) => { e.preventDefault(); handleInvite(); }} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="add-email">ئیمەیل *</Label>
+                    <Input id="add-email" type="email" required value={addForm.email} onChange={e => setAddForm({ ...addForm, email: e.target.value })} placeholder="user@example.com" />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="add-role">ڕۆڵ</Label>
+                    <Select value={addForm.role} onValueChange={(v: string | null) => v && setAddForm({ ...addForm, role: v })}>
+                      <SelectTrigger id="add-role"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="REP">نوێنەر</SelectItem>
+                        <SelectItem value="MANAGER">بەڕێوەبەر</SelectItem>
+                        <SelectItem value="ADMIN">ئەدمین</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {addMode === "direct" && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="add-name">ناو *</Label>
+                        <Input id="add-name" required value={addForm.name} onChange={e => setAddForm({ ...addForm, name: e.target.value })} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="add-pass">وشەی نهێنی *</Label>
+                        <Input id="add-pass" type="password" required value={addForm.password} onChange={e => setAddForm({ ...addForm, password: e.target.value })} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="add-phone">تەلەفۆن</Label>
+                        <Input id="add-phone" value={addForm.phone} onChange={e => setAddForm({ ...addForm, phone: e.target.value })} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="add-city">شار</Label>
+                        <Input id="add-city" value={addForm.city} onChange={e => setAddForm({ ...addForm, city: e.target.value })} />
+                      </div>
+                    </div>
+                  </>
                 )}
-                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity 0.2s" }} onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0")}>
-                  <Camera size={16} color="white" />
+                <div>
+                  <p className="text-sm font-semibold mb-3">مۆڵەتەکان</p>
+                  <PermissionGrid permissions={addForm.permissions} onChange={p => setAddForm({ ...addForm, permissions: p })} />
+                </div>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>پاشگەزبوونەوە</Button>
+                  <Button type="submit" disabled={addLoading}>
+                    {addLoading ? "..." : addMode === "direct" ? <><Key className="size-4 me-1" /> زیادکردن</> : <><Link2 className="size-4 me-1" /> دروستکردنی لینک</>}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </>
+          ) : (
+            <div className="text-center py-2">
+              <div className="size-14 rounded-full bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mx-auto mb-4 text-emerald-600">
+                <Link2 className="size-7" />
+              </div>
+              <h3 className="text-lg font-bold mb-2">لینکی بانگهێشت ئامادەیە! 🎉</h3>
+              <p className="text-sm text-muted-foreground mb-5">ئەم لینکە بنێرە بۆ بەکارهێشت بکرێ</p>
+              <div className="bg-muted rounded-xl px-4 py-3 text-xs font-mono break-all ltr text-start border border-border mb-5">{inviteUrl}</div>
+              <div className="flex gap-2 justify-center">
+                <Button onClick={handleCopy} className={cn("gap-2", copied && "bg-emerald-600 hover:bg-emerald-700")}>
+                  {copied ? <><Check className="size-4" /> کۆپیکرا!</> : <><Copy className="size-4" /> کۆپیکردن</>}
+                </Button>
+                <Button variant="outline" onClick={() => { setInviteUrl(""); setAddOpen(false); loadUsers(); }}>داخستن</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════
+          EDIT USER DIALOG
+      ═══════════════════════════════════════════════════════════ */}
+      <Dialog open={!!editUser} onOpenChange={open => !open && setEditUser(null)}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>دەستکاری: {editUser?.name || editUser?.email || ""}</DialogTitle>
+            <DialogDescription>ڕۆڵ و مۆڵەتەکان نوێ بکەرەوە</DialogDescription>
+          </DialogHeader>
+          {editUser && (
+            <div className="space-y-5">
+              <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-xl">
+                <div onClick={() => editAvatarRef.current?.click()}
+                  className="size-16 rounded-full cursor-pointer overflow-hidden border-2 border-primary shrink-0 relative group">
+                  {editAvatar ? (
+                    <img src={editAvatar} alt="avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center text-white text-xl font-black">
+                      {editUser.name?.[0] || editUser.email?.[0] || "؟"}
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Camera className="size-4 text-white" />
+                  </div>
+                </div>
+                <input ref={editAvatarRef} type="file" accept="image/*" className="hidden"
+                  onChange={async e => { const f = e.target.files?.[0]; if (!f) return; try { setEditAvatar(await resizeImage(f)); } catch { alert("گۆڕینی وێنەکە نەکرای"); } }}
+                />
+                <div>
+                  <p className="font-bold text-sm mb-0.5">{editUser.name}</p>
+                  <p className="text-xs text-muted-foreground mb-2">{editUser.email}</p>
+                  <p className="text-[11px] text-muted-foreground">کلیک لەسەر وێنەکە بکە بۆ گۆڕین</p>
+                  {editAvatar && <Button type="button" variant="ghost" size="sm" className="text-xs text-destructive h-6 mt-1" onClick={() => setEditAvatar("")}>سڕینەوەی وێنە</Button>}
                 </div>
               </div>
-              <input ref={editAvatarRef} type="file" accept="image/*" style={{ display: "none" }}
-                onChange={async e => { const f = e.target.files?.[0]; if (!f) return; try { setEditAvatar(await resizeImage(f)); } catch { alert("گۆڕینی وێنەکە نەکرای"); } }}
-              />
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>{editUser.name}</div>
-                <div style={{ fontSize: 12, color: "#6C757D", marginBottom: 8 }}>{editUser.email}</div>
-                <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 6 }}>کلیک لەسەر وێنەکە بکە بۆ گۆڕین</div>
-                {editAvatar && <button type="button" onClick={() => setEditAvatar("")} style={{ fontSize: 11, color: "#FA5252", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>سڕینەوەی وێنە</button>}
-              </div>
-            </div>
-            <FormField label="ڕۆڵ"><select style={selectStyle} value={editRole} onChange={e => setEditRole(e.target.value)}><option value="REP">نوێنەر</option><option value="MANAGER">بەڕێوەبەر</option><option value="ADMIN">ئەدمین</option></select></FormField>
-            <div style={{ marginTop: 16 }}>
-              <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 8 }}>مۆڵەتەکان</label>
-              <PermissionGrid permissions={editPerms} onChange={setEditPerms} />
-            </div>
-            <div style={{ display: "flex", gap: 12, marginTop: 24, paddingTop: 16, borderTop: "1px solid #E9ECEF" }}>
-              <button onClick={handleSaveEdit} disabled={editLoading} style={{ padding: "10px 28px", borderRadius: 8, background: "#4263EB", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", opacity: editLoading ? 0.7 : 1 }}>
-                {editLoading ? "پاشەکەوتکردن..." : "نوێکردنەوە"}
-              </button>
-              <button onClick={() => setEditUser(null)} style={{ padding: "10px 28px", borderRadius: 8, border: "1px solid #DEE2E6", background: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#6C757D" }}>پاشگەزبوونەوە</button>
-            </div>
-          </>
-        )}
-      </Modal>
 
-      <ConfirmDialog
-        open={!!disableId}
-        onClose={() => setDisableId(null)}
-        onConfirm={handleDisable}
-        title="ناچالاككردنی بەکارهێنەر"
-        message="ئایا دڵنیایت؟ ئەم بەکارهێنەرە ناتوانێت داخڵ بکەت، بەڵام داتای ئەوان (ئیارەکان، کۆیاک، سەردەکانی) بە تەواو دەمێنێت. دوباره دەتوانیت چالاکیان بکەیتەوە."
-      />
-    </>
+              <div className="space-y-2">
+                <Label htmlFor="edit-role">ڕۆڵ</Label>
+                <Select value={editRole} onValueChange={(v: string | null) => v && setEditRole(v)}>
+                  <SelectTrigger id="edit-role"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="REP">نوێنەر</SelectItem>
+                    <SelectItem value="MANAGER">بەڕێوەبەر</SelectItem>
+                    <SelectItem value="ADMIN">ئەدمین</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <p className="text-sm font-semibold mb-3">مۆڵەتەکان</p>
+                <PermissionGrid permissions={editPerms} onChange={setEditPerms} />
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button variant="outline" onClick={() => setEditUser(null)}>پاشگەزبوونەوە</Button>
+                <Button onClick={handleSaveEdit} disabled={editLoading}>
+                  {editLoading ? "پاشەکەوتکردن..." : "نوێکردنەوە"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════
+          DISABLE USER CONFIRM
+      ═══════════════════════════════════════════════════════════ */}
+      <AlertDialog open={!!disableId} onOpenChange={open => !open && setDisableId(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>ناچالاككردنی بەکارهێنەر</AlertDialogTitle>
+            <AlertDialogDescription>ئایا دڵنیایت؟ ئەم بەکارهێنەرە ناتوانێت داخڵ بکەت، بەڵام داتای ئەوان بە تەواو دەمێنێت. دوباره دەتوانیت چالاکیان بکەیتەوە.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>پاشگەزبوونەوە</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDisable}>
+              ناچالاككردن
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }

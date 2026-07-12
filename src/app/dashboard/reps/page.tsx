@@ -1,13 +1,26 @@
 "use client";
 import { useState, FormEvent, useMemo, useRef } from "react";
-import { Search, Plus, UserCheck, Phone, MapPin, Edit3, Trash2, X, Camera } from "lucide-react";
+import { Search, Plus, UserCheck, Phone, MapPin, Edit3, Trash2, Camera } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Rep } from "@/lib/types";
-import Modal from "@/components/ui/Modal";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
-import ExportButton from "@/components/ui/ExportButton";
+import ExportButton from "@/components/custom/ExportButton";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 const repExportCols = [
   { key: "name", label: "ناو" }, { key: "phone", label: "تەلەفۆن" },
@@ -31,7 +44,6 @@ export default function RepsPage() {
 
   const picInputRef = useRef<HTMLInputElement>(null);
 
-  // Resize image to ≤200px and return base64 JPEG
   const resizeImage = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -65,7 +77,6 @@ export default function RepsPage() {
     [reps, searchTerm]
   );
 
-  // Pre-compute per-rep stats once instead of calling filter() per row per render
   const repStats = useMemo(() => {
     const map: Record<string, { clientCount: number; orderCount: number; revenue: number }> = {};
     reps.forEach(r => {
@@ -80,155 +91,232 @@ export default function RepsPage() {
   }, [reps, orders, clients]);
 
   return (
-    <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, background: "#EBFBEE", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#40C057" }}><UserCheck size={20} /></div>
-          <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>نوێنەرانی فرۆشتن</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی نوێنەرانی فرۆشتنی دەرمان</p></div>
+    <div className="page-stagger">
+      {/* ── Page Header ── */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <div className="size-10 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl flex items-center justify-center text-emerald-600">
+            <UserCheck className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">نوێنەرانی فرۆشتن</h1>
+            <p className="text-sm text-muted-foreground">بەڕێوەبردنی نوێنەرانی فرۆشتنی دەرمان</p>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="flex items-center gap-2">
           <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={repExportCols} filename="reps" title="نوێنەران" />
-          <button onClick={openAdd} className="topbar-add-btn"><Plus size={16} /><span>نوێنەری نوێ</span></button>
+          <Button onClick={openAdd}><Plus className="size-4 me-1" />نوێنەری نوێ</Button>
         </div>
       </div>
 
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { title: "کۆی نوێنەران", value: String(reps.length) },
-          { title: "چالاک", value: String(reps.filter(r => r.isActive).length) },
-          { title: "کۆی کڕیاران", value: String(clients.length) },
-          { title: "کۆی داهات", value: formatIQD(orders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0)) },
-        ].map((k, i) => (
-          <div className="kpi-card" key={i}><div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div><div className="kpi-card-value" style={{ fontSize: "1.4rem" }}>{k.value}</div></div>
+          { title: "کۆی نوێنەران",  value: reps.length,                                                                      cls: "text-primary" },
+          { title: "چالاک",           value: reps.filter(r => r.isActive).length,                                               cls: "text-emerald-600" },
+          { title: "کۆی کڕیاران",  value: clients.length,                                                                    cls: "text-sky-600" },
+          { title: "کۆی داهات",   value: formatIQD(orders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0)), cls: "text-cyan-600" },
+        ].map(k => (
+          <Card key={k.title} className="card-interactive">
+            <CardContent className="p-4">
+              <p className={cn("text-xl font-black", k.cls)}>{k.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{k.title}</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-        <div style={{ position: "relative" }}>
-          <Search size={16} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
-          <input type="text" placeholder="گەڕان..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ width: 280, padding: "8px 36px 8px 12px", border: "1px solid #DEE2E6", borderRadius: 8, fontSize: 13, background: "#F8F9FA", fontFamily: "inherit" }} />
-        </div>
-      </div>
+      {/* ── Search ── */}
+      <Card className="mb-5">
+        <CardContent className="p-3 flex items-center gap-2">
+          <Search className="size-4 text-muted-foreground shrink-0" />
+          <Input type="text" placeholder="گەڕان..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+            className="border-0 shadow-none focus-visible:ring-0 h-8 text-sm" />
+        </CardContent>
+      </Card>
 
-      {/* Rep Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320, 1fr))", gap: 16 }}>
-        {filtered.map((r) => (
-          <div key={r.id} style={{ background: "white", borderRadius: 12, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF", transition: "transform 0.15s", cursor: "pointer" }} onClick={() => setDetailRep(r)}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                {/* Avatar: photo or gradient initials */}
-                <div style={{ width: 48, height: 48, borderRadius: "50%", overflow: "hidden", border: "2px solid #E9ECEF", flexShrink: 0, background: "linear-gradient(135deg, #4263EB, #7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {r.profilePic
-                    ? <img src={r.profilePic} alt={r.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                    : <span style={{ color: "white", fontSize: 18, fontWeight: 800 }}>{r.name.charAt(0)}</span>
-                  }
+      {/* ── Rep Cards ── */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
+        {filtered.map(r => (
+          <Card key={r.id} className="card-interactive cursor-pointer" onClick={() => setDetailRep(r)}>
+            <CardContent className="p-5">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="size-12 rounded-full overflow-hidden border-2 border-border bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shrink-0">
+                    {r.profilePic
+                      ? <img src={r.profilePic} alt={r.name} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      : <span className="text-white text-lg font-black">{r.name.charAt(0)}</span>}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base">{r.name}</h3>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5"><MapPin className="size-3" />{r.city}</div>
+                  </div>
                 </div>
-                <div>
-                  <h3 style={{ fontSize: 15, fontWeight: 700 }}>{r.name}</h3>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#6C757D", marginTop: 2 }}><MapPin size={12} />{r.city}</div>
+                <Badge variant={r.isActive ? "default" : "secondary"} className="text-[10px]">{r.isActive ? "چالاک" : "ناچالاک"}</Badge>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                <Phone className="size-3" />
+                <span dir="ltr">{r.phone}</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 p-3 bg-muted/50 rounded-lg mb-3">
+                <div className="text-center">
+                  <p className="text-lg font-black text-primary">{repStats[r.id]?.clientCount ?? 0}</p>
+                  <p className="text-[10px] text-muted-foreground">کڕیار</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-black text-orange-500">{repStats[r.id]?.orderCount ?? 0}</p>
+                  <p className="text-[10px] text-muted-foreground">داواکاری</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-black text-emerald-600">{formatIQD(repStats[r.id]?.revenue ?? 0)}</p>
+                  <p className="text-[10px] text-muted-foreground">داهات</p>
                 </div>
               </div>
-              <span className={`status-badge ${r.isActive ? "paid" : "cancelled"}`}>{r.isActive ? "چالاک" : "ناچالاک"}</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#6C757D", marginBottom: 12 }}><Phone size={12} /> <span style={{ direction: "ltr" }}>{r.phone}</span></div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, padding: 12, background: "#F8F9FA", borderRadius: 8 }}>
-              <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#4263EB" }}>{repStats[r.id]?.clientCount ?? 0}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>کڕیار</div></div>
-              <div style={{ textAlign: "center" }}><div style={{ fontSize: 18, fontWeight: 800, color: "#F47B35" }}>{repStats[r.id]?.orderCount ?? 0}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>داواکاری</div></div>
-              <div style={{ textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 800, color: "#40C057" }}>{formatIQD(repStats[r.id]?.revenue ?? 0)}</div><div style={{ fontSize: 10, color: "#ADB5BD" }}>داهات</div></div>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 12, justifyContent: "flex-end" }}>
-              <button onClick={(e) => { e.stopPropagation(); openEdit(r); }} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #DEE2E6", background: "white", fontSize: 11, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}><Edit3 size={12} /> دەستکاری</button>
-              <button onClick={(e) => { e.stopPropagation(); setDeleteId(r.id); }} style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #FFC9C9", background: "#FFF5F5", fontSize: 11, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4, color: "#FA5252" }}><Trash2 size={12} /> سڕینەوە</button>
-            </div>
-          </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={e => { e.stopPropagation(); openEdit(r); }}>
+                  <Edit3 className="size-3 me-1" /> دەستکاری
+                </Button>
+                <Button size="sm" variant="outline" className="text-xs h-7 text-destructive border-destructive/40 hover:bg-destructive/5" onClick={e => { e.stopPropagation(); setDeleteId(r.id); }}>
+                  <Trash2 className="size-3 me-1" /> سڕینەوە
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
-      {/* Add/Edit Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "دەستکاری نوێنەر" : "نوێنەری نوێ"} width={480}>
-        <form onSubmit={handleSubmit}>
-          {/* Clickable avatar upload */}
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-            <div
-              onClick={() => picInputRef.current?.click()}
-              style={{ position: "relative", width: 80, height: 80, borderRadius: "50%", overflow: "hidden", border: "3px solid #4263EB", background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-            >
-              {form.profilePic
-                ? <img src={form.profilePic} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : <span style={{ color: "white", fontSize: 28, fontWeight: 800 }}>{form.name.charAt(0) || "?"}</span>
-              }
-              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", opacity: 0, transition: "opacity .2s" }}
-                onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-                onMouseLeave={e => (e.currentTarget.style.opacity = "0")}>
-                <Camera size={18} color="white" />
+      {/* ═══════════════════════════════════════════════════════════
+          ADD / EDIT DIALOG
+      ═══════════════════════════════════════════════════════════ */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{editing ? "دەستکاری نوێنەر" : "نوێنەری نوێ"}</DialogTitle>
+            <DialogDescription>زانیاری نوێنەری فرۆشتن پڕبکەوە</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Avatar upload */}
+            <div className="flex justify-center">
+              <div onClick={() => picInputRef.current?.click()}
+                className="relative size-20 rounded-full overflow-hidden border-2 border-primary bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center cursor-pointer">
+                {form.profilePic
+                  ? <img src={form.profilePic} className="w-full h-full object-cover" alt="" />
+                  : <span className="text-white text-3xl font-black">{form.name.charAt(0) || "?"}</span>
+                }
+                <div className="absolute inset-0 bg-black/35 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                  <Camera className="size-4 text-white" />
+                </div>
+              </div>
+              <input ref={picInputRef} type="file" accept="image/*" className="hidden"
+                onChange={async e => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  try { setForm(prev => ({ ...prev, profilePic: "" })); const b64 = await resizeImage(f); setForm(prev => ({ ...prev, profilePic: b64 })); }
+                  catch { alert("وێنەکە بارنەبوو"); }
+                }}
+              />
+            </div>
+            {form.profilePic && (
+              <div className="text-center">
+                <Button type="button" variant="ghost" size="sm" className="text-destructive text-xs" onClick={() => setForm(prev => ({ ...prev, profilePic: "" }))}>
+                  سڕینەوەی وێنە
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="rep-name">ناوی نوێنەر *</Label>
+                <Input id="rep-name" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rep-email">ئیمەیڵ</Label>
+                <Input id="rep-email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="rep@example.com" dir="ltr" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rep-phone">تەلەفۆن *</Label>
+                <Input id="rep-phone" required value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="0770 XXX XXXX" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rep-city">شار</Label>
+                <Select value={form.city || cities[0]} onValueChange={(v: string | null) => v && setForm({ ...form, city: v })}>
+                  <SelectTrigger id="rep-city"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {cities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="rep-active">چالاک</Label>
+                <Switch id="rep-active" checked={form.isActive} onCheckedChange={v => setForm({ ...form, isActive: v })} />
               </div>
             </div>
-            <input ref={picInputRef} type="file" accept="image/*" style={{ display: "none" }}
-              onChange={async e => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                try { setForm(prev => ({ ...prev, profilePic: "" })); const b64 = await resizeImage(f); setForm(prev => ({ ...prev, profilePic: b64 })); }
-                catch { alert("وێنەکە بارنەبوو"); }
-              }}
-            />
-          </div>
-          {form.profilePic && (
-            <div style={{ textAlign: "center", marginBottom: 8 }}>
-              <button type="button" onClick={() => setForm(prev => ({ ...prev, profilePic: "" }))}
-                style={{ fontSize: 11, color: "#FA5252", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                سڕینەوەی وێنە
-              </button>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>پاشگەزبوونەوە</Button>
+              <Button type="submit">{editing ? "نوێکردنەوە" : "زیادکردن"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════
+          DETAIL SHEET
+      ═══════════════════════════════════════════════════════════ */}
+      <Sheet open={!!detailRep} onOpenChange={open => !open && setDetailRep(null)}>
+        <SheetContent side="left" className="w-[440px] overflow-y-auto">
+          <SheetHeader className="border-b pb-4 mb-4">
+            <SheetTitle>{detailRep?.name}</SheetTitle>
+          </SheetHeader>
+          {detailRep && (
+            <div>
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div><p className="text-xs text-muted-foreground mb-1">تەلەفۆن</p><p className="font-semibold text-sm">{detailRep.phone}</p></div>
+                <div><p className="text-xs text-muted-foreground mb-1">شار</p><p className="font-semibold text-sm">{detailRep.city}</p></div>
+              </div>
+              <h4 className="font-bold text-sm mb-3">کڕیارانی تایبەت ({clients.filter(c => c.repId === detailRep.id).length})</h4>
+              <div className="flex flex-col gap-1.5 mb-6">
+                {clients.filter(c => c.repId === detailRep.id).map(c => (
+                  <div key={c.id} className="flex justify-between items-center px-3 py-2 bg-muted/50 rounded-lg">
+                    <span className="font-semibold text-sm">{c.name}</span>
+                    <span className="text-xs text-muted-foreground">{c.city}</span>
+                  </div>
+                ))}
+              </div>
+              <h4 className="font-bold text-sm mb-3">داواکارییەکان ({orders.filter(o => o.repId === detailRep.id).length})</h4>
+              <div className="flex flex-col gap-1.5">
+                {orders.filter(o => o.repId === detailRep.id).map(o => (
+                  <div key={o.id} className="flex justify-between items-center px-3 py-2 bg-muted/50 rounded-lg">
+                    <div><span className="font-semibold text-sm">{o.orderNumber}</span> <span className="text-xs text-muted-foreground">{o.clientName}</span></div>
+                    <span className="font-semibold text-sm">{formatIQD(o.totalAmount)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-          <FormGrid cols={1}>
-            <FormField label="ناوی نوێنەر" required><input style={inputStyle} required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></FormField>
-            <FormField label="ئیمەیڵ"><input style={inputStyle} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="rep@example.com" dir="ltr" /></FormField>
-            <FormField label="تەلەفۆن" required><input style={inputStyle} required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0770 XXX XXXX" /></FormField>
-            <FormField label="شار"><select style={selectStyle} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })}>{cities.map(c => <option key={c} value={c}>{c}</option>)}</select></FormField>
-          </FormGrid>
-          <div style={{ marginTop: 16 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
-              <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} style={{ width: 16, height: 16 }} />
-              چالاک
-            </label>
-          </div>
-          <FormActions onCancel={() => setModalOpen(false)} isEdit={!!editing} />
-        </form>
-      </Modal>
+        </SheetContent>
+      </Sheet>
 
-      {/* Detail Drawer */}
-      {detailRep && (
-        <div onClick={() => setDetailRep(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 400, animation: "fadeIn 0.15s ease" }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 440, background: "white", boxShadow: "-10px 0 30px rgba(0,0,0,0.1)", animation: "slideInRight 0.2s ease", overflowY: "auto" }}>
-            <div style={{ padding: "20px 24px", borderBottom: "1px solid #E9ECEF", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700 }}>{detailRep.name}</h3>
-              <button onClick={() => setDetailRep(null)} style={{ background: "#F1F3F5", borderRadius: 8, padding: 6, border: "none", cursor: "pointer" }}><X size={16} /></button>
-            </div>
-            <div style={{ padding: 24 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-                <div><div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 4 }}>تەلەفۆن</div><div style={{ fontSize: 14, fontWeight: 600 }}>{detailRep.phone}</div></div>
-                <div><div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 4 }}>شار</div><div style={{ fontSize: 14, fontWeight: 600 }}>{detailRep.city}</div></div>
-              </div>
-              <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>کڕیارانی تایبەت ({clients.filter(c => c.repId === detailRep.id).length})</h4>
-              {clients.filter(c => c.repId === detailRep.id).map(c => (
-                <div key={c.id} style={{ padding: "10px 12px", background: "#F8F9FA", borderRadius: 8, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</span>
-                  <span style={{ fontSize: 12, color: "#6C757D" }}>{c.city}</span>
-                </div>
-              ))}
-              <h4 style={{ fontSize: 14, fontWeight: 700, marginTop: 20, marginBottom: 12 }}>داواکارییەکان ({orders.filter(o => o.repId === detailRep.id).length})</h4>
-              {orders.filter(o => o.repId === detailRep.id).map(o => (
-                <div key={o.id} style={{ padding: "10px 12px", background: "#F8F9FA", borderRadius: 8, marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
-                  <div><span style={{ fontWeight: 600, fontSize: 13 }}>{o.orderNumber}</span> <span style={{ fontSize: 11, color: "#ADB5BD" }}>{o.clientName}</span></div>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>{formatIQD(o.totalAmount)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={() => { if (deleteId) deleteRep(deleteId); setDeleteId(null); }} message="ئایا دڵنیایت لە سڕینەوەی ئەم نوێنەرە؟" />
-    </>
+      {/* ═══════════════════════════════════════════════════════════
+          DELETE CONFIRM
+      ═══════════════════════════════════════════════════════════ */}
+      <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>سڕینەوەی نوێنەر</AlertDialogTitle>
+            <AlertDialogDescription>ئایا دڵنیایت لە سڕینەوەی ئەم نوێنەرە؟ ئەم کردارە ناگەڕێتەوە.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>پاشگەزبوونەوە</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteId) deleteRep(deleteId); setDeleteId(null); }}>
+              سڕینەوە
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }

@@ -3,12 +3,14 @@ import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { MapPin, RefreshCw, Wifi, WifiOff, Users } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const RepMap = dynamic(() => import("./RepMap"), { ssr: false, loading: () => (
-  <div style={{ flex: 1, background: "#F0F4F8", display: "flex", alignItems: "center", justifyContent: "center" }}>
-    <div style={{ textAlign: "center", color: "#ADB5BD" }}>
-      <MapPin size={36} style={{ marginBottom: 8, opacity: 0.4 }} />
-      <div style={{ fontSize: 13 }}>نەخشەکە بارئەکرێت...</div>
+  <div className="flex-1 bg-muted/40 flex items-center justify-center">
+    <div className="flex flex-col items-center text-muted-foreground">
+      <MapPin className="size-9 mb-2 opacity-40" />
+      <p className="text-sm">نەخشەکە بارئەکرێت...</p>
     </div>
   </div>
 )});
@@ -35,6 +37,22 @@ function timeAgo(iso: string) {
 
 const TEN_MINS = 10 * 60 * 1000;
 
+function RepAvatar({ loc, isOnline, selected }: { loc: RepLocation; isOnline: boolean; selected: boolean }) {
+  return (
+    <div className={cn("relative size-9 rounded-full overflow-hidden shrink-0 flex items-center justify-center text-white text-sm font-black",
+      isOnline ? "bg-gradient-to-br from-primary to-violet-500" : "bg-muted-foreground/40",
+      selected && "ring-2 ring-primary ring-offset-1")}>
+      {loc.profile_pic_url && (
+        <img src={loc.profile_pic_url} alt={loc.rep_name} className="absolute inset-0 w-full h-full object-cover"
+          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+      )}
+      {loc.rep_name.charAt(0)}
+      <div className={cn("absolute bottom-0 end-0 size-2 rounded-full border-2 border-background",
+        isOnline ? "bg-emerald-500" : "bg-muted-foreground/60")} />
+    </div>
+  );
+}
+
 export default function MapPage() {
   const [locations, setLocations] = useState<RepLocation[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -59,89 +77,79 @@ export default function MapPage() {
   const offline = locations.filter(l => Date.now() - new Date(l.updated_at).getTime() >= TEN_MINS);
 
   return (
-    <div style={{ height: "calc(100vh - 64px)", display: "flex", flexDirection: "column", padding: 16, gap: 12, direction: "rtl" }}>
+    <div className="flex flex-col gap-3 p-4" style={{ height: "calc(100vh - 64px)" }} dir="rtl">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+      <div className="flex items-center justify-between shrink-0">
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#1A1A2E", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-            <MapPin size={20} color="#4263EB" /> نەخشەی زیندوو
+          <h1 className="text-xl font-black flex items-center gap-2">
+            <MapPin className="size-5 text-primary" /> نەخشەی زیندوو
           </h1>
-          <p style={{ color: "#6C757D", fontSize: 12, margin: "3px 0 0" }}>
+          <p className="text-xs text-muted-foreground mt-0.5">
             شوێنی نوێنەران لە ئێستادا · دواین نوێکردنەوە: {lastRefresh.toLocaleTimeString("ckb")}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="flex items-center gap-2">
           {online.length > 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", background: "#EBFBEE", borderRadius: 20, fontSize: 12, fontWeight: 700, color: "#2F9E44" }}>
-              <Wifi size={12} /> {online.length} ئۆنلاین
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-full text-xs font-bold text-emerald-700 dark:text-emerald-400">
+              <Wifi className="size-3" /> {online.length} ئۆنلاین
             </span>
           )}
-          <button onClick={fetchLocations} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, border: "1px solid #E9ECEF", background: "white", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#6C757D", fontFamily: "inherit" }}>
-            <RefreshCw size={13} /> نوێکردنەوە
-          </button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={fetchLocations}>
+            <RefreshCw className="size-3.5" /> نوێکردنەوە
+          </Button>
         </div>
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, display: "flex", gap: 12, minHeight: 0 }}>
+      <div className="flex-1 flex gap-3 min-h-0">
         {/* Side panel */}
-        <div style={{ width: 260, display: "flex", flexDirection: "column", gap: 6, overflow: "auto", flexShrink: 0 }}>
+        <div className="w-64 flex flex-col gap-1.5 overflow-y-auto shrink-0">
           {loading ? (
-            <div style={{ textAlign: "center", padding: 24, color: "#ADB5BD", fontSize: 12 }}>چاوەڕوان بکە...</div>
+            <p className="text-center py-6 text-sm text-muted-foreground">چاوەڕوان بکە...</p>
           ) : locations.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 32, background: "white", borderRadius: 14, border: "1px solid #E9ECEF" }}>
-              <MapPin size={32} style={{ opacity: 0.2, marginBottom: 8 }} />
-              <div style={{ fontSize: 13, color: "#ADB5BD", marginBottom: 8 }}>هیچ نوێنەرێک شوێنی نەنێردووە</div>
-              <Link href="/dashboard/telegram" style={{ fontSize: 12, color: "#4263EB", fontWeight: 600 }}>بڕۆ بۆ ڕێکخستنی تێلێگرام</Link>
+            <div className="text-center py-8 bg-background rounded-2xl border border-border">
+              <MapPin className="size-8 mx-auto mb-2 opacity-20" />
+              <p className="text-sm text-muted-foreground mb-2">هیچ نوێنەرێک شوێنی نەنێردووە</p>
+              <Link href="/dashboard/telegram" className="text-xs text-primary font-semibold hover:underline">
+                بڕۆ بۆ ڕێکخستنی تێلێگرام
+              </Link>
             </div>
           ) : (
             <>
               {online.length > 0 && (
                 <>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: "#2F9E44", padding: "4px 8px", display: "flex", alignItems: "center", gap: 4 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#2F9E44" }} /> ئۆنلاین ({online.length})
-                  </div>
+                  <p className="text-[10px] font-black text-emerald-600 px-2 flex items-center gap-1.5">
+                    <span className="size-1.5 rounded-full bg-emerald-500 inline-block" /> ئۆنلاین ({online.length})
+                  </p>
                   {online.map(l => (
                     <div key={l.chat_id} onClick={() => setSelectedId(l.chat_id === selectedId ? null : l.chat_id)}
-                      style={{ background: "white", borderRadius: 12, border: selectedId === l.chat_id ? "2px solid #4263EB" : "1px solid #E9ECEF", padding: "10px 12px", cursor: "pointer", transition: "all .15s" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ position: "relative", width: 36, height: 36, borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "linear-gradient(135deg,#4263EB,#7C5CFC)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 13, fontWeight: 800 }}>
-                          {l.profile_pic_url
-                            ? <img src={l.profile_pic_url} alt={l.rep_name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                            : null
-                          }
-                          {l.rep_name.charAt(0)}
-                          <div style={{ position: "absolute", bottom: 0, right: 0, width: 8, height: 8, borderRadius: "50%", background: "#2F9E44", border: "2px solid white" }} />
-                        </div>
+                      className={cn("bg-background rounded-xl border px-3 py-2.5 cursor-pointer transition-all hover:shadow-sm",
+                        selectedId === l.chat_id ? "border-primary border-2" : "border-border")}>
+                      <div className="flex items-center gap-2">
+                        <RepAvatar loc={l} isOnline selected={selectedId === l.chat_id} />
                         <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "#1A1A2E" }}>{l.rep_name}</div>
-                          <div style={{ fontSize: 10, color: "#2F9E44", fontWeight: 600 }}>● {timeAgo(l.updated_at)}</div>
+                          <p className="text-xs font-bold">{l.rep_name}</p>
+                          <p className="text-[10px] text-emerald-600 font-semibold">● {timeAgo(l.updated_at)}</p>
                         </div>
                       </div>
                     </div>
                   ))}
                 </>
               )}
+
               {offline.length > 0 && (
                 <>
-                  {online.length > 0 && <div style={{ height: 1, background: "#F1F3F5", margin: "4px 0" }} />}
-                  <div style={{ fontSize: 10, fontWeight: 800, color: "#ADB5BD", padding: "4px 8px", display: "flex", alignItems: "center", gap: 4 }}>
-                    <WifiOff size={9} /> ئۆفلاین ({offline.length})
-                  </div>
+                  {online.length > 0 && <div className="h-px bg-border my-1" />}
+                  <p className="text-[10px] font-black text-muted-foreground px-2 flex items-center gap-1.5">
+                    <WifiOff className="size-2.5" /> ئۆفلاین ({offline.length})
+                  </p>
                   {offline.map(l => (
-                    <div key={l.chat_id} style={{ background: "#F8F9FA", borderRadius: 12, border: "1px solid #E9ECEF", padding: "10px 12px", opacity: 0.7 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ position: "relative", width: 36, height: 36, borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "#CED4DA", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 13, fontWeight: 800 }}>
-                          {l.profile_pic_url
-                            ? <img src={l.profile_pic_url} alt={l.rep_name} style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0, filter: "grayscale(40%)" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                            : null
-                          }
-                          {l.rep_name.charAt(0)}
-                          <div style={{ position: "absolute", bottom: 0, right: 0, width: 8, height: 8, borderRadius: "50%", background: "#CED4DA", border: "2px solid white" }} />
-                        </div>
+                    <div key={l.chat_id} className="bg-muted/40 rounded-xl border border-border px-3 py-2.5 opacity-65">
+                      <div className="flex items-center gap-2">
+                        <RepAvatar loc={l} isOnline={false} selected={false} />
                         <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "#6C757D" }}>{l.rep_name}</div>
-                          <div style={{ fontSize: 10, color: "#ADB5BD" }}>{timeAgo(l.updated_at)}</div>
+                          <p className="text-xs font-bold text-muted-foreground">{l.rep_name}</p>
+                          <p className="text-[10px] text-muted-foreground/70">{timeAgo(l.updated_at)}</p>
                         </div>
                       </div>
                     </div>
@@ -153,18 +161,17 @@ export default function MapPage() {
         </div>
 
         {/* Map */}
-        <RepMap
-          locations={locations}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-        />
+        <RepMap locations={locations} selectedId={selectedId} onSelect={setSelectedId} />
       </div>
 
-      {/* Bottom hint if no locations */}
+      {/* Bottom hint */}
       {!loading && locations.length === 0 && (
-        <div style={{ flexShrink: 0, padding: "10px 16px", background: "#EDF2FF", borderRadius: 10, fontSize: 12, color: "#4263EB", display: "flex", alignItems: "center", gap: 8 }}>
-          <Users size={14} />
-          <span>بۆ بینینی شوێن، پێویستە نوێنەران ڕۆڵیان دیاری بکەن لە <Link href="/dashboard/telegram" style={{ color: "#4263EB", fontWeight: 700 }}>ڕێکخستنی تێلێگرام</Link> و شوێنی زیندووی هاوبەش بکەن.</span>
+        <div className="shrink-0 px-4 py-2.5 bg-primary/10 rounded-xl text-xs text-primary flex items-center gap-2">
+          <Users className="size-3.5 shrink-0" />
+          <span>بۆ بینینی شوێن، پێویستە نوێنەران ڕۆڵیان دیاری بکەن لە{" "}
+            <Link href="/dashboard/telegram" className="font-bold underline">ڕێکخستنی تێلێگرام</Link>
+            {" "}و شوێنی زیندووی هاوبەش بکەن.
+          </span>
         </div>
       )}
     </div>

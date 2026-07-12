@@ -1,6 +1,5 @@
 "use client";
 import { useState, FormEvent, useRef, useMemo, useEffect } from "react";
-
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
   CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign, Pencil,
@@ -9,15 +8,28 @@ import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
 import type { Order, OrderStatus, OrderItem } from "@/lib/types";
-import Modal from "@/components/ui/Modal";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
-import ExportButton from "@/components/ui/ExportButton";
-import PrintModal from "@/components/ui/PrintModal";
-import ClientCombobox from "@/components/ui/ClientCombobox";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import ExportButton from "@/components/custom/ExportButton";
+import PrintModal from "@/components/custom/PrintModal";
+import ClientCombobox from "@/components/custom/ClientCombobox";
 import type { ExportColumn } from "@/lib/export";
-import { SkeletonKPI, SkeletonTableRows } from "@/components/ui/Skeleton";
 import { notifyDriverOfOrder, sendTelegramMessage } from "@/lib/telegram";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 
 const exportCols: ExportColumn[] = [
@@ -40,17 +52,23 @@ const STATUS: Record<OrderStatus, StatusMeta> = {
 
 const STATUS_TABS = ["هەموو", ...Object.values(STATUS).map(s => s.label), "📝 گۆڕانکاری"];
 
+const STATUS_BADGE_CLS: Record<string, string> = {
+  WAITING:      "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
+  IN_PROGRESS:  "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
+  NOT_ACCEPTED: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400",
+  READY:        "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
+  SENT:         "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-400",
+  DELIVERED:    "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-400",
+  PAID:         "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400",
+};
+
 function StatusBadge({ status }: { status: OrderStatus }) {
-  const s = STATUS[status] ?? { label: status, color: "#6C757D", bg: "#F1F3F5", icon: <Clock size={13} /> };
+  const s = STATUS[status] ?? { label: status, icon: <Clock className="size-3" /> };
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600, background: s.bg, color: s.color }}>
+    <span className={cn("inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold", STATUS_BADGE_CLS[status] || "bg-muted text-muted-foreground")}>
       {s.icon} {s.label}
     </span>
   );
-}
-
-function actionBtn(color: string, bg: string): React.CSSProperties {
-  return { display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", background: bg, color, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 12, whiteSpace: "nowrap" as const };
 }
 
 export default function OrdersPage() {
@@ -402,280 +420,293 @@ export default function OrdersPage() {
     amount:  filtered.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0),
   };
 
-  const card: React.CSSProperties = { background: "#fff", borderRadius: 14, padding: "16px 20px", border: "1px solid #F1F3F5", boxShadow: "0 1px 4px rgba(0,0,0,.05)" };
-
   return (
     <>
       {/* ── Header ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, background: "#FEF3EB", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#F47B35" }}><ShoppingCart size={20} /></div>
-          <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>داواکارییەکان</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی داواکارییەکان و جەریانی کاری</p></div>
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <div className="size-10 bg-orange-50 dark:bg-orange-950/40 rounded-xl flex items-center justify-center text-orange-500">
+            <ShoppingCart className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">داواکارییەکان</h1>
+            <p className="text-sm text-muted-foreground">بەڕێوەبردنی داواکارییەکان و جەریانی کاری</p>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="flex items-center gap-2">
           <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={exportCols} filename="orders" title="داواکارییەکان" />
-          <button onClick={() => setNewOrderOpen(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#4263EB", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>
-            <Plus size={16} /> داواکاری نوێ
-          </button>
+          <Button onClick={() => setNewOrderOpen(true)}>
+            <Plus className="size-4 me-1" /> داواکاری نوێ
+          </Button>
         </div>
       </div>
 
       {/* ── KPIs ── */}
-      {loading ? <SkeletonKPI /> : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 24 }}>
-          {[
-            { label: "کۆی داواکارییەکان", value: kpi.total,           color: "#4263EB", bg: "#EDF2FF" },
-            { label: "چاوەڕوان",          value: kpi.waiting,          color: "#D97706", bg: "#FEF3C7" },
-            { label: "نێردراوە",          value: kpi.sent,             color: "#7C3AED", bg: "#EDE9FE" },
-            { label: "پارەدراوە",        value: kpi.paid,             color: "#059669", bg: "#D1FAE5" },
-            { label: "کۆی داهات",        value: formatIQD(kpi.amount), color: "#0891B2", bg: "#CFFAFE" },
-          ].map(k => (
-            <div key={k.label} style={card}>
-              <div style={{ fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</div>
-              <div style={{ fontSize: 12, color: "#6C757D", marginTop: 4 }}>{k.label}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6 page-stagger">
+        {loading ? Array.from({ length: 5 }).map((_, i) => (
+          <Card key={i}><CardContent className="p-4"><Skeleton className="h-4 w-24 mb-2" /><Skeleton className="h-7 w-16" /></CardContent></Card>
+        )) : [
+          { label: "کۆی داواکارییەکان", value: kpi.total,            cls: "text-primary" },
+          { label: "چاوەڕوان",          value: kpi.waiting,           cls: "text-amber-600" },
+          { label: "نێردراوە",          value: kpi.sent,              cls: "text-violet-600" },
+          { label: "پارەدراوە",         value: kpi.paid,              cls: "text-emerald-600" },
+          { label: "کۆی داهات",         value: formatIQD(kpi.amount), cls: "text-cyan-600" },
+        ].map(k => (
+          <Card key={k.label} className="card-interactive">
+            <CardContent className="p-4">
+              <p className={cn("text-xl font-black", k.cls)}>{k.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{k.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {/* ── Filters ── */}
-      <div style={{ ...card, marginBottom: 20, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-          <Search size={16} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
-          <input value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setPage(1); }} placeholder="گەڕان بە ژمارە یان کڕیار..." style={{ ...inputStyle, paddingLeft: 38, width: "100%", boxSizing: "border-box" }} />
-        </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {STATUS_TABS.map(t => {
-            const isEditTab = t === "📝 گۆڕانکاری";
-            const editCount = isEditTab ? orders.filter(o => o.notes.startsWith("[EDIT_REQUEST]:")).length : 0;
-            const active = statusFilter === t;
-            return (
-              <button key={t} onClick={() => { setStatusFilter(t); setPage(1); }} style={{
-                padding: "6px 14px", borderRadius: 99, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .15s", display: "flex", alignItems: "center", gap: 4,
-                borderColor: active ? (isEditTab ? "#D97706" : "#4263EB") : "#DEE2E6",
-                background: active ? (isEditTab ? "#FEF3C7" : "#EDF2FF") : "#fff",
-                color: active ? (isEditTab ? "#D97706" : "#4263EB") : "#495057",
-              }}>
-                {t}
-                {isEditTab && editCount > 0 && <span style={{ background: "#D97706", color: "white", borderRadius: 99, padding: "1px 6px", fontSize: 10, fontWeight: 800, marginRight: 2 }}>{editCount}</span>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Table ── */}
-      <div style={{ ...card, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid #F1F3F5", background: "#FAFAFA" }}>
-                {["ژمارە", "کڕیار", "نوێنەر", "بارودۆخ", "کۆی گشتی", "بەروار", "کردار"].map(h => (
-                  <th key={h} style={{ padding: "12px 16px", textAlign: "right", fontWeight: 600, color: "#495057", fontSize: 13, whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? <SkeletonTableRows cols={7} /> : paged.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: 48, textAlign: "center", color: "#ADB5BD" }}>هیچ داواکارییەک نەدۆزرایەوە</td></tr>
-              ) : paged.map(o => (
-                <tr key={o.id} style={{ borderBottom: "1px solid #F8F9FA", transition: "background .1s" }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#FAFAFA")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "")}>
-                  <td style={{ padding: "12px 16px", fontWeight: 700, color: "#4263EB" }}>{o.orderNumber}</td>
-                  <td style={{ padding: "12px 16px" }}>{o.clientName}</td>
-                  <td style={{ padding: "12px 16px", color: "#6C757D", fontSize: 13 }}>{o.repName}</td>
-                  <td style={{ padding: "12px 16px" }}><StatusBadge status={o.status} /></td>
-                  <td style={{ padding: "12px 16px", fontWeight: 600 }}>{formatIQD(o.totalAmount)}</td>
-                  <td style={{ padding: "12px 16px", color: "#6C757D", fontSize: 13 }}>{new Date(o.createdAt).toLocaleDateString("ku")}</td>
-
-                  {/* ── Inline action buttons ── */}
-                  <td style={{ padding: "12px 16px" }}>
-                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                      {/* Edit request badge */}
-                      {o.notes.startsWith("[EDIT_REQUEST]:") && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 8px", borderRadius: 99, fontSize: 11, fontWeight: 700, background: "#FEF3C7", color: "#D97706" }}>📝 داوای گۆڕانکاری</span>
-                      )}
-                      {/* Manager approve/reject edit request */}
-                      {isManager && o.notes.startsWith("[EDIT_REQUEST]:") && <>
-                        <button onClick={() => approveEditRequest(o)} style={actionBtn("#059669", "#D1FAE5")}><CheckCircle size={12} /> قبووڵ</button>
-                        <button onClick={() => rejectEditRequest(o)} style={actionBtn("#DC2626", "#FEE2E2")}><XCircle size={12} /> ڕەت</button>
-                      </>}
-                      {/* Status-specific actions (manager only) */}
-                      {isManager && o.status === "WAITING" && !o.notes.startsWith("[EDIT_REQUEST]:") && <>
-                        <button onClick={() => acceptOrder(o)} style={actionBtn("#059669", "#D1FAE5")}><CheckCircle size={12} /> قبووڵکردن</button>
-                        <button onClick={() => setRejectOrder(o)} style={actionBtn("#DC2626", "#FEE2E2")}><XCircle size={12} /> ڕەتکردن</button>
-                      </>}
-                      {isManager && o.status === "IN_PROGRESS" && (
-                        <button onClick={() => openSendModal(o)} style={actionBtn("#059669", "#D1FAE5")}><CheckCircle size={12} /> ئامادەیە</button>
-                      )}
-                      {isManager && o.status === "READY" && (
-                        <button onClick={() => updateOrder(o.id, { status: "SENT" })} style={actionBtn("#7C3AED", "#EDE9FE")}><Truck size={12} /> نێردراوە ✓</button>
-                      )}
-                      {isManager && o.status === "SENT" && (
-                        <button onClick={() => setInvoiceModalOrder(o)} style={actionBtn("#0891B2", "#CFFAFE")}><Upload size={12} /> گەیشتووە</button>
-                      )}
-                      {isManager && o.status === "DELIVERED" && (
-                        <button onClick={() => { setPayModalOrder(o); setPayMethod("CASH"); }} style={actionBtn("#059669", "#D1FAE5")}><DollarSign size={12} /> پارەدان</button>
-                      )}
-                      {/* Edit button */}
-                      {((isManager && (o.status === "WAITING" || o.status === "IN_PROGRESS")) || (isRep && o.status === "WAITING" && o.repId === myRep?.id)) && (
-                        <button onClick={() => openEditModal(o)} style={{ padding: "5px 8px", background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center" }}><Pencil size={13} /></button>
-                      )}
-                      {/* Always available */}
-                      <button onClick={() => setDetailOrder(o)} style={{ padding: "5px 8px", background: "#F1F3F5", color: "#495057", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center" }}><Eye size={13} /></button>
-                      <button onClick={() => setPrintOrder(o)} style={{ padding: "5px 8px", background: "#F1F3F5", color: "#495057", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center" }}><Printer size={13} /></button>
-                      {isManager && <button onClick={() => setDeleteId(o.id)} style={{ padding: "5px 8px", background: "#FFF5F5", color: "#DC2626", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center" }}><Trash2 size={13} /></button>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── Pagination ── */}
-      {!loading && totalPages > 1 && (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, fontSize: 13, color: "#6C757D" }}>
-          <span>{filtered.length} داواکاری — لاپەڕە {page} لە {totalPages}</span>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #DEE2E6", background: page === 1 ? "#F8F9FA" : "white", cursor: page === 1 ? "default" : "pointer", fontWeight: 600, color: page === 1 ? "#ADB5BD" : "#495057" }}>→</button>
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const pg = page <= 3 ? i + 1 : page + i - 2;
-              if (pg < 1 || pg > totalPages) return null;
+      <Card className="mb-5">
+        <CardContent className="p-3 flex gap-3 items-center flex-wrap">
+          <div className="relative flex-1 min-w-48">
+            <Search className="absolute end-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <Input value={searchTerm} onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
+              placeholder="گەڕان بە ژمارە یان کڕیار..." className="pe-9 text-sm" />
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {STATUS_TABS.map(t => {
+              const isEditTab = t === "📝 گۆڕانکاری";
+              const editCount = isEditTab ? orders.filter(o => o.notes.startsWith("[EDIT_REQUEST]:")).length : 0;
+              const active = statusFilter === t;
               return (
-                <button key={pg} onClick={() => setPage(pg)}
-                  style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid", borderColor: page === pg ? "#4263EB" : "#DEE2E6", background: page === pg ? "#EDF2FF" : "white", cursor: "pointer", fontWeight: 600, color: page === pg ? "#4263EB" : "#495057" }}>{pg}</button>
+                <Button key={t} variant={active ? (isEditTab ? "outline" : "default") : "outline"} size="sm"
+                  onClick={() => { setStatusFilter(t); setPage(1); }}
+                  className={cn(
+                    "gap-1 rounded-full text-xs font-semibold",
+                    active
+                      ? isEditTab ? "border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400" : ""
+                      : "text-muted-foreground"
+                  )}>
+                  {t}
+                  {isEditTab && editCount > 0 && <span className="bg-amber-500 text-white rounded-full px-1.5 py-px text-[10px] font-bold">{editCount}</span>}
+                </Button>
               );
             })}
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #DEE2E6", background: page === totalPages ? "#F8F9FA" : "white", cursor: page === totalPages ? "default" : "pointer", fontWeight: 600, color: page === totalPages ? "#ADB5BD" : "#495057" }}>←</button>
           </div>
-        </div>
-      )}
+        </CardContent>
+      </Card>
+
+      {/* ── Table ── */}
+      <Card className="overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {["ژمارە", "کڕیار", "نوێنەر", "بارودۆخ", "کۆی گشتی", "بەروار", "کردار"].map(h => (
+                <TableHead key={h} className="whitespace-nowrap">{h}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody className="table-stagger">
+            {loading ? (
+              Array.from({ length: 7 }).map((_, i) => (
+                <TableRow key={i}>{Array.from({ length: 7 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}</TableRow>
+              ))
+            ) : paged.length === 0 ? (
+              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-12">هیچ داواکارییەک نەدۆزرایەوە</TableCell></TableRow>
+            ) : paged.map(o => (
+              <TableRow key={o.id}>
+                <TableCell className="font-bold text-primary">{o.orderNumber}</TableCell>
+                <TableCell className="font-medium">{o.clientName}</TableCell>
+                <TableCell className="text-muted-foreground text-xs">{o.repName}</TableCell>
+                <TableCell><StatusBadge status={o.status} /></TableCell>
+                <TableCell className="font-semibold">{formatIQD(o.totalAmount)}</TableCell>
+                <TableCell className="text-muted-foreground text-xs">{new Date(o.createdAt).toLocaleDateString("ku")}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {o.notes.startsWith("[EDIT_REQUEST]:") && (
+                      <Badge variant="outline" className="text-amber-600 border-amber-400 text-[10px]">📝 داوای گۆڕانکاری</Badge>
+                    )}
+                    {isManager && o.notes.startsWith("[EDIT_REQUEST]:") && <>
+                      <Button size="sm" variant="ghost" className="h-7 text-emerald-600 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 px-2 text-xs" onClick={() => approveEditRequest(o)}><CheckCircle className="size-3 me-1" />قبووڵ</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-destructive hover:text-destructive hover:bg-destructive/10 px-2 text-xs" onClick={() => rejectEditRequest(o)}><XCircle className="size-3 me-1" />ڕەت</Button>
+                    </>}
+                    {isManager && o.status === "WAITING" && !o.notes.startsWith("[EDIT_REQUEST]:") && <>
+                      <Button size="sm" variant="ghost" className="h-7 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 px-2 text-xs" onClick={() => acceptOrder(o)}><CheckCircle className="size-3 me-1" />قبووڵ</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-destructive hover:bg-destructive/10 px-2 text-xs" onClick={() => setRejectOrder(o)}><XCircle className="size-3 me-1" />ڕەت</Button>
+                    </>}
+                    {isManager && o.status === "IN_PROGRESS" && (
+                      <Button size="sm" variant="ghost" className="h-7 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 px-2 text-xs" onClick={() => openSendModal(o)}><CheckCircle className="size-3 me-1" />ئامادەیە</Button>
+                    )}
+                    {isManager && o.status === "READY" && (
+                      <Button size="sm" variant="ghost" className="h-7 text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30 px-2 text-xs" onClick={() => updateOrder(o.id, { status: "SENT" })}><Truck className="size-3 me-1" />نێردراوە</Button>
+                    )}
+                    {isManager && o.status === "SENT" && (
+                      <Button size="sm" variant="ghost" className="h-7 text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-950/30 px-2 text-xs" onClick={() => setInvoiceModalOrder(o)}><Upload className="size-3 me-1" />گەیشتووە</Button>
+                    )}
+                    {isManager && o.status === "DELIVERED" && (
+                      <Button size="sm" variant="ghost" className="h-7 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 px-2 text-xs" onClick={() => { setPayModalOrder(o); setPayMethod("CASH"); }}><DollarSign className="size-3 me-1" />پارەدان</Button>
+                    )}
+                    {((isManager && (o.status === "WAITING" || o.status === "IN_PROGRESS")) || (isRep && o.status === "WAITING" && o.repId === myRep?.id)) && (
+                      <Button size="icon" variant="ghost" className="size-7" onClick={() => openEditModal(o)}><Pencil className="size-3.5" /></Button>
+                    )}
+                    <Button size="icon" variant="ghost" className="size-7" onClick={() => setDetailOrder(o)}><Eye className="size-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="size-7" onClick={() => setPrintOrder(o)}><Printer className="size-3.5" /></Button>
+                    {isManager && <Button size="icon" variant="ghost" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(o.id)}><Trash2 className="size-3.5" /></Button>}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {!loading && totalPages > 1 && (
+          <div className="flex justify-between items-center px-4 py-3 border-t border-border">
+            <span className="text-xs text-muted-foreground">{filtered.length} داواکاری — لاپەڕە {page} لە {totalPages}</span>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>→</Button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const pg = page <= 3 ? i + 1 : page + i - 2;
+                if (pg < 1 || pg > totalPages) return null;
+                return (
+                  <Button key={pg} variant={page === pg ? "default" : "outline"} size="sm" onClick={() => setPage(pg)} className="min-w-8">{pg}</Button>
+                );
+              })}
+              <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>←</Button>
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* ════════════════════════════════════════════════════════════════
           NEW ORDER MODAL
       ════════════════════════════════════════════════════════════════ */}
-      <Modal open={newOrderOpen} onClose={() => { setNewOrderOpen(false); resetForm(); }} title={editOrder ? `گۆڕینی داواکاری — ${editOrder.orderNumber}` : "داواکاری نوێ"} width={720}>
+      <Dialog open={newOrderOpen} onOpenChange={open => { if (!open) { setNewOrderOpen(false); resetForm(); } }}>
+        <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{editOrder ? `گۆڕینی داواکاری — ${editOrder.orderNumber}` : "داواکاری نوێ"}</DialogTitle>
+            <DialogDescription>زانیاری داواکاری پڕبکەوە</DialogDescription>
+          </DialogHeader>
         <form onSubmit={handleSubmit}>
           {/* To-warehouse toggle */}
           {!editOrder && (
-            <div style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
-              <button type="button" onClick={() => { setToWarehouse(!toWarehouse); setToWarehouseId(""); setForm({ ...form, warehouseId: "" }); }}
-                style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, border: "1.5px solid", cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all .15s",
-                  borderColor: toWarehouse ? "#7C3AED" : "#DEE2E6",
-                  background: toWarehouse ? "#F3F0FF" : "#fff",
-                  color: toWarehouse ? "#7C3AED" : "#6C757D",
-                }}>
+            <div className="mb-3.5 flex items-center gap-2.5">
+              <Button type="button" variant={toWarehouse ? "outline" : "ghost"}
+                onClick={() => { setToWarehouse(!toWarehouse); setToWarehouseId(""); setForm({ ...form, warehouseId: "" }); }}
+                className={cn("gap-1.5 font-bold text-[13px] rounded-[10px] border-[1.5px]",
+                  toWarehouse ? 'border-violet-600 bg-violet-50 dark:bg-violet-950/30 text-violet-600' : 'border-border text-muted-foreground')}>
                 🏪 {toWarehouse ? "داواکاری بۆ کۆگا ✓" : "داواکاری بۆ کۆگا"}
-              </button>
-              {toWarehouse && <span style={{ fontSize: 12, color: "#7C3AED" }}>کۆگا وەکو وەرگر — بۆنەسی کۆگا بەکاردەهێنرێت، بۆنەسی نوێنەر نییە</span>}
+              </Button>
+              {toWarehouse && <span className="text-xs text-violet-600">کۆگا وەکو وەرگر — بۆنەسی کۆگا بەکاردەهێنرێت، بۆنەسی نوێنەر نییە</span>}
             </div>
           )}
 
-          <FormGrid cols={2}>
+          <div className="grid grid-cols-2 gap-4">
             {/* Client or Warehouse selector based on toggle */}
             {toWarehouse ? (
-              <FormField label="🏪 کۆگا (وەرگر)" required>
-                <select style={selectStyle} value={toWarehouseId} onChange={e => setToWarehouseId(e.target.value)} required>
-                  <option value="">کۆگا هەڵبژێرە...</option>
-                  {warehouses.filter(w => w.isActive).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </FormField>
+              <div className="space-y-2">
+                <Label>🏪 کۆگا (وەرگر) *</Label>
+                <Select value={toWarehouseId || null} onValueChange={(v: string | null) => v && setToWarehouseId(v)}>
+                  <SelectTrigger><SelectValue placeholder="کۆگا هەڵبژێرە..." /></SelectTrigger>
+                  <SelectContent>
+                    {warehouses.filter(w => w.isActive).map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             ) : (
-              <FormField label="کڕیار" required>
+              <div className="space-y-2">
+                <Label>کڕیار *</Label>
                 <ClientCombobox clients={clients} value={form.clientId} clientName={form.clientName}
                   onChange={(id, name) => setForm({ ...form, clientId: id, clientName: name })}
                   onRequestNew={(name) => setForm({ ...form, clientName: name })} />
-              </FormField>
+              </div>
             )}
             {!isRep ? (
-              <FormField label="نوێنەر" required>
-                <select style={selectStyle} value={form.repId} onChange={e => setForm({ ...form, repId: e.target.value })} required>
-                  <option value="">هەڵبژاردن...</option>
-                  {reps.filter(r => r.isActive).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-              </FormField>
+              <div className="space-y-2">
+                <Label>نوێنەر *</Label>
+                <Select value={form.repId || null} onValueChange={(v: string | null) => v && setForm({ ...form, repId: v })}>
+                  <SelectTrigger><SelectValue placeholder="هەڵبژاردن..." /></SelectTrigger>
+                  <SelectContent>
+                    {reps.filter(r => r.isActive).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             ) : (
-              <FormField label="نوێنەر">
-                <div style={{ padding: "8px 12px", background: "#EDF2FF", borderRadius: 8, fontSize: 14, color: "#4263EB", fontWeight: 600 }}>{myRep?.name || currentUser?.name}</div>
-              </FormField>
+              <div className="space-y-2">
+                <Label>نوێنەر</Label>
+                <div className="px-3 py-2 bg-primary/10 rounded-lg text-sm text-primary font-semibold">{myRep?.name || currentUser?.name}</div>
+              </div>
             )}
-          </FormGrid>
+          </div>
           {/* Warehouse transit selector — hidden when toWarehouse */}
           {!toWarehouse && (
-            <FormGrid cols={2}>
-              <FormField label="کۆگا">
-                <select style={selectStyle} value={form.warehouseId} onChange={e => setForm({ ...form, warehouseId: e.target.value })}>
-                  <option value="">— ڕاستەوخۆ (بێ کۆگا) —</option>
-                  {warehouses.filter(w => w.isActive).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </FormField>
-              <FormField label="تێبینی">
-                <input style={inputStyle} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
-              </FormField>
-            </FormGrid>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="space-y-2">
+                <Label>کۆگا</Label>
+                <Select value={form.warehouseId || null} onValueChange={(v: string | null) => setForm({ ...form, warehouseId: v || "" })}>
+                  <SelectTrigger><SelectValue placeholder="— ڕاستەوخۆ (بێ کۆگا) —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— ڕاستەوخۆ (بێ کۆگا) —</SelectItem>
+                    {warehouses.filter(w => w.isActive).map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>تێبینی</Label>
+                <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
+              </div>
+            </div>
           )}
           {toWarehouse && (
-            <FormGrid cols={1}>
-              <FormField label="تێبینی">
-                <input style={inputStyle} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
-              </FormField>
-            </FormGrid>
+            <div className="mt-4 space-y-2">
+              <Label>تێبینی</Label>
+              <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
+            </div>
           )}
 
           {/* Warehouse bonus info banner (no global rep input anymore) */}
           {selectedWarehouse && (
-            <div style={{ marginBottom: 12, padding: "10px 14px", background: "#EDE9FE", borderRadius: 10, fontSize: 13, color: "#7C3AED" }}>
+            <div className="mb-3 px-3.5 py-2.5 bg-violet-100 dark:bg-violet-950/30 rounded-[10px] text-[13px] text-violet-600">
               🏪 <strong>{selectedWarehouse.name}</strong> — بۆنەسی کۆگا: <strong>{selectedWarehouse.bonusPct}%</strong>
               {selectedWarehouse.bonusRules.length > 0 && <span> · {selectedWarehouse.bonusRules.length} ڕێگەی تایبەت</span>}
             </div>
           )}
           {isDirect && (
-            <div style={{ marginBottom: 12, padding: "10px 14px", background: "#FEF3C7", borderRadius: 10, fontSize: 13, color: "#D97706" }}>
+            <div className="mb-3 px-3.5 py-2.5 bg-amber-100 dark:bg-amber-950/30 rounded-[10px] text-[13px] text-amber-600">
               📦 داواکاری ڕاستەوخۆ — دەتوانی بۆ هەر بەرهەمێک بۆنەسی دیاری بکەیت (ئەگەر بەتاڵ بهێڵیتەوە = بۆنەس نییە)
             </div>
           )}
 
           {/* Product rows */}
-          <div style={{ marginTop: 4 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>بەرهەمەکان</span>
-              <button type="button" onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", manualBonusPct: "", repBonusPct: "" }])}
-                style={{ background: "#EDF2FF", color: "#4263EB", border: "none", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>+ زیادکردن</button>
+          <div className="mt-1">
+            <div className="flex justify-between items-center mb-2.5">
+              <span className="font-semibold text-sm">بەرهەمەکان</span>
+              <Button type="button" variant="ghost" size="sm" className="bg-primary/10 text-primary hover:bg-primary/20 text-[13px] font-semibold" onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", manualBonusPct: "", repBonusPct: "" }])}>+ زیادکردن</Button>
             </div>
             {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: toWarehouse ? "1fr 120px auto" : "1fr 120px 110px auto", gap: 8, marginBottom: 4 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#6C757D" }}>بەرهەم</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#6C757D" }}>ژمارە</div>
-              {!toWarehouse && <div style={{ fontSize: 12, fontWeight: 600, color: isDirect ? "#D97706" : "#059669" }}>{isDirect ? "بۆنەس %" : "👤 نوێنەر %"}</div>}
+            <div className="mb-1 gap-2" style={{ display: "grid", gridTemplateColumns: toWarehouse ? "1fr 120px auto" : "1fr 120px 110px auto" }}>
+              <div className="text-xs font-semibold text-muted-foreground">بەرهەم</div>
+              <div className="text-xs font-semibold text-muted-foreground">ژمارە</div>
+              {!toWarehouse && <div className={`text-xs font-semibold ${isDirect ? 'text-amber-600' : 'text-emerald-600'}`}>{isDirect ? "بۆنەس %" : "👤 نوێنەر %"}</div>}
               <div />
             </div>
             {orderItems.map((item, idx) => (
-              <div key={idx} style={{ display: "grid", gridTemplateColumns: toWarehouse ? "1fr 120px auto" : "1fr 120px 110px auto", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                <select style={selectStyle} value={item.productId} onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: e.target.value } : x))}>
-                  <option value="">بەرهەم هەڵبژێرە...</option>
-                  {products.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                <input type="number" min={1} style={inputStyle} placeholder="ژمارە" value={item.quantity}
+              <div key={idx} className="mb-2 gap-2 items-center" style={{ display: "grid", gridTemplateColumns: toWarehouse ? "1fr 120px auto" : "1fr 120px 110px auto" }}>
+                <Select value={item.productId || null} onValueChange={(v: string | null) => v && setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v } : x))}>
+                  <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
+                  <SelectContent>
+                    {products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
                   onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
                 {/* Bonus % input: direct = manualBonusPct, warehouse transit = repBonusPct, toWarehouse = hidden */}
                 {!toWarehouse && (
-                  <div style={{ position: "relative" }}>
-                    <input type="number" min={0} max={100} style={{ ...inputStyle, paddingRight: 28 }} placeholder="0"
+                  <div className="relative">
+                    <Input type="number" min={0} max={100} className="ps-7" placeholder="0"
                       value={isDirect ? item.manualBonusPct : item.repBonusPct}
                       onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, [isDirect ? "manualBonusPct" : "repBonusPct"]: e.target.value } : x))} />
-                    <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "#ADB5BD", pointerEvents: "none" }}>%</span>
+                    <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
                   </div>
                 )}
                 {orderItems.length > 1 && (
-                  <button type="button" onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}
-                    style={{ background: "#FEE2E2", color: "#DC2626", border: "none", borderRadius: 8, width: 34, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Button type="button" variant="ghost" size="icon" className="size-9 bg-red-100 dark:bg-red-950/30 text-red-600 hover:bg-red-200" onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}>
                     <X size={14} />
-                  </button>
+                  </Button>
                 )}
               </div>
             ))}
@@ -683,29 +714,29 @@ export default function OrdersPage() {
 
           {/* Bonus preview */}
           {liveBonusItems.some(i => i.bonusQty > 0) && (
-            <div style={{ marginTop: 14, padding: 12, background: "#FAFAFA", borderRadius: 10, border: "1px solid #E9ECEF" }}>
-              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: "#495057" }}>داڕێژەی بۆنەس</div>
+            <div className="mt-3.5 p-3 bg-muted rounded-[10px] border border-border">
+              <div className="font-semibold text-[13px] mb-2.5 text-muted-foreground">داڕێژەی بۆنەس</div>
               {liveBonusItems.filter(i => i.bonusQty > 0).map((i, idx) => (
-                <div key={idx} style={{ marginBottom: 10, padding: "8px 10px", background: "white", borderRadius: 8, border: "1px solid #F1F3F5" }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1A1A2E", marginBottom: 6 }}>{i.name}</div>
-                  <div style={{ fontSize: 12, color: "#495057", padding: "2px 0" }}>
+                <div key={idx} className="mb-2.5 p-2.5 bg-card rounded-lg border border-border">
+                  <div className="font-bold text-[13px] text-foreground mb-1.5">{i.name}</div>
+                  <div className="text-xs text-muted-foreground py-0.5">
                     دەبێیت: <strong>{i.qty} + {i.bonusQty} = {i.qty + i.bonusQty}</strong> دانە
                   </div>
                   {isDirect && i.bonusQty > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#D97706", padding: "2px 0" }}>
-                      <span style={{ width: 20, textAlign: "center" }}>📦</span>
+                    <div className="flex items-center gap-1.5 text-xs text-amber-600 py-0.5">
+                      <span className="w-5 text-center">📦</span>
                       <span>بۆنەس: <strong>+{i.bonusQty}</strong> ({i.pct}%)</span>
                     </div>
                   )}
                   {!isDirect && i.warehouseBonusQty > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#7C3AED", padding: "2px 0" }}>
-                      <span style={{ width: 20, textAlign: "center" }}>🏪</span>
+                    <div className="flex items-center gap-1.5 text-xs text-violet-600 py-0.5">
+                      <span className="w-5 text-center">🏪</span>
                       <span>بۆنەسی کۆگا: <strong>+{i.warehouseBonusQty}</strong> ({i.pct}%) — لەگەڵ کاڵاکە دەنێردرێت</span>
                     </div>
                   )}
                   {!isDirect && i.repBonusQty > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#059669", padding: "2px 0" }}>
-                      <span style={{ width: 20, textAlign: "center" }}>👤</span>
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-600 py-0.5">
+                      <span className="w-5 text-center">👤</span>
                       <span>بۆنەسی نوێنەر: <strong>+{i.repBonusQty}</strong> ({i.repPct}%) — نوێنەر وەردەگرێت</span>
                     </div>
                   )}
@@ -714,9 +745,13 @@ export default function OrdersPage() {
             </div>
           )}
 
-          <FormActions onCancel={() => { setNewOrderOpen(false); resetForm(); }} submitLabel={editOrder ? (isManager ? "پاشەکەوتکردنی گۆڕانکاری" : "ناردنی داوای گۆڕانکاری") : "تۆمارکردنی داواکاری"} />
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button type="button" variant="outline" onClick={() => { setNewOrderOpen(false); resetForm(); }}>پاشگەزبوونەوە</Button>
+            <Button type="submit">{editOrder ? (isManager ? "پاشەکەوتکردنی گۆڕانکاری" : "ناردنی داوای گۆڕانکاری") : "تۆمارکردنی داواکاری"}</Button>
+          </DialogFooter>
         </form>
-      </Modal>
+        </DialogContent>
+      </Dialog>
 
       {/* ════════════════════════════════════════════════════════════════
           ORDER DETAIL DRAWER (view only)
@@ -724,13 +759,15 @@ export default function OrdersPage() {
       {detailOrder && (() => {
         const o = orders.find(x => x.id === detailOrder.id) || detailOrder;
         return (
-          <Modal open={!!detailOrder} onClose={() => setDetailOrder(null)} title={`داواکاری — ${o.orderNumber}`} width={700}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <Dialog open={!!detailOrder} onOpenChange={open => !open && setDetailOrder(null)}>
+            <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto" dir="rtl">
+              <DialogHeader><DialogTitle>داواکاری — {o.orderNumber}</DialogTitle><DialogDescription>وردەکاری داواکاری</DialogDescription></DialogHeader>
+            <div className="flex flex-col gap-4">
+              <div className="flex gap-2.5 flex-wrap items-center">
                 <StatusBadge status={o.status} />
-                {o.driverName && <span style={{ fontSize: 13, color: "#6C757D" }}>— شوفێر: <strong>{o.driverName}</strong> · {o.driverPhone}</span>}
+                {o.driverName && <span className="text-[13px] text-muted-foreground">— شوفێر: <strong>{o.driverName}</strong> · {o.driverPhone}</span>}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div className="grid grid-cols-2 gap-2.5">
                 {[
                   { label: "کڕیار", value: o.clientName },
                   { label: "نوێنەر", value: o.repName },
@@ -741,36 +778,39 @@ export default function OrdersPage() {
                   ...(o.deliveredAt ? [{ label: "بەرواری گەیشتن", value: new Date(o.deliveredAt).toLocaleDateString("ku") }] : []),
                   ...(o.paidAt ? [{ label: "بەرواری پارەدان", value: new Date(o.paidAt).toLocaleDateString("ku") }] : []),
                 ].map(f => (
-                  <div key={f.label} style={{ padding: "10px 14px", background: "#FAFAFA", borderRadius: 10, border: "1px solid #F1F3F5" }}>
-                    <div style={{ fontSize: 11, color: "#ADB5BD", marginBottom: 2 }}>{f.label}</div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{f.value}</div>
+                  <div key={f.label} className="px-3.5 py-2.5 bg-muted rounded-[10px] border border-border">
+                    <div className="text-[11px] text-muted-foreground mb-0.5">{f.label}</div>
+                    <div className="font-semibold text-sm">{f.value}</div>
                   </div>
                 ))}
               </div>
-              <div style={{ border: "1px solid #F1F3F5", borderRadius: 10, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead><tr style={{ background: "#FAFAFA" }}>
-                    {["بەرهەم", "ژمارە", "🏪 کۆگا", "👤 نوێنەر", "نرخ", "کۆ"].map(h => <th key={h} style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: "#495057" }}>{h}</th>)}
-                  </tr></thead>
-                  <tbody>
+              <div className="border border-border rounded-[10px] overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {["بەرهەم", "ژمارە", "🏪 کۆگا", "👤 نوێنەر", "نرخ", "کۆ"].map(h => <TableHead key={h}>{h}</TableHead>)}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {o.items.map((item, idx) => (
-                      <tr key={idx} style={{ borderTop: "1px solid #F8F9FA" }}>
-                        <td style={{ padding: "10px 14px" }}>{item.productName}</td>
-                        <td style={{ padding: "10px 14px" }}>{item.quantity}</td>
-                        <td style={{ padding: "10px 14px", color: "#7C3AED", fontWeight: 600 }}>{(item.warehouseBonusQty || item.bonusQty || 0) > 0 ? `+${item.warehouseBonusQty ?? item.bonusQty}` : "—"}</td>
-                        <td style={{ padding: "10px 14px", color: "#059669", fontWeight: 600 }}>{(item.repBonusQty || 0) > 0 ? `+${item.repBonusQty}` : "—"}</td>
-                        <td style={{ padding: "10px 14px" }}>{formatIQD(item.unitPrice)}</td>
-                        <td style={{ padding: "10px 14px", fontWeight: 600 }}>{formatIQD(item.quantity * item.unitPrice)}</td>
-                      </tr>
+                      <TableRow key={idx}>
+                        <TableCell>{item.productName}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell className="text-violet-600 font-semibold">{(item.warehouseBonusQty || item.bonusQty || 0) > 0 ? `+${item.warehouseBonusQty ?? item.bonusQty}` : "—"}</TableCell>
+                        <TableCell className="text-emerald-600 font-semibold">{(item.repBonusQty || 0) > 0 ? `+${item.repBonusQty}` : "—"}</TableCell>
+                        <TableCell>{formatIQD(item.unitPrice)}</TableCell>
+                        <TableCell className="font-semibold">{formatIQD(item.quantity * item.unitPrice)}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
-              {o.signedInvoiceUrl && <a href={o.signedInvoiceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#4263EB", fontSize: 13, fontWeight: 600 }}>📄 پسوولەی واژووکراو</a>}
-              {o.signedReceiptUrl && <a href={o.signedReceiptUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#059669", fontSize: 13, fontWeight: 600 }}>🧾 پسوولەی پارەدان</a>}
-              {o.notes && <p style={{ fontSize: 13, color: "#6C757D", background: "#FAFAFA", padding: "10px 14px", borderRadius: 10, margin: 0 }}>{o.notes}</p>}
+              {o.signedInvoiceUrl && <a href={o.signedInvoiceUrl} target="_blank" rel="noopener noreferrer" className="text-primary text-[13px] font-semibold">📄 پسوولەی واژووکراو</a>}
+              {o.signedReceiptUrl && <a href={o.signedReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-600 text-[13px] font-semibold">🧾 پسوولەی پارەدان</a>}
+              {o.notes && <p className="text-[13px] text-muted-foreground bg-muted px-3.5 py-2.5 rounded-[10px] m-0">{o.notes}</p>}
             </div>
-          </Modal>
+            </DialogContent>
+          </Dialog>
         );
       })()}
 
@@ -778,90 +818,91 @@ export default function OrdersPage() {
           COMBINED READY + SEND MODAL (IN_PROGRESS → SENT)
           Clicking "ئامادەیە+ناردن" opens this immediately
       ════════════════════════════════════════════════════════════════ */}
-      <Modal open={!!sendModalOrder} onClose={() => setSendModalOrder(null)} title="ئامادەیە — هەڵبژاردنی شوفێر" width={480}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Dialog open={!!sendModalOrder} onOpenChange={open => !open && setSendModalOrder(null)}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>ئامادەیە — هەڵبژاردنی شوفێر</DialogTitle><DialogDescription>شوفێرێک هەڵبژێرە بۆ ناردنی داواکاری</DialogDescription></DialogHeader>
+        <div className="flex flex-col gap-4 modal-stagger">
           {sendModalOrder && (
-            <div style={{ padding: "10px 14px", background: "#F8F9FA", borderRadius: 10, fontSize: 13 }}>
-              <span style={{ color: "#6C757D" }}>داواکاری </span>
-              <strong style={{ color: "#4263EB" }}>{sendModalOrder.orderNumber}</strong>
-              <span style={{ color: "#6C757D" }}> — {sendModalOrder.clientName}</span>
+            <div className="px-3.5 py-2.5 bg-muted rounded-[10px] text-[13px]">
+              <span className="text-muted-foreground">داواکاری </span>
+              <strong className="text-primary">{sendModalOrder.orderNumber}</strong>
+              <span className="text-muted-foreground"> — {sendModalOrder.clientName}</span>
             </div>
           )}
-          <FormField label="شوفێر" required>
-            <select style={selectStyle} value={selectedDriverId} onChange={e => setSelectedDriverId(e.target.value)}>
-              <option value="">هەڵبژاردن...</option>
-              {drivers.filter(d => d.isActive).map(d => (
-                <option key={d.id} value={d.id}>{d.name} — {d.city} ({d.phone})</option>
-              ))}
-            </select>
-          </FormField>
+          <div className="space-y-2">
+            <Label>شوفێر *</Label>
+            <Select value={selectedDriverId || null} onValueChange={(v: string | null) => v && setSelectedDriverId(v)}>
+              <SelectTrigger><SelectValue placeholder="هەڵبژاردن..." /></SelectTrigger>
+              <SelectContent>
+                {drivers.filter(d => d.isActive).map(d => (
+                  <SelectItem key={d.id} value={d.id}>{d.name} — {d.city} ({d.phone})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {selectedDriverId && (() => {
             const d = drivers.find(x => x.id === selectedDriverId);
             return d ? (
-              <div style={{ padding: 14, background: "#EDE9FE", borderRadius: 10 }}>
-                <div style={{ fontWeight: 700, color: "#7C3AED", fontSize: 15 }}>{d.name}</div>
-                <div style={{ fontSize: 13, color: "#6C757D", marginTop: 2 }}>{d.phone} · {d.city}</div>
+              <div className="p-3.5 bg-violet-100 dark:bg-violet-950/30 rounded-[10px]">
+                <div className="font-bold text-violet-600 text-[15px]">{d.name}</div>
+                <div className="text-[13px] text-muted-foreground mt-0.5">{d.phone} · {d.city}</div>
                 {d.telegramChatId
-                  ? <div style={{ fontSize: 12, color: "#7C3AED", marginTop: 4 }}>📱 تێلێگرام: ئاگاداری دەنێردرێت</div>
-                  : <div style={{ fontSize: 12, color: "#ADB5BD", marginTop: 4 }}>⚠️ Chat ID نییە — ئاگاداری نانێردرێت</div>
+                  ? <div className="text-xs text-violet-600 mt-1">📱 تێلێگرام: ئاگاداری دەنێردرێت</div>
+                  : <div className="text-xs text-muted-foreground mt-1">⚠️ Chat ID نییە — ئاگاداری نانێردرێت</div>
                 }
               </div>
             ) : null;
           })()}
           {/* Telegram voice info banner */}
-          <div style={{ padding: "12px 14px", background: "#F0F4FF", borderRadius: 10, border: "1px solid #C5D2FF" }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#4263EB", marginBottom: 4 }}>🎙️ ئەوازی تێبینی</div>
-            <div style={{ fontSize: 12, color: "#495057", lineHeight: 1.8 }}>
+          <div className="px-3.5 py-3 bg-primary/5 rounded-[10px] border border-primary/20">
+            <div className="text-[13px] font-bold text-primary mb-1">🎙️ ئەوازی تێبینی</div>
+            <div className="text-xs text-muted-foreground leading-relaxed">
               دوای کرتەکردن لەسەر <b>"✔ ئامادەیە"</b>، بۆتی تێلێگرام پەیامێک دەنێرێت بۆ ئاگادارکەرەکان داوا دەکات تۆمارکردنی ئەوازی تێبینی.
               ئەو ئەوازەیان بینێرن بۆ بۆتەکە — بۆتەکە بەخۆی دەیدرێتە شوفێرەکە.
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button onClick={() => setSendModalOrder(null)} style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
-            <button onClick={confirmSend} disabled={sending || !selectedDriverId} style={{ padding: "9px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, opacity: sending || !selectedDriverId ? 0.6 : 1 }}>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setSendModalOrder(null)}>پاشگەزبوونەوە</Button>
+            <Button onClick={confirmSend} disabled={sending || !selectedDriverId} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               {sending ? "ناردن..." : "✔ ئامادەیە"}
-            </button>
+            </Button>
           </div>
         </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
 
-      {/* ════════════════════════════════════════════════════════════════
-          INVOICE UPLOAD (SENT → DELIVERED)
-      ════════════════════════════════════════════════════════════════ */}
-      <Modal open={!!invoiceModalOrder} onClose={() => { setInvoiceModalOrder(null); setInvoiceFiles([]); }} title="بارکردنی پسوولەی واژووکراو">
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* INVOICE UPLOAD */}
+      <Dialog open={!!invoiceModalOrder} onOpenChange={open => { if (!open) { setInvoiceModalOrder(null); setInvoiceFiles([]); } }}>
+        <DialogContent className="sm:max-w-lg" dir="rtl">
+          <DialogHeader><DialogTitle>بارکردنی پسوولەی واژووکراو</DialogTitle><DialogDescription>فایلی پسوولەی واژووکراو باربکە</DialogDescription></DialogHeader>
+        <div className="flex flex-col gap-4 modal-stagger">
 
           {/* Drop zone */}
           <div
             onClick={() => invoiceRef.current?.click()}
             onDragOver={e => {
               e.preventDefault(); e.stopPropagation();
-              e.currentTarget.style.borderColor = "#4263EB";
-              e.currentTarget.style.background  = "#EDF2FF";
+              e.currentTarget.classList.add('drop-zone--active');
             }}
             onDragLeave={e => {
               e.preventDefault(); e.stopPropagation();
-              e.currentTarget.style.borderColor = "#D1D1D1";
-              e.currentTarget.style.background  = "#FAFAFA";
+              e.currentTarget.classList.remove('drop-zone--active');
             }}
             onDrop={e => {
               e.preventDefault(); e.stopPropagation();
-              e.currentTarget.style.borderColor = "#D1D1D1";
-              e.currentTarget.style.background  = "#FAFAFA";
+              e.currentTarget.classList.remove('drop-zone--active');
               const dropped = Array.from(e.dataTransfer.files);
               if (dropped.length) setInvoiceFiles(prev => [...prev, ...dropped]);
             }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = "#4263EB")}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = "#D1D1D1")}
-            style={{ border: "1.5px dashed #D1D1D1", borderRadius: 12, padding: "28px 20px", textAlign: "center", cursor: "pointer", background: "#FAFAFA", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, transition: "border-color .2s, background .2s" }}
+            className="drop-zone"
           >
-            <Upload size={24} style={{ color: "#ADB5BD" }} />
+            <Upload size={24} style={{ color: "hsl(var(--muted-foreground))" }} />
             <div>
               <div style={{ fontSize: 14, fontWeight: 500, color: "#171717" }}>فایلێک هەڵبژێرە یان ئێرە بیکێشە (چەند فایل دەتوانیت)</div>
               <div style={{ fontSize: 12, color: "#5C5C5C", marginTop: 4 }}>وێنە، PDF، تا ٥٠ MB</div>
             </div>
-            <div style={{ padding: "6px 14px", background: "#fff", border: "1px solid #E8E8E8", borderRadius: 8, fontSize: 13, color: "#5C5C5C", fontWeight: 500, boxShadow: "0 1px 2px rgba(10,13,20,.03)" }}>
+            <div style={{ padding: "6px 14px", background: "hsl(var(--card))", border: "1px solid #E8E8E8", borderRadius: 8, fontSize: 13, color: "#5C5C5C", fontWeight: 500, boxShadow: "0 1px 2px rgba(10,13,20,.03)" }}>
               هەڵبژاردنی فایل
             </div>
             <input ref={invoiceRef} type="file" accept="image/*,application/pdf" multiple style={{ display: "none" }}
@@ -874,38 +915,38 @@ export default function OrdersPage() {
 
           {/* File cards — one per file */}
           {invoiceFiles.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="flex flex-col gap-2">
               {invoiceFiles.map((file, idx) => (
-                <div key={idx} style={{ border: `1px solid ${uploading ? "#E8E8E8" : "#D1FAE5"}`, borderRadius: 12, padding: "12px 14px", background: uploading ? "#fff" : "#F0FDF4", display: "flex", flexDirection: "column", gap: 10, transition: "all .3s" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, background: "#FEE2E2", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>📄</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: "#171717", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{file.name}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
-                        <span style={{ fontSize: 11, color: "#5C5C5C" }}>{(file.size / 1024).toFixed(0)} KB</span>
-                        <span style={{ fontSize: 11, color: "#5C5C5C" }}>∙</span>
+                <div key={idx} className={`rounded-xl p-3 flex flex-col gap-2.5 transition-all border ${uploading ? 'border-border bg-card' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/20'}`}>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 bg-red-100 dark:bg-red-950/30 rounded-lg flex items-center justify-center shrink-0 text-base">📄</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-medium truncate">{file.name}</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[11px] text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
+                        <span className="text-[11px] text-muted-foreground">∙</span>
                         {uploading ? (
-                          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#171717" }}>
-                            <span style={{ display: "inline-block", width: 10, height: 10, border: "2px solid #4263EB", borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                          <span className="flex items-center gap-1 text-[11px]">
+                            <span className="inline-block w-2.5 h-2.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                             بارکردن...
                           </span>
                         ) : (
-                          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#059669", fontWeight: 600 }}>
+                          <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
                             <CheckCircle size={11} /> تەواوبوو
                           </span>
                         )}
                       </div>
                     </div>
                     {!uploading && (
-                      <button onClick={() => setInvoiceFiles(prev => prev.filter((_, i) => i !== idx))}
-                        style={{ background: "none", border: "none", cursor: "pointer", padding: 2, color: "#ADB5BD", flexShrink: 0, display: "flex" }}>
+                      <Button variant="ghost" size="icon" onClick={() => setInvoiceFiles(prev => prev.filter((_, i) => i !== idx))}
+                        className="size-6 shrink-0">
                         <X size={16} />
-                      </button>
+                      </Button>
                     )}
                   </div>
                   {uploading && (
-                    <div style={{ height: 5, background: "#EBEBEB", borderRadius: 999, overflow: "hidden" }}>
-                      <div style={{ height: "100%", background: "#4263EB", borderRadius: 999, animation: "progress-pulse 1.5s ease-in-out infinite" }} />
+                    <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                      <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '70%' }} />
                     </div>
                   )}
                 </div>
@@ -920,56 +961,55 @@ export default function OrdersPage() {
             }
           `}</style>
 
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => { setInvoiceModalOrder(null); setInvoiceFiles([]); }}
-              style={{ flex: 1, padding: "9px 18px", background: "#fff", border: "1px solid #E8E8E8", borderRadius: 10, cursor: "pointer", fontWeight: 500, color: "#5C5C5C", boxShadow: "0 1px 2px rgba(10,13,20,.03)" }}>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => { setInvoiceModalOrder(null); setInvoiceFiles([]); }}>
               پاشگەزبوونەوە
-            </button>
-            <button onClick={confirmDelivered} disabled={uploading}
-              style={{ flex: 1, padding: "9px 18px", background: "#FA7319", color: "#fff", border: "none", borderRadius: 10, cursor: uploading ? "not-allowed" : "pointer", fontWeight: 600, opacity: uploading ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            </Button>
+            <Button onClick={confirmDelivered} disabled={uploading} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white">
               <CheckCircle size={16} />
               {uploading ? "بارکردن..." : "گەیشت"}
-            </button>
+            </Button>
           </div>
         </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
 
-
-      {/* ════════════════════════════════════════════════════════════════
-          REJECT MODAL
-      ════════════════════════════════════════════════════════════════ */}
-      <Modal open={!!rejectOrder} onClose={() => { setRejectOrder(null); setRejectReason(""); }} title="ڕەتکردنەوەی داواکاری">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <p style={{ fontSize: 14, color: "#6C757D", margin: 0 }}>هۆی ڕەتکردنەوە بنووسە (ئەگەر پێویست بوو).</p>
-          <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={3}
-            placeholder="هۆی ڕەتکردنەوە..." style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button onClick={() => { setRejectOrder(null); setRejectReason(""); }} style={{ padding: "9px 18px", background: "#F8F9FA", border: "1px solid #DEE2E6", borderRadius: 10, cursor: "pointer" }}>پاشگەزبوونەوە</button>
-            <button onClick={confirmReject} style={{ padding: "9px 18px", background: "#DC2626", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600 }}>ڕەتکردنەوە ✓</button>
+      {/* REJECT DIALOG */}
+      <Dialog open={!!rejectOrder} onOpenChange={open => { if (!open) { setRejectOrder(null); setRejectReason(""); } }}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>ڕەتکردنەوەی داواکاری</DialogTitle><DialogDescription>هۆی ڕەتکردنەوە بنووسە</DialogDescription></DialogHeader>
+        <div className="flex flex-col gap-3.5 modal-stagger">
+          <p className="text-sm text-muted-foreground m-0">هۆی ڕەتکردنەوە بنووسە (ئەگەر پێویست بوو).</p>
+          <Textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={3}
+            placeholder="هۆی ڕەتکردنەوە..." className="resize-y min-h-[80px]" />
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => { setRejectOrder(null); setRejectReason(""); }}>پاشگەزبوونەوە</Button>
+            <Button variant="destructive" onClick={confirmReject}>ڕەتکردنەوە ✓</Button>
           </div>
         </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
 
-      {/* ════════════════════════════════════════════════════════════════
-          PAYMENT MODAL (DELIVERED → PAID)
-      ════════════════════════════════════════════════════════════════ */}
-      <Modal open={!!payModalOrder} onClose={() => setPayModalOrder(null)} title="پارەدانی داواکاری" width={420}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* PAYMENT DIALOG */}
+      <Dialog open={!!payModalOrder} onOpenChange={open => !open && setPayModalOrder(null)}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader><DialogTitle>پارەدانی داواکاری</DialogTitle><DialogDescription>ڕێگای پارەدان دیاری بکە</DialogDescription></DialogHeader>
+        <div className="flex flex-col gap-4 modal-stagger">
           {payModalOrder && (
             <>
               {/* Order summary */}
-              <div style={{ background: "#F8F9FA", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                  <span style={{ color: "#6C757D" }}>داواکاری</span>
-                  <strong style={{ color: "#4263EB" }}>{payModalOrder.orderNumber}</strong>
+              <div className="bg-muted rounded-xl px-4 py-3.5 flex flex-col gap-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">داواکاری</span>
+                  <strong className="text-primary">{payModalOrder.orderNumber}</strong>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-                  <span style={{ color: "#6C757D" }}>کڕیار</span>
-                  <span style={{ fontWeight: 600 }}>{payModalOrder.clientName}</span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">کڕیار</span>
+                  <span className="font-semibold">{payModalOrder.clientName}</span>
                 </div>
-                <div style={{ borderTop: "1px solid #E9ECEF", marginTop: 4, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 16 }}>
-                  <span style={{ color: "#6C757D", fontWeight: 600 }}>کۆی گشتی</span>
-                  <strong style={{ color: "#059669", fontSize: 18 }}>
+                <div className="border-t border-border mt-1 pt-2 flex justify-between text-base">
+                  <span className="text-muted-foreground font-semibold">کۆی گشتی</span>
+                  <strong className="text-emerald-600 text-lg">
                     {new Intl.NumberFormat("ar-IQ").format(payModalOrder.totalAmount)} IQD
                   </strong>
                 </div>
@@ -977,42 +1017,51 @@ export default function OrdersPage() {
 
               {/* Payment method */}
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#495057", marginBottom: 10 }}>ڕێگای پارەدان</div>
-                <div style={{ display: "flex", gap: 10 }}>
+                <div className="text-[13px] font-bold text-muted-foreground mb-2.5">ڕێگای پارەدان</div>
+                <div className="flex gap-2.5">
                   {(["CASH", "TRANSFER"] as const).map(method => (
-                    <button key={method} type="button"
+                    <Button key={method} type="button" variant={payMethod === method ? "outline" : "ghost"}
                       onClick={() => setPayMethod(method)}
-                      style={{
-                        flex: 1, padding: "12px 16px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 14, transition: "all .15s",
-                        border: `2px solid ${payMethod === method ? (method === "CASH" ? "#059669" : "#4263EB") : "#E9ECEF"}`,
-                        background: payMethod === method ? (method === "CASH" ? "#D1FAE5" : "#EDF2FF") : "#fff",
-                        color: payMethod === method ? (method === "CASH" ? "#059669" : "#4263EB") : "#6C757D",
-                      }}>
+                      className={cn("flex-1 py-3 rounded-[10px] font-bold text-sm border-2",
+                        payMethod === method
+                          ? method === "CASH"
+                            ? "border-emerald-600 bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600"
+                            : "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground"
+                      )}>
                       {method === "CASH" ? "💵 کاش" : "🏦 حەواڵە"}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
 
               {/* Action buttons */}
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setPayModalOrder(null)}
-                  style={{ flex: 1, padding: "10px 18px", background: "#fff", border: "1px solid #E8E8E8", borderRadius: 10, cursor: "pointer", fontWeight: 500, color: "#5C5C5C" }}>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setPayModalOrder(null)}>
                   پاشگەزبوونەوە
-                </button>
-                <button onClick={confirmPayment} disabled={paying}
-                  style={{ flex: 1, padding: "10px 18px", background: "#059669", color: "#fff", border: "none", borderRadius: 10, cursor: paying ? "not-allowed" : "pointer", fontWeight: 700, fontSize: 14, opacity: paying ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                </Button>
+                <Button onClick={confirmPayment} disabled={paying} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white">
                   <DollarSign size={16} />
                   {paying ? "پرۆسەکردن..." : "پارەدراوە ✔"}
-                </button>
+                </Button>
               </div>
             </>
           )}
         </div>
-      </Modal>
-
-      {/* ── Delete confirm ── */}
-      <ConfirmDialog open={!!deleteId} message="دڵنیای لە سڕینەوەی ئەم داواکارییە؟" onConfirm={() => { if (deleteId) { deleteOrder(deleteId); setDeleteId(null); } }} onClose={() => setDeleteId(null)} />
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>سڕینەوەی داواکاری</AlertDialogTitle>
+            <AlertDialogDescription>دڵنیای لە سڕینەوەی ئەم داواکارییە؟</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>پاشگەزبوونەوە</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteId) { deleteOrder(deleteId); setDeleteId(null); } }}>سڕینەوە</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Print ── */}
       {printOrder && <PrintModal open={true} order={printOrder} onClose={() => setPrintOrder(null)} />}

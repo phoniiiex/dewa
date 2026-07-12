@@ -1,23 +1,18 @@
 "use client";
 import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { useRouter } from "next/navigation";
-import Sidebar from "@/components/layout/Sidebar";
+import AppSidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
-import Toast from "@/components/ui/Toast";
-import AiPanel from "@/components/ai/AiPanel";
-import ErrorBoundary from "@/components/ui/ErrorBoundary";
+import ErrorBoundary from "@/components/custom/ErrorBoundary";
 import { DataProvider } from "@/lib/store";
 import { setCurrentActor } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import "@/styles/dashboard.css";
-
-type SidebarPosition = "right" | "left" | "top";
+import { Toaster } from "@/components/ui/sonner";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 
 export type DateRange = { from: Date | null; to: Date | null; label: string };
 
 interface LayoutContextType {
-  sidebarCollapsed: boolean;
-  toggleSidebar: () => void;
   searchOpen: boolean;
   setSearchOpen: (v: boolean) => void;
   notifOpen: boolean;
@@ -28,10 +23,6 @@ interface LayoutContextType {
   currentUser: { id: string; email: string; name: string; role: string; avatarUrl: string; phone: string } | null;
   setCurrentUser: React.Dispatch<React.SetStateAction<{ id: string; email: string; name: string; role: string; avatarUrl: string; phone: string } | null>>;
   updateCurrentUserProfile: (data: { name?: string; phone?: string; avatarUrl?: string }) => Promise<void>;
-  darkMode: boolean;
-  toggleDarkMode: () => void;
-  sidebarPosition: SidebarPosition;
-  setSidebarPosition: (pos: SidebarPosition) => void;
   dateRange: DateRange;
   setDateRange: (r: DateRange) => void;
   globalStatusFilter: string;
@@ -49,41 +40,15 @@ export function useLayout() {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: string; avatarUrl: string; phone: string } | null>(null);
-  const [darkMode, setDarkMode] = useState(false);
-  const [sidebarPosition, setSidebarPositionState] = useState<SidebarPosition>("right");
   const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null, label: "هەموو ماوەکان" });
   const [globalStatusFilter, setGlobalStatusFilter] = useState("هەموو");
   const [openNewOrder, setOpenNewOrder] = useState(false);
   const hbIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Load appearance preferences from localStorage
-  useEffect(() => {
-    const savedDark = localStorage.getItem("dewa_dark_mode") === "true";
-    const savedPos = (localStorage.getItem("dewa_sidebar_pos") || "right") as SidebarPosition;
-    setDarkMode(savedDark);
-    setSidebarPositionState(savedPos);
-    document.documentElement.setAttribute("data-theme", savedDark ? "dark" : "light");
-    document.documentElement.setAttribute("data-sidebar", savedPos);
-  }, []);
-
-  const toggleDarkMode = () => {
-    const next = !darkMode;
-    setDarkMode(next);
-    localStorage.setItem("dewa_dark_mode", String(next));
-    document.documentElement.setAttribute("data-theme", next ? "dark" : "light");
-  };
-
-  const setSidebarPosition = (pos: SidebarPosition) => {
-    setSidebarPositionState(pos);
-    localStorage.setItem("dewa_sidebar_pos", pos);
-    document.documentElement.setAttribute("data-sidebar", pos);
-  };
 
   // Auth guard
   useEffect(() => {
@@ -105,13 +70,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           avatarUrl: (profile as Record<string, string>)?.avatar_url || "",
           phone: (profile as Record<string, string>)?.phone || "",
         });
-        // Set actor for activity logging
         setCurrentActor(
           session.user.id,
           (profile as Record<string, string>)?.name || session.user.user_metadata?.name || "",
           (profile as Record<string, string>)?.role || "REP"
         );
-        // Heartbeat: update last_seen via admin API (bypasses RLS)
         const accessToken = session.access_token;
         const updateLastSeen = () =>
           fetch("/api/auth/heartbeat", {
@@ -157,9 +120,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   if (!authed) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F8F9FA" }}>
-      <div style={{ width: 40, height: 40, border: "3px solid #DEE2E6", borderTopColor: "#4263EB", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="size-10 rounded-full border-[3px] border-muted border-t-primary animate-spin" />
     </div>
   );
 
@@ -167,8 +129,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <ErrorBoundary>
       <DataProvider>
         <LayoutContext.Provider value={{
-          sidebarCollapsed,
-          toggleSidebar: () => setSidebarCollapsed(p => !p),
           searchOpen, setSearchOpen,
           notifOpen, setNotifOpen,
           aiOpen, setAiOpen,
@@ -176,21 +136,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           currentUser,
           setCurrentUser,
           updateCurrentUserProfile,
-          darkMode,
-          toggleDarkMode,
-          sidebarPosition,
-          setSidebarPosition,
           dateRange, setDateRange,
           globalStatusFilter, setGlobalStatusFilter,
           openNewOrder, setOpenNewOrder,
         }}>
-          <div className={`app-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-            <Sidebar />
-            <TopBar />
-            <main className="main-content">{children}</main>
-            <Toast />
-            <AiPanel open={aiOpen} onClose={() => setAiOpen(false)} />
-          </div>
+          <SidebarProvider dir="rtl">
+            <AppSidebar />
+            <SidebarInset className="flex flex-col min-h-screen">
+              <TopBar />
+              <main className="flex-1 p-4 md:p-6">
+                {children}
+              </main>
+              <Toaster position="top-center" richColors />
+            </SidebarInset>
+          </SidebarProvider>
         </LayoutContext.Provider>
       </DataProvider>
     </ErrorBoundary>

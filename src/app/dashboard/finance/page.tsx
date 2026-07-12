@@ -5,9 +5,19 @@ import { Plus, DollarSign, TrendingUp, TrendingDown, ArrowUpCircle, ArrowDownCir
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { TransactionType, PaymentMethod } from "@/lib/types";
-import Modal from "@/components/ui/Modal";
-import { FormField, FormGrid, FormActions, inputStyle, selectStyle } from "@/components/ui/FormField";
-import ExportButton from "@/components/ui/ExportButton";
+import ExportButton from "@/components/custom/ExportButton";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 const transactionExportCols = [
   { key: "type", label: "جۆر", format: (v: unknown) => v === "INCOME" ? "داهات" : "خەرجی" },
@@ -46,123 +56,189 @@ export default function FinancePage() {
     setForm({ type: "INCOME", description: "", amount: "", method: "CASH", relatedOrderId: null });
   };
 
-
   return (
-    <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, background: "#EBFBEE", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#40C057" }}><DollarSign size={20} /></div>
-          <div><h1 style={{ fontSize: 20, fontWeight: 700 }}>دارایی و حیساب</h1><p style={{ fontSize: 13, color: "#6C757D" }}>بەدواداچوونی داهات، خەرجی، و قازانج</p></div>
+    <div className="page-stagger">
+      {/* ── Page Header ── */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <div className="size-10 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl flex items-center justify-center text-emerald-600">
+            <DollarSign className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">دارایی و حیساب</h1>
+            <p className="text-sm text-muted-foreground">بەدواداچوونی داهات، خەرجی، و قازانج</p>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="flex items-center gap-2">
           <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={transactionExportCols} filename="finance" title="دارایی" />
-          <button onClick={() => setModalOpen(true)} className="topbar-add-btn"><Plus size={16} /><span>مامەڵەی نوێ</span></button>
+          <Button onClick={() => setModalOpen(true)}><Plus className="size-4 me-1" />مامەڵەی نوێ</Button>
         </div>
       </div>
 
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 24 }}>
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { title: "کۆی داهات", value: formatIQD(totalIncome), color: "#40C057", icon: <TrendingUp size={16} /> },
-          { title: "کۆی خەرجی", value: formatIQD(totalExpense), color: "#FA5252", icon: <TrendingDown size={16} /> },
-          { title: "قازانجی تەوا", value: formatIQD(netProfit), color: netProfit >= 0 ? "#40C057" : "#FA5252" },
-          { title: "کۆی مامەڵە", value: String(transactions.length) },
+          { title: "کۆی داهات",   value: formatIQD(totalIncome),  cls: "text-emerald-600" },
+          { title: "کۆی خەرجی",   value: formatIQD(totalExpense), cls: "text-destructive" },
+          { title: "قازانجی تەوا", value: formatIQD(netProfit),   cls: netProfit >= 0 ? "text-emerald-600" : "text-destructive" },
+          { title: "کۆی مامەڵە",  value: String(transactions.length), cls: "text-primary" },
         ].map((k, i) => (
-          <div className="kpi-card" key={i}>
-            <div className="kpi-card-title" style={{ marginBottom: 8 }}>{k.title}</div>
-            <div className="kpi-card-value" style={{ fontSize: "1.3rem", color: k.color }}>{k.value}</div>
-          </div>
+          <Card key={i} className="card-interactive">
+            <CardContent className="p-4">
+              <p className={cn("text-xl font-black", k.cls)}>{k.value}</p>
+              <p className="text-xs text-muted-foreground mt-1">{k.title}</p>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
-      {/* Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-        <div style={{ background: "linear-gradient(135deg, #40C057, #2B8A3E)", color: "white", borderRadius: 14, padding: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, opacity: 0.9 }}><ArrowUpCircle size={20} /> <span style={{ fontSize: 14 }}>داهات</span></div>
-          <div style={{ fontSize: 28, fontWeight: 800 }}>{formatIQD(totalIncome)}</div>
-          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>{transactions.filter(t => t.type === "INCOME").length} مامەڵە</div>
+      {/* ── Summary Gradient Cards ── */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 text-white rounded-2xl p-6">
+          <div className="flex items-center gap-2 mb-3 opacity-90"><ArrowUpCircle className="size-5" /><span className="text-sm">داهات</span></div>
+          <p className="text-3xl font-black">{formatIQD(totalIncome)}</p>
+          <p className="mt-2 text-xs opacity-80">{transactions.filter(t => t.type === "INCOME").length} مامەڵە</p>
         </div>
-        <div style={{ background: "linear-gradient(135deg, #FA5252, #C92A2A)", color: "white", borderRadius: 14, padding: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, opacity: 0.9 }}><ArrowDownCircle size={20} /> <span style={{ fontSize: 14 }}>خەرجی</span></div>
-          <div style={{ fontSize: 28, fontWeight: 800 }}>{formatIQD(totalExpense)}</div>
-          <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>{transactions.filter(t => t.type === "EXPENSE").length} مامەڵە</div>
+        <div className="bg-gradient-to-br from-red-500 to-red-700 text-white rounded-2xl p-6">
+          <div className="flex items-center gap-2 mb-3 opacity-90"><ArrowDownCircle className="size-5" /><span className="text-sm">خەرجی</span></div>
+          <p className="text-3xl font-black">{formatIQD(totalExpense)}</p>
+          <p className="mt-2 text-xs opacity-80">{transactions.filter(t => t.type === "EXPENSE").length} مامەڵە</p>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-        <div style={{ position: "relative" }}>
-          <Search size={16} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#ADB5BD" }} />
-          <input type="text" placeholder="گەڕان..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ width: 280, padding: "8px 36px 8px 12px", border: "1px solid #DEE2E6", borderRadius: 8, fontSize: 13, background: "#F8F9FA", fontFamily: "inherit" }} />
+      {/* ── Filters ── */}
+      <div className="flex gap-3 mb-5 flex-wrap items-center">
+        <div className="relative">
+          <Search className="size-3.5 absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input type="text" placeholder="گەڕان..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-64 pe-9" />
         </div>
-        <div style={{ display: "flex", gap: 4, background: "#F1F3F5", borderRadius: 8, padding: 2 }}>
+        <div className="flex bg-muted p-1 rounded-xl gap-1">
           {["هەموو", "داهات", "خەرجی"].map(s => (
-            <button key={s} onClick={() => setTypeFilter(s)} style={{ padding: "6px 12px", borderRadius: 6, fontSize: 11, fontWeight: 500, background: typeFilter === s ? "white" : "transparent", color: typeFilter === s ? "#1A1A2E" : "#6C757D", boxShadow: typeFilter === s ? "0 1px 2px rgba(0,0,0,0.05)" : "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>{s}</button>
+            <Button key={s} variant={typeFilter === s ? "secondary" : "ghost"} size="sm"
+              onClick={() => setTypeFilter(s)}
+              className={cn("px-3.5 rounded-lg text-xs font-bold",
+                typeFilter === s ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
+              {s}
+            </Button>
           ))}
         </div>
       </div>
 
-      <div className="data-table-wrapper">
-        <table className="data-table">
-          <thead><tr><th>جۆر</th><th>وەسف</th><th>بڕ</th><th>شێواز</th><th>بەروار</th></tr></thead>
-          <tbody>
-            {filtered.map(t => (
-              <tr key={t.id}
-                onClick={() => { if (t.relatedOrderId) router.push("/dashboard/orders"); }}
-                style={{ cursor: t.relatedOrderId ? "pointer" : "default" }}
-                title={t.relatedOrderId ? "کرتەبکە بۆ بینینی داواکاری" : undefined}
-              >
-                <td>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, background: t.type === "INCOME" ? "#D3F9D8" : "#FFE3E3", color: t.type === "INCOME" ? "#2B8A3E" : "#C92A2A" }}>
-                    {t.type === "INCOME" ? <TrendingUp size={12} /> : <TrendingDown size={12} />} {typeLabels[t.type]}
-                  </span>
-                </td>
-                <td style={{ fontWeight: 600, fontSize: 13 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {t.description}
-                    {t.relatedOrderId && (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, color: "#4263EB", background: "#EDF2FF", padding: "1px 6px", borderRadius: 4 }}>
-                        <ExternalLink size={9} /> داواکاری
-                      </span>
-                    )}
-                  </span>
-                </td>
-                <td style={{ fontWeight: 700, fontSize: 14, color: t.type === "INCOME" ? "#40C057" : "#FA5252" }}>{t.type === "INCOME" ? "+" : "-"}{formatIQD(t.amount)}</td>
-                <td><span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, background: "#F1F3F5" }}>{methodLabels[t.method]}</span></td>
-                <td style={{ fontSize: 12, color: "#6C757D" }}>{t.createdAt}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="pagination"><span className="pagination-info">{filtered.length} مامەڵە</span></div>
-      </div>
+      {/* ── Data Table ── */}
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40">
+                <TableHead className="text-right">جۆر</TableHead>
+                <TableHead className="text-right">وەسف</TableHead>
+                <TableHead className="text-right">بڕ</TableHead>
+                <TableHead className="text-right">شێواز</TableHead>
+                <TableHead className="text-right">بەروار</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">هیچ مامەڵەیەک نەدۆزرایەوە</TableCell>
+                </TableRow>
+              ) : filtered.map(t => (
+                <TableRow key={t.id}
+                  onClick={() => { if (t.relatedOrderId) router.push("/dashboard/orders"); }}
+                  className={cn(t.relatedOrderId && "cursor-pointer")}>
+                  <TableCell>
+                    <Badge className={cn("gap-1 text-[11px]",
+                      t.type === "INCOME" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                                           : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300")}>
+                      {t.type === "INCOME" ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+                      {typeLabels[t.type]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      {t.description}
+                      {t.relatedOrderId && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                          <ExternalLink className="size-2" /> داواکاری
+                        </span>
+                      )}
+                    </span>
+                  </TableCell>
+                  <TableCell className={cn("font-bold", t.type === "INCOME" ? "text-emerald-600" : "text-destructive")}>
+                    {t.type === "INCOME" ? "+" : "-"}{formatIQD(t.amount)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="text-[11px]">{methodLabels[t.method]}</Badge>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{t.createdAt}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <div className="px-4 py-2.5 border-t bg-muted/20 text-xs text-muted-foreground">{filtered.length} مامەڵە</div>
+        </CardContent>
+      </Card>
 
-      {/* Add Transaction Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="مامەڵەی نوێ" width={480}>
-        <form onSubmit={handleSubmit}>
-          <FormGrid cols={1}>
-            <FormField label="جۆر">
-              <div style={{ display: "flex", gap: 8 }}>
+      {/* ═══════════════════════════════════════════════════════════
+          ADD TRANSACTION DIALOG
+      ═══════════════════════════════════════════════════════════ */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>مامەڵەی نوێ</DialogTitle>
+            <DialogDescription>زانیاری مامەڵەکە پڕبکەوە</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Type selector */}
+            <div className="space-y-2">
+              <Label>جۆر</Label>
+              <div className="flex gap-2">
                 {(["INCOME", "EXPENSE"] as TransactionType[]).map(t => (
-                  <button key={t} type="button" onClick={() => setForm({ ...form, type: t })} style={{ flex: 1, padding: "10px 16px", borderRadius: 8, border: `2px solid ${form.type === t ? (t === "INCOME" ? "#40C057" : "#FA5252") : "#DEE2E6"}`, background: form.type === t ? (t === "INCOME" ? "#D3F9D8" : "#FFE3E3") : "white", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: form.type === t ? (t === "INCOME" ? "#2B8A3E" : "#C92A2A") : "#6C757D" }}>
+                  <Button key={t} type="button" variant={form.type === t ? "outline" : "ghost"}
+                    onClick={() => setForm({ ...form, type: t })}
+                    className={cn("flex-1 py-2.5 rounded-xl border-2 text-sm font-bold",
+                      form.type === t
+                        ? t === "INCOME" ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+                                        : "border-red-500 bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400"
+                        : "border-border text-muted-foreground")}>
                     {t === "INCOME" ? "↗ داهات" : "↘ خەرجی"}
-                  </button>
+                  </Button>
                 ))}
               </div>
-            </FormField>
-            <FormField label="وەسف" required><input style={inputStyle} required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="بۆ نموونە: پارەدانی دەرمانخانەی ئازادی" /></FormField>
-            <FormField label="بڕ (د.ع)" required><input style={inputStyle} type="number" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="5000000" /></FormField>
-            <FormField label="شێوازی پارەدان">
-              <div style={{ display: "flex", gap: 8 }}>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="txn-desc">وەسف *</Label>
+              <Input id="txn-desc" required value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="بۆ نموونە: پارەدانی دەرمانخانەی ئازادی" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="txn-amount">بڕ (د.ع) *</Label>
+              <Input id="txn-amount" type="number" required value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="5000000" />
+            </div>
+
+            {/* Method selector */}
+            <div className="space-y-2">
+              <Label>شێوازی پارەدان</Label>
+              <div className="flex gap-2">
                 {(["CASH", "TRANSFER"] as PaymentMethod[]).map(m => (
-                  <button key={m} type="button" onClick={() => setForm({ ...form, method: m })} style={{ flex: 1, padding: "10px 16px", borderRadius: 8, border: `2px solid ${form.method === m ? "#4263EB" : "#DEE2E6"}`, background: form.method === m ? "#EDF2FF" : "white", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: form.method === m ? "#4263EB" : "#6C757D" }}>
+                  <Button key={m} type="button" variant={form.method === m ? "outline" : "ghost"}
+                    onClick={() => setForm({ ...form, method: m })}
+                    className={cn("flex-1 py-2.5 rounded-xl border-2 text-sm font-bold",
+                      form.method === m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground")}>
                     {methodLabels[m]}
-                  </button>
+                  </Button>
                 ))}
               </div>
-            </FormField>
-          </FormGrid>
-          <FormActions onCancel={() => setModalOpen(false)} submitLabel="تۆمارکردن" />
-        </form>
-      </Modal>
-    </>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>پاشگەزبوونەوە</Button>
+              <Button type="submit">تۆمارکردن</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

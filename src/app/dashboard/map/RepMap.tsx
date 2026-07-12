@@ -75,7 +75,7 @@ export default function RepMap({ locations, selectedId, onSelect }: Props) {
   const selected = locations.find(l => l.chat_id === selectedId);
 
   return (
-    <div style={{ flex: 1, borderRadius: 16, overflow: "hidden", border: "1px solid #E9ECEF", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+    <div style={{ flex: 1, borderRadius: 16, overflow: "hidden", border: "1px solid hsl(var(--border))", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
       <style>{`
         @keyframes pulse-ring {
           0%   { transform: scale(0.85); opacity: 0.7; }
@@ -126,7 +126,7 @@ export default function RepMap({ locations, selectedId, onSelect }: Props) {
                       </div>
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, color: "#6C757D", borderTop: "1px solid #F1F3F5", paddingTop: 6 }}>
+                  <div style={{ fontSize: 11, color: "hsl(var(--muted-foreground))", borderTop: "1px solid #F1F3F5", paddingTop: 6 }}>
                     ⏱ {timeAgo(l.updated_at)}
                     {l.accuracy && <span style={{ marginRight: 8 }}>🎯 {Math.round(l.accuracy)}m</span>}
                   </div>

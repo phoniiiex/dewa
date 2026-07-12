@@ -10,6 +10,14 @@ import {
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { InvoiceBlockConfig, InvoiceTemplate } from "@/lib/types";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 // ── Doc types ──
 type DocType = InvoiceTemplate["docType"];
@@ -186,86 +194,89 @@ export default function TemplatesPage() {
   const subtotal = previewOrder.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
   const discountAmt = subtotal * (customDiscount / 100);
   const finalTotal = subtotal - discountAmt;
-
-  // ── Shared styles ──
-  const iS: React.CSSProperties = { width: "100%", padding: "8px 12px", border: "1px solid #DEE2E6", borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none" };
-  const btnP: React.CSSProperties = { padding: "8px 20px", borderRadius: 8, background: "#4263EB", color: "white", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 };
+  const editorInputCls = "h-8 text-xs border-border/50";
 
   return (
     <>
       {/* Page Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, background: "#EBF1FF", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", color: "#4263EB" }}>
-            <LayoutTemplate size={20} />
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+          <div className="size-10 bg-blue-50 dark:bg-blue-950/40 rounded-xl flex items-center justify-center text-blue-600">
+            <LayoutTemplate className="size-5" />
           </div>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700 }}>داڕێژەی چاپ</h1>
-            <p style={{ fontSize: 13, color: "#6C757D" }}>بەڕێوەبردنی داڕێژەی پسووڵە، وەسڵ، گەیاندن و نرخنامە</p>
+            <h1 className="text-xl font-bold">داڕێژەی چاپ</h1>
+            <p className="text-sm text-muted-foreground">بەڕێوەبردنی داڕێژەی پسووڵە، وەسڵ، گەیاندن و نرخنامە</p>
           </div>
         </div>
-        <button onClick={() => openNew()} style={btnP}>
-          <Plus size={14} /> داڕێژەی نوێ
-        </button>
+        <Button onClick={() => openNew()}>
+          <Plus className="size-4 me-1" /> داڕێژەی نوێ
+        </Button>
       </div>
 
       {/* Two-column layout */}
-      <div style={{ display: "grid", gridTemplateColumns: isEditorOpen ? "300px 1fr" : "1fr", gap: 20, alignItems: "start" }}>
+      <div className={cn("grid gap-5 items-start", isEditorOpen ? "grid-cols-[300px_1fr]" : "grid-cols-1")}>
 
         {/* ── TEMPLATE LIBRARY ── */}
-        <div style={{ background: "white", borderRadius: 16, border: "1px solid #E9ECEF", overflow: "hidden" }}>
-          {/* Filter Tabs */}
-          <div style={{ display: "flex", gap: 2, padding: "10px 12px", borderBottom: "1px solid #E9ECEF", flexWrap: "wrap" }}>
-            <button onClick={() => setFilterType("all")} style={{ padding: "5px 10px", borderRadius: 6, border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", background: filterType === "all" ? "#1A1A2E" : "#F1F3F5", color: filterType === "all" ? "white" : "#6C757D" }}>
+        <Card className="overflow-hidden">
+          <div className="flex gap-1.5 p-3 border-b flex-wrap">
+            <Button variant={filterType === "all" ? "default" : "ghost"} size="sm"
+              onClick={() => setFilterType("all")}
+              className="px-2.5 h-7 rounded-md text-[11px] font-semibold">
               هەموو ({invoiceTemplates.length})
-            </button>
+            </Button>
             {DOC_TYPES.map(dt => (
-              <button key={dt.id} onClick={() => setFilterType(dt.id)} style={{ padding: "5px 10px", borderRadius: 6, border: "none", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4, background: filterType === dt.id ? dt.color : "#F1F3F5", color: filterType === dt.id ? "white" : "#6C757D" }}>
+              <Button key={dt.id} variant={filterType === dt.id ? "default" : "ghost"} size="sm"
+                onClick={() => setFilterType(dt.id)}
+                className="gap-1 px-2.5 h-7 rounded-md text-[11px] font-semibold"
+                style={filterType === dt.id ? { background: dt.color, color: "white" } : undefined}>
                 {dt.icon} {dt.label} ({invoiceTemplates.filter(t => t.docType === dt.id).length})
-              </button>
+              </Button>
             ))}
           </div>
 
-          {/* Template list */}
-          <div style={{ maxHeight: isEditorOpen ? "calc(100vh - 260px)" : "auto", overflowY: "auto" }}>
+          <div className={cn("overflow-y-auto", isEditorOpen ? "max-h-[calc(100vh-260px)]" : "")}>
             {filteredTemplates.length === 0 ? (
-              <div style={{ padding: 40, textAlign: "center", color: "#ADB5BD" }}>
-                <LayoutTemplate size={32} style={{ margin: "0 auto 10px", display: "block", opacity: 0.3 }} />
-                <div style={{ fontSize: 13 }}>هیچ داڕێژەیەک نییە</div>
-                <button onClick={() => openNew(filterType === "all" ? "invoice" : filterType)} style={{ ...btnP, margin: "12px auto 0", fontSize: 11 }}>
-                  <Plus size={12} /> داڕێژەی نوێ
-                </button>
+              <div className="p-10 text-center text-muted-foreground">
+                <LayoutTemplate className="size-8 mx-auto mb-2 opacity-30" />
+                <p className="text-xs">هیچ داڕێژەیەک نییە</p>
+                <Button size="sm" className="mt-3 text-xs" onClick={() => openNew(filterType === "all" ? "invoice" : filterType)}>
+                  <Plus className="size-3 me-1" /> داڕێژەی نوێ
+                </Button>
               </div>
             ) : (
               <>
-                {/* Group by type */}
                 {(filterType === "all" ? DOC_TYPES : DOC_TYPES.filter(d => d.id === filterType)).map(dt => {
                   const group = filteredTemplates.filter(t => t.docType === dt.id);
                   if (group.length === 0) return null;
                   return (
                     <div key={dt.id}>
                       {filterType === "all" && (
-                        <div style={{ padding: "6px 16px", background: dt.bg, fontSize: 10, fontWeight: 700, color: dt.color, display: "flex", alignItems: "center", gap: 5, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                        <div className="px-4 py-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide"
+                          style={{ background: dt.bg, color: dt.color }}>
                           {dt.icon} {dt.label}
                         </div>
                       )}
                       {group.map(t => (
-                        <div key={t.id} style={{ padding: "12px 16px", borderBottom: "1px solid #F1F3F5", cursor: "pointer", background: editingTemplate?.id === t.id ? "#EDF2FF" : "white", borderRight: editingTemplate?.id === t.id ? "3px solid #4263EB" : "3px solid transparent", transition: "all 0.15s" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                            <div style={{ flex: 1, minWidth: 0 }} onClick={() => openEdit(t)}>
-                              <div style={{ fontWeight: 700, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                                <span style={{ padding: "2px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700, background: DOC_TYPES.find(d => d.id === t.docType)?.bg, color: DOC_TYPES.find(d => d.id === t.docType)?.color }}>
+                        <div key={t.id}
+                          className={cn("px-4 py-3 border-b border-b-border/50 cursor-pointer transition-all border-e-2",
+                            editingTemplate?.id === t.id ? "bg-primary/5 border-e-primary" : "bg-background border-e-transparent hover:bg-muted/40")}>
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex-1 min-w-0" onClick={() => openEdit(t)}>
+                              <p className="font-bold text-xs truncate">{t.name}</p>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <Badge variant="secondary" className="text-[9px] px-1.5 py-0"
+                                  style={{ background: DOC_TYPES.find(d => d.id === t.docType)?.bg, color: DOC_TYPES.find(d => d.id === t.docType)?.color }}>
                                   {DOC_LABEL[t.docType]}
-                                </span>
-                                <span style={{ fontSize: 10, color: "#ADB5BD" }}>{t.blocks.filter(b => b.visible).length} بلۆک</span>
-                                <span style={{ fontSize: 10, color: "#ADB5BD" }}>· {t.createdAt}</span>
+                                </Badge>
+                                <span className="text-[10px] text-muted-foreground">{t.blocks.filter(b => b.visible).length} بلۆک</span>
+                                <span className="text-[10px] text-muted-foreground">· {t.createdAt}</span>
                               </div>
                             </div>
-                            <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                              <button onClick={() => previewPrint(t)} title="چاپکردن" style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "#E3F7EC", color: "#2B8A3E", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Printer size={12} /></button>
-                              <button onClick={() => duplicateTemplate(t)} title="کۆپی" style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "#EDF2FF", color: "#4263EB", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Copy size={12} /></button>
-                              <button onClick={() => { if (confirm("دەتەوێت بیسڕیتەوە؟")) deleteTemplate(t.id); }} title="سڕینەوە" style={{ width: 26, height: 26, borderRadius: 6, border: "none", background: "#FFE3E3", color: "#FA5252", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Trash2 size={12} /></button>
+                            <div className="flex gap-1 shrink-0">
+                              <Button variant="ghost" size="icon" className="size-6 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30" onClick={() => previewPrint(t)}><Printer className="size-3" /></Button>
+                              <Button variant="ghost" size="icon" className="size-3.5 text-primary hover:bg-primary/5" onClick={() => duplicateTemplate(t)}><Copy className="size-3" /></Button>
+                              <Button variant="ghost" size="icon" className="size-6 text-destructive hover:bg-destructive/5" onClick={() => { if (confirm("دەتەوێت بیسڕیتەوە؟")) deleteTemplate(t.id); }}><Trash2 className="size-3" /></Button>
                             </div>
                           </div>
                         </div>
@@ -276,118 +287,133 @@ export default function TemplatesPage() {
               </>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* ── TEMPLATE EDITOR + PREVIEW ── */}
         {isEditorOpen && (
-          <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 16, alignItems: "start" }}>
-
-            {/* Editor panel */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {/* Editor header */}
-              <div style={{ background: "white", borderRadius: 14, border: "1px solid #E9ECEF", padding: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>{isNew ? "داڕێژەی نوێ" : "دەستکاریکردن"}</div>
-                  <button onClick={() => setIsEditorOpen(false)} style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "#F1F3F5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#6C757D" }}><X size={12} /></button>
-                </div>
-                <div style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: "#6C757D", display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>ناوی داڕێژە</label>
-                  <input value={editorName} onChange={e => setEditorName(e.target.value)} placeholder="ناوی داڕێژە..." style={iS} />
-                </div>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: "#6C757D", display: "block", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>جۆری ڕێکەوت</label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-                    {DOC_TYPES.map(dt => (
-                      <button key={dt.id} onClick={() => setEditorDocType(dt.id)} style={{ padding: "6px 8px", borderRadius: 7, border: `1.5px solid ${editorDocType === dt.id ? dt.color : "#E9ECEF"}`, background: editorDocType === dt.id ? dt.bg : "white", color: editorDocType === dt.id ? dt.color : "#6C757D", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4 }}>
-                        {dt.icon} {dt.label}
-                      </button>
-                    ))}
+          <div className="grid grid-cols-[260px_1fr] gap-4 items-start">
+            <div className="flex flex-col gap-3">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <p className="text-xs font-bold">{isNew ? "داڕێژەی نوێ" : "دەستکاریکردن"}</p>
+                    <Button variant="ghost" size="icon" className="size-6" onClick={() => setIsEditorOpen(false)}><X className="size-3" /></Button>
                   </div>
-                </div>
-                <button onClick={saveTemplate} style={{ ...btnP, width: "100%", justifyContent: "center" }}>
-                  <Save size={13} /> پاشەکەوتکردن
-                </button>
-              </div>
+                  <div className="mb-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide block mb-1">ناوی داڕێژە</label>
+                    <Input value={editorName} onChange={e => setEditorName(e.target.value)} placeholder="ناوی داڕێژە..." className={editorInputCls} />
+                  </div>
+                  <div className="mb-3">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide block mb-1">جۆری ڕێکەوت</label>
+                    <div className="grid grid-cols-2 gap-1">
+                      {DOC_TYPES.map(dt => (
+                        <Button key={dt.id} variant={editorDocType === dt.id ? "default" : "outline"} size="sm"
+                          onClick={() => setEditorDocType(dt.id)}
+                          className="gap-1 h-7 text-[11px] font-semibold"
+                          style={editorDocType === dt.id ? { background: dt.color, borderColor: dt.color, color: "white" } : undefined}>
+                          {dt.icon} {dt.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <Button className="w-full justify-center" size="sm" onClick={saveTemplate}>
+                    <Save className="size-3.5 me-1" /> پاشەکەوتکردن
+                  </Button>
+                </CardContent>
+              </Card>
 
-              {/* Blocks */}
-              <div style={{ background: "white", borderRadius: 14, border: "1px solid #E9ECEF", overflow: "hidden" }}>
-                <div style={{ padding: "10px 14px", borderBottom: "1px solid #E9ECEF", fontWeight: 700, fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>بلۆکەکان</span>
-                  <button onClick={() => setShowAddBlock(!showAddBlock)} style={{ width: 22, height: 22, borderRadius: 5, border: "none", background: "#4263EB", color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Plus size={11} /></button>
+              <Card className="overflow-hidden">
+                <div className="flex justify-between items-center px-3.5 py-2.5 border-b">
+                  <span className="text-xs font-bold">بلۆکەکان</span>
+                  <Button variant="ghost" size="icon" className="size-5 bg-primary text-primary-foreground hover:bg-primary/80" onClick={() => setShowAddBlock(!showAddBlock)}><Plus className="size-3" /></Button>
                 </div>
-
                 {showAddBlock && (() => {
                   const deletedBuiltins = DEFAULT_BLOCKS.filter(db => !db.required && !blocks.find(b => b.id === db.id));
                   return (
-                    <div style={{ padding: 10, borderBottom: "1px solid #E9ECEF", background: "#F8F9FA" }}>
+                    <div className="p-2.5 border-b bg-muted/40">
                       {deletedBuiltins.length > 0 && (
-                        <div style={{ marginBottom: 8 }}>
-                          <div style={{ fontSize: 9, fontWeight: 700, color: "#6C757D", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>بلۆکی سڕاوەکان</div>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                        <div className="mb-2">
+                          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">بلۆکی سڕاوەکان</p>
+                          <div className="flex flex-wrap gap-1">
                             {deletedBuiltins.map(db => (
-                              <button key={db.id} onClick={() => setBlocks(prev => [...prev, { ...db, visible: true }])} style={{ padding: "3px 8px", borderRadius: 5, border: "1px solid #D0BFFF", background: "#F3F0FF", color: "#7C5CFC", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 3 }}>
-                                {BLOCK_ICONS[db.id]} {db.label} <Plus size={9} />
-                              </button>
+                              <Button key={db.id} variant="outline" size="sm"
+                                onClick={() => setBlocks(prev => [...prev, { ...db, visible: true }])}
+                                className="gap-1 h-auto px-2 py-0.5 rounded-md border-violet-200 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:border-violet-800 dark:text-violet-400 text-[10px] font-semibold">
+                                {BLOCK_ICONS[db.id]} {db.label} <Plus className="size-2" />
+                              </Button>
                             ))}
                           </div>
                         </div>
                       )}
-                      <div style={{ fontSize: 9, fontWeight: 700, color: "#6C757D", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>بلۆکی تایبەت</div>
-                      <input placeholder="ناو..." value={customBlockLabel} onChange={e => setCustomBlockLabel(e.target.value)} style={{ ...iS, marginBottom: 4, fontSize: 11 }} />
-                      <textarea placeholder="ناوەڕۆک..." value={customBlockText} onChange={e => setCustomBlockText(e.target.value)} rows={2} style={{ ...iS, resize: "vertical", marginBottom: 4, fontSize: 11 }} />
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={addCustomBlock} style={{ ...btnP, flex: 1, fontSize: 10, padding: "5px 8px", justifyContent: "center" }}><Plus size={10} /> زیادکردن</button>
-                        <button onClick={() => setShowAddBlock(false)} style={{ ...btnP, flex: 1, fontSize: 10, padding: "5px 8px", justifyContent: "center", background: "#6C757D" }}>پاشگەزبوونەوە</button>
+                      <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">بلۆکی تایبەت</p>
+                      <Input placeholder="ناو..." value={customBlockLabel} onChange={e => setCustomBlockLabel(e.target.value)} className="h-7 text-xs mb-1" />
+                      <Textarea placeholder="ناوەڕۆک..." value={customBlockText} onChange={e => setCustomBlockText(e.target.value)} rows={2}
+                        className="text-xs resize-y mb-1.5" />
+                      <div className="flex gap-1">
+                        <Button size="sm" className="flex-1 h-7 text-[10px]" onClick={addCustomBlock}><Plus className="size-3 me-0.5" /> زیادکردن</Button>
+                        <Button size="sm" variant="secondary" className="flex-1 h-7 text-[10px]" onClick={() => setShowAddBlock(false)}>پاشگەزبوونەوە</Button>
                       </div>
                     </div>
                   );
                 })()}
-
-                <div style={{ padding: 6 }}>
+                <div className="p-1.5">
                   {blocks.map((block, idx) => (
                     <div key={block.id} draggable onDragStart={() => handleDragStart(idx)} onDragOver={e => handleDragOver(e, idx)} onDrop={() => handleDrop(idx)} onDragEnd={handleDragEnd}
-                      style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 7px", borderRadius: 7, marginBottom: 2, cursor: "grab", fontSize: 11, background: dragOverIdx === idx ? "#EDF2FF" : dragIdx === idx ? "#F8F9FA" : "transparent", border: dragOverIdx === idx ? "1px dashed #4263EB" : "1px solid transparent", opacity: block.visible ? 1 : 0.4, transition: "all 0.12s" }}>
-                      <GripVertical size={11} color="#CED4DA" style={{ flexShrink: 0 }} />
-                      <span style={{ color: "#6C757D", flexShrink: 0 }}>{BLOCK_ICONS[block.type === "custom" ? "custom" : block.id]}</span>
-                      <span style={{ flex: 1, fontWeight: 600, color: "#495057", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11 }}>{block.label}</span>
-                      <button onClick={() => toggleBlock(block.id)} disabled={block.required} style={{ width: 18, height: 18, borderRadius: 4, border: "none", cursor: block.required ? "default" : "pointer", background: block.visible ? "#4263EB" : "#E9ECEF", color: block.visible ? "white" : "#ADB5BD", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {block.visible ? <Eye size={9} /> : <EyeOff size={9} />}
-                      </button>
-                      {!block.required && <button onClick={() => removeBlock(block.id)} style={{ width: 18, height: 18, borderRadius: 4, border: "none", cursor: "pointer", background: "#FFE3E3", color: "#FA5252", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Trash2 size={9} /></button>}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2 py-1 rounded-md mb-0.5 cursor-grab text-[11px] border transition-all",
+                        dragOverIdx === idx ? "bg-primary/5 border-dashed border-primary" : dragIdx === idx ? "bg-muted border-border" : "border-transparent",
+                        !block.visible && "opacity-40"
+                      )}>
+                      <GripVertical className="size-3 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground shrink-0">{BLOCK_ICONS[block.type === "custom" ? "custom" : block.id]}</span>
+                      <span className="flex-1 font-semibold text-foreground truncate text-[11px]">{block.label}</span>
+                      <Button variant="ghost" size="icon" onClick={() => toggleBlock(block.id)} disabled={block.required}
+                        className={cn("size-5 rounded",
+                          block.visible ? "bg-primary text-primary-foreground hover:bg-primary/80" : "bg-muted text-muted-foreground",
+                          block.required && "opacity-50 cursor-default")}>
+                        {block.visible ? <Eye className="size-2.5" /> : <EyeOff className="size-2.5" />}
+                      </Button>
+                      {!block.required && (
+                        <Button variant="ghost" size="icon" onClick={() => removeBlock(block.id)}
+                          className="size-5 rounded bg-destructive/10 text-destructive hover:bg-destructive/20">
+                          <Trash2 className="size-2.5" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
-              </div>
+              </Card>
 
-              {/* Settings */}
-              <div style={{ background: "white", borderRadius: 14, border: "1px solid #E9ECEF", padding: 14 }}>
-                <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 10 }}>ڕێکخستنەکان</div>
-                <div style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: "#6C757D", display: "block", marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>داشکاندن (٪)</label>
-                  <input type="number" min="0" max="100" value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} style={iS} />
-                </div>
-                <div style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: "#6C757D", display: "block", marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>تێبینی پێش‌گەراو</label>
-                  <textarea value={customNote} onChange={e => setCustomNote(e.target.value)} placeholder="تێبینی..." rows={2} style={{ ...iS, resize: "vertical" }} />
-                </div>
-                <div style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: "#6C757D", display: "block", marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.5 }}>مەرجەکانی پارەدان</label>
-                  <textarea value={customTerms} onChange={e => setCustomTerms(e.target.value)} placeholder="مەرجەکان..." rows={2} style={{ ...iS, resize: "vertical" }} />
-                </div>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#6C757D", cursor: "pointer" }}>
-                  <input type="checkbox" checked={showBonusCol} onChange={e => setShowBonusCol(e.target.checked)} style={{ width: 13, height: 13 }} />
-                  ستوونی بۆنەس
-                </label>
-              </div>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs font-bold mb-3">ڕێکخستنەکان</p>
+                  <div className="mb-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide block mb-1">داشکاندن (٪)</label>
+                    <Input type="number" min="0" max="100" value={customDiscount} onChange={e => setCustomDiscount(Number(e.target.value))} className={editorInputCls} />
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide block mb-1">تێبینی پێش‌گەراو</label>
+                    <Textarea value={customNote} onChange={e => setCustomNote(e.target.value)} placeholder="تێبینی..." rows={2}
+                      className="text-xs resize-y" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide block mb-1">مەرجەکانی پارەدان</label>
+                    <Textarea value={customTerms} onChange={e => setCustomTerms(e.target.value)} placeholder="مەرجەکان..." rows={2}
+                      className="text-xs resize-y" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="inv-bonus-col" checked={showBonusCol} onCheckedChange={(v) => setShowBonusCol(!!v)} />
+                    <Label htmlFor="inv-bonus-col" className="text-xs font-semibold text-muted-foreground cursor-pointer">ستوونی بۆنەس</Label>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Live Preview */}
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#6C757D" }}>پێشبینینی داڕێژە (نموونە)</div>
-                <button onClick={saveTemplate} style={{ ...btnP, fontSize: 12 }}>
-                  <Save size={14} /> پاشەکەوت
-                </button>
+              <div className="flex justify-between items-center mb-2.5">
+                <p className="text-xs font-bold text-muted-foreground">پێشبینینی داڕێژە (نموونە)</p>
+                <Button size="sm" onClick={saveTemplate}><Save className="size-3.5 me-1" /> پاشەکەوت</Button>
               </div>
               <div style={{ background: "white", borderRadius: 14, border: "1px solid #E9ECEF", padding: 40, minHeight: 500, fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif", direction: "rtl" }}>
                 {renderPreview({ blocks: visibleBlocks, showBonusCol, customNote, customTerms, customDiscount, discountAmt, finalTotal, subtotal, editorDocType, settings, previewOrder, previewClient })}

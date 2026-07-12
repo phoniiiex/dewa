@@ -1,6 +1,11 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 function OnboardForm() {
   const params = useSearchParams();
@@ -28,55 +33,87 @@ function OnboardForm() {
     setSubmitting(true); setErrMsg("");
     const res = await fetch("/api/auth/onboard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, ...form }) });
     const d = await res.json();
-    if (d.success) setStatus("done");
-    else { setErrMsg(d.error || "Error"); setSubmitting(false); }
+    if (d.ok) setStatus("done"); else { setErrMsg(d.error || "Error"); setSubmitting(false); }
   };
 
-  if (status === "loading") return <div style={{ textAlign: "center", padding: 80 }}><p style={{ color: "#6C757D" }}>چاوەڕوانبە...</p></div>;
-  if (status === "error") return <div style={{ textAlign: "center", padding: 80 }}><p style={{ color: "#FA5252", fontWeight: 600 }}>هەڵە: {errMsg}</p></div>;
+  if (status === "loading") return (
+    <div className="flex flex-col items-center py-16">
+      <Loader2 className="size-8 animate-spin text-primary mb-3" />
+      <p className="text-sm text-muted-foreground">چاوەڕوانبە...</p>
+    </div>
+  );
+  if (status === "error") return (
+    <div className="flex flex-col items-center py-16 text-center">
+      <p className="text-destructive font-semibold mb-2">هەڵە</p>
+      <p className="text-sm text-muted-foreground">{errMsg}</p>
+    </div>
+  );
   if (status === "done") return (
-    <div style={{ textAlign: "center", padding: 80 }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>هەژمارەکەت دروستکرا!</h2>
-      <p style={{ color: "#6C757D", marginBottom: 24 }}>ئێستا دەتوانیت بچیتە ژوورەوە.</p>
-      <button onClick={() => router.push("/")} style={{ padding: "12px 32px", borderRadius: 10, background: "#4263EB", color: "white", fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit" }}>چوونە ژوورەوە</button>
+    <div className="flex flex-col items-center py-16 text-center">
+      <h2 className="text-lg font-bold mb-2">هەژمارەکەت دروستکرا!</h2>
+      <p className="text-sm text-muted-foreground mb-6">ئێستا دەتوانیت بچیتە ژوورەوە.</p>
+      <Button onClick={() => router.push("/")}>چوونە ژوورەوە</Button>
     </div>
   );
 
+  const fields = [
+    { key: "name", label: "ناو", type: "text", required: true },
+    { key: "password", label: "وشەی نهێنی", type: "password", required: true },
+    { key: "confirmPassword", label: "دڵنیابوونەوەی وشەی نهێنی", type: "password", required: true },
+    { key: "phone", label: "تەلەفۆن", type: "text", required: false },
+    { key: "city", label: "شار", type: "text", required: false },
+  ];
+
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: 420, margin: "0 auto" }}>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>دروستکردنی هەژمار</h2>
-      <p style={{ fontSize: 13, color: "#6C757D", marginBottom: 24 }}>{tokenInfo?.email} — {tokenInfo?.role}</p>
-      {errMsg && <p style={{ color: "#FA5252", fontSize: 13, marginBottom: 12 }}>{errMsg}</p>}
-      {[
-        { key: "name", label: "ناو", type: "text", required: true },
-        { key: "password", label: "وشەی نهێنی", type: "password", required: true },
-        { key: "confirmPassword", label: "دڵنیابوونەوەی وشەی نهێنی", type: "password", required: true },
-        { key: "phone", label: "تەلەفۆن", type: "text", required: false },
-        { key: "city", label: "شار", type: "text", required: false },
-      ].map(f => (
-        <div key={f.key} style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{f.label}</label>
-          <input type={f.type} required={f.required} value={form[f.key as keyof typeof form]}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <CardHeader className="p-0 pb-4">
+        <CardTitle>دروستکردنی هەژمار</CardTitle>
+        <CardDescription>{tokenInfo?.email} — {tokenInfo?.role}</CardDescription>
+      </CardHeader>
+
+      {errMsg && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm font-semibold text-destructive">
+          {errMsg}
+        </div>
+      )}
+
+      {fields.map(f => (
+        <div key={f.key} className="space-y-1.5">
+          <Label htmlFor={`onboard-${f.key}`}>
+            {f.label}
+            {f.required && <span className="text-destructive ms-0.5">*</span>}
+          </Label>
+          <Input
+            id={`onboard-${f.key}`}
+            type={f.type}
+            required={f.required}
+            value={form[f.key as keyof typeof form]}
             onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-            style={{ width: "100%", padding: "10px 14px", border: "1px solid #DEE2E6", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: "#F8F9FA" }} />
+          />
         </div>
       ))}
-      <button type="submit" disabled={submitting} style={{ width: "100%", padding: "12px", borderRadius: 10, background: submitting ? "#ADB5BD" : "#4263EB", color: "white", fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit", marginTop: 8 }}>
-        {submitting ? "..." : "دروستکردنی هەژمار"}
-      </button>
+
+      <Button type="submit" className="w-full" disabled={submitting}>
+        {submitting ? <><Loader2 className="size-4 animate-spin me-2" />...</> : "دروستکردنی هەژمار"}
+      </Button>
     </form>
   );
 }
 
 export default function OnboardPage() {
   return (
-    <div style={{ minHeight: "100vh", background: "#F8F9FA", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Noto Sans Arabic', sans-serif", direction: "rtl" }}>
-      <div style={{ background: "white", borderRadius: 16, padding: 40, boxShadow: "0 8px 24px rgba(0,0,0,0.08)", width: "90%", maxWidth: 520 }}>
-        <Suspense fallback={<p style={{ textAlign: "center", color: "#6C757D" }}>چاوەڕوانبە...</p>}>
-          <OnboardForm />
-        </Suspense>
-      </div>
+    <div className="min-h-screen bg-muted/40 flex items-center justify-center font-[family-name:var(--font-noto-sans-arabic)]" dir="rtl">
+      <Card className="w-[90%] max-w-[520px]">
+        <CardContent>
+          <Suspense fallback={
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="size-8 animate-spin text-primary" />
+            </div>
+          }>
+            <OnboardForm />
+          </Suspense>
+        </CardContent>
+      </Card>
     </div>
   );
 }
