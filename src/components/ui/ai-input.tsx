@@ -774,6 +774,7 @@ export interface AIInputProps {
   defaultSettings?: Record<string, string>;
   menuItems?: AIInputMenuItem[];
   menuActions?: PromptMenuAction[];
+  listening?: boolean;
   onMenuSelect?: (value: string) => void;
   onMenuToggle?: (value: string, checked: boolean) => void;
   onMic?: () => void;
@@ -788,6 +789,7 @@ export function AIInput({
   defaultSettings,
   menuItems = [],
   menuActions = [],
+  listening = false,
   onMenuSelect,
   onMenuToggle,
   onMic,
@@ -862,11 +864,20 @@ export function AIInput({
 
         {/* Send / Mic button */}
         <button
-          aria-label={canSend ? "Send" : "Microphone"}
-          className={`flex size-8 shrink-0 items-center justify-center rounded-full transition-colors ${canSend ? "bg-foreground text-background hover:bg-foreground/90" : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+          aria-label={canSend ? "Send" : listening ? "Stop recording" : "Microphone"}
+          className={`relative flex size-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+            canSend
+              ? "bg-foreground text-background hover:bg-foreground/90"
+              : listening
+                ? "bg-red-500 text-white hover:bg-red-600"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
+          }`}
           onClick={canSend ? handleSend : onMic}
           type="button"
         >
+          {listening && (
+            <span className="absolute inset-0 rounded-full animate-ping bg-red-400 opacity-60" />
+          )}
           <AnimatePresence mode="popLayout" initial={false}>
             {canSend ? (
               <motion.span key="send" animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.8, y: 2 }} initial={{ opacity: 0, scale: 0.8, y: -2 }} transition={{ duration: 0.14 }}>

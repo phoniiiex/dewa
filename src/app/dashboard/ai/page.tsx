@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  useState, useCallback,
+  useState, useCallback, useRef,
 } from "react";
 import { StreamingText } from "@/components/ui/streaming-text";
 import {
@@ -325,6 +325,10 @@ export default function AiPage() {
   const { currentUser } = useLayout();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const [inputValue, setInputValue] = useState("");
 
   const userInitials = currentUser?.name
     ? currentUser.name.split(" ").map(w => w[0]).join("").slice(0, 2)
@@ -364,6 +368,56 @@ export default function AiPage() {
       setLoading(false);
     }
   }, [messages, loading]);
+
+  const handleMic = useCallback(() => {
+    // Stop if already listening
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+      setListening(false);
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionAPI) {
+      alert("وتنەوە پشتگیری ناکرێت لەم وێبگەڕەدا. Chrome بەکاربهێنە.");
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognition: any = new SpeechRecognitionAPI();
+    recognition.lang = "ku"; // Kurdish — falls back to closest available
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+    recognition.onerror = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results as ArrayLike<{ [0]: { transcript: string } }>)
+        .map((r) => r[0].transcript)
+        .join("");
+      const isFinal = (event.results[event.results.length - 1] as { isFinal: boolean }).isFinal;
+      setInputValue(transcript);
+      if (isFinal) {
+        recognition.stop();
+        if (transcript.trim()) sendMessage(transcript.trim());
+        setInputValue("");
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [sendMessage]);
 
   const isEmpty = messages.length === 0;
 
@@ -447,12 +501,14 @@ export default function AiPage() {
         <AIInput
           menuItems={menuItems}
           settingGroups={settingGroups}
+          listening={listening}
           onMenuSelect={(value) => {
             const prompt = MENU_PROMPTS[value];
             if (prompt) sendMessage(prompt);
           }}
           onSend={(message) => sendMessage(message)}
-          placeholder={loading ? "جواب دەدرێتەوە…" : "پەیامێک بنوسە…"}
+          onMic={handleMic}
+          placeholder={listening ? "🎙️ گوێدەگرم…" : loading ? "جواب دەدرێتەوە…" : "پەیامێک بنوسە…"}
         />
         <p className="text-[11px] text-muted-foreground text-center mt-2">
           Gemini · Dewa {new Date().getFullYear()} · هەموو وەڵامەکان دەتوانن هەڵەش بن
