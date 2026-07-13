@@ -3,18 +3,12 @@
 /**
  * OreoAvatar
  * ----------
- * Drop-in avatar that shows:
- *   • The user's real photo when `src` is provided
- *   • A deterministic @oreo-design/avatar SVG otherwise
- *
- * Props mirror a standard <img>-style avatar:
- *   src?         - real image URL (base64 or https)
- *   name         - person's name (seeds the deterministic avatar + alt text)
- *   size?        - px dimension (default 36)
- *   className?   - extra classes for the outer wrapper
- *   onError?     - forwarded to the real <img>
+ * Shows a real photo (src) or a deterministic @oreo-design/avatar SVG.
+ * Both `palette` and `shape` are derived from the name hash so the same
+ * person always gets the same avatar — and every person looks different.
  */
 import { Avatar } from "@oreo-design/avatar/react";
+import type { ShapeId } from "@oreo-design/avatar";
 import { cn } from "@/lib/utils";
 
 interface OreoAvatarProps {
@@ -24,18 +18,35 @@ interface OreoAvatarProps {
   className?: string;
 }
 
-/** Pick a stable palette from the name string */
+/* Real palette IDs from the @oreo-design/avatar package */
+const PALETTES = [
+  "rose-milk", "peach-cream", "mint-milk", "aurora-pink", "lilac-silk",
+  "blue-cream", "jade-cream", "coral-mist", "lemon-mint", "violet-peach",
+  "magenta-void", "teal-void", "amber-dusk", "sky-melon", "grapefruit",
+  "lavender-lime", "aqua-orchid", "honeydew", "plum-gold", "ice-berry",
+  "apricot-mint", "candy-blue", "raspberry-cream", "spring-glow", "sunset-punch",
+  "moon-pearl", "seafoam-rose", "blueberry-milk", "mango-iris", "forest-neon",
+  "cotton-candy", "lime-sorbet", "cherry-cola", "opal-mint", "peach-lilac",
+  "cyan-flame", "orchid-night", "pistachio-blush", "lagoon-gold", "vanilla-sky",
+] as const;
+
+/* All shape IDs from the package */
+const SHAPES: ShapeId[] = ["bloom", "silk", "flare", "nova", "void", "jade"];
+
+/** djb2-style stable integer hash */
+function strHash(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
 function nameToPalette(name: string): string {
-  const palettes = [
-    "aurora", "candy", "citrus", "coral", "crimson", "dusk", "ember",
-    "forest", "glacier", "gold", "iris", "jade", "lavender", "mint",
-    "moss", "night", "ocean", "peach", "plum", "rose", "ruby", "sage",
-    "sand", "sky", "slate", "steel", "storm", "teal", "terra", "twilight",
-    "violet", "wheat", "wine", "zinc",
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  return palettes[hash % palettes.length];
+  return PALETTES[strHash(name) % PALETTES.length];
+}
+
+function nameToShape(name: string): ShapeId {
+  // Offset the seed so shape and palette are independent
+  return SHAPES[(strHash(name + "\x00shape") >>> 4) % SHAPES.length];
 }
 
 export function OreoAvatar({ src, name, size = 36, className }: OreoAvatarProps) {
@@ -52,7 +63,6 @@ export function OreoAvatar({ src, name, size = 36, className }: OreoAvatarProps)
           alt={name}
           className="w-full h-full object-cover"
           onError={(e) => {
-            // If real image fails to load, hide it — the Avatar below shows through
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
@@ -60,6 +70,7 @@ export function OreoAvatar({ src, name, size = 36, className }: OreoAvatarProps)
         <Avatar
           variantId={name}
           palette={nameToPalette(name)}
+          shape={nameToShape(name)}
           size={size}
           className="w-full h-full"
         />
