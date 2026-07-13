@@ -23,6 +23,8 @@ import {
 import { Sparkline } from "@/components/dither-kit/sparkline";
 import type { DitherColor } from "@/components/dither-kit/palette";
 import { AreaChart as DitherAreaChart } from "@/components/dither-kit/area-chart";
+import { LiveActivityChart } from "@/components/custom/LiveActivityChart";
+import { OreoAvatar } from "@/components/custom/OreoAvatar";
 import { Area as DitherArea } from "@/components/dither-kit/area";
 import { XAxis as DXAxis } from "@/components/dither-kit/x-axis";
 import { Tooltip as DTooltip } from "@/components/dither-kit/tooltip";
@@ -604,6 +606,25 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* ── Live Activity Chart ── */}
+      {!loading && (
+        <Card className="mb-4 overflow-hidden">
+          <CardHeader className="px-4 pt-3 pb-0 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-primary animate-pulse inline-block" />
+              <CardTitle className="text-sm font-bold text-foreground">چالاکیی ڕستەیی</CardTitle>
+              <Badge variant="outline" className="text-[10px] h-4 px-1.5">زیندوو</Badge>
+            </div>
+            <span className="text-[10px] text-muted-foreground">80ms</span>
+          </CardHeader>
+          <CardContent className="p-0 pt-1">
+            <div className="h-28">
+              <LiveActivityChart />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Online Users Strip ── */}
       {onlineUsers.length > 0 && (
         <Card className="mb-4">
@@ -617,10 +638,7 @@ export default function DashboardPage() {
                 const initials = u.name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2) || "؟";
                 return (
                   <div key={u.id} title={u.name} className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 dark:bg-emerald-950/30 rounded-full text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                    <Avatar className="size-4">
-                      <AvatarImage src={u.avatar_url} />
-                      <AvatarFallback className="bg-green-500 text-white text-[8px] font-bold">{initials}</AvatarFallback>
-                    </Avatar>
+                    <OreoAvatar src={u.avatar_url} name={u.name} size={16} />
                     {u.name}
                   </div>
                 );
