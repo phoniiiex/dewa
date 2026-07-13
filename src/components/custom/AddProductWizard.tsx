@@ -596,8 +596,12 @@ function ManualMode({ form, upd, onClose, onSwitchAuto, onSubmit, isEdit }: {
           regardless of the parent RTL context, so progress reads correctly.
           Completed steps are clickable (disabled={n > step} blocks future only).
         */}
+        {/* dir="ltr" wrapper: StepperNav doesn't forward the dir prop, but
+            CSS direction is inherited — so wrapping forces the nav's flex-row
+            to flow left→right (steps 1,2,3,4,5,6) even inside the RTL drawer */}
+        <div dir="ltr" className="w-full">
         <Stepper value={step} onValueChange={goTo}>
-          <StepperNav dir="ltr">
+          <StepperNav>
             {MANUAL_STEPS.map((s, i) => (
               <StepperItem key={s.n} step={s.n} disabled={s.n > step}>
                 <StepperTrigger>
@@ -617,7 +621,8 @@ function ManualMode({ form, upd, onClose, onSwitchAuto, onSubmit, isEdit }: {
             ))}
           </StepperNav>
         </Stepper>
-      </div>
+        </div>{/* end dir="ltr" */}
+      </div>{/* end header */}
 
       {/* ── Step heading ── */}
       <div className="px-5 pt-4 pb-1 shrink-0">
