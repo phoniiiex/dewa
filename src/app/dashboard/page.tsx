@@ -23,8 +23,12 @@ import {
 import { Sparkline } from "@/components/dither-kit/sparkline";
 import type { DitherColor } from "@/components/dither-kit/palette";
 import { AreaChart as DitherAreaChart } from "@/components/dither-kit/area-chart";
-import { LiveActivityChart } from "@/components/custom/LiveActivityChart";
+import dynamic from "next/dynamic";
 import { OreoAvatar } from "@/components/custom/OreoAvatar";
+const LiveActivityChart = dynamic(
+  () => import("@/components/custom/LiveActivityChart").then(m => ({ default: m.LiveActivityChart })),
+  { ssr: false, loading: () => <div className="w-full h-40 animate-pulse bg-white/5 rounded-lg" /> }
+);
 import { Area as DitherArea } from "@/components/dither-kit/area";
 import { XAxis as DXAxis } from "@/components/dither-kit/x-axis";
 import { Tooltip as DTooltip } from "@/components/dither-kit/tooltip";
@@ -608,17 +612,17 @@ export default function DashboardPage() {
 
       {/* ── Live Activity Chart ── */}
       {!loading && (
-        <Card className="mb-4 overflow-hidden">
+        <Card className="mb-4 overflow-hidden bg-zinc-900 border-zinc-800">
           <CardHeader className="px-4 pt-3 pb-0 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="size-2 rounded-full bg-primary animate-pulse inline-block" />
-              <CardTitle className="text-sm font-bold text-foreground">چالاکیی ڕستەیی</CardTitle>
-              <Badge variant="outline" className="text-[10px] h-4 px-1.5">زیندوو</Badge>
+              <span className="size-2 rounded-full bg-violet-400 animate-pulse inline-block" />
+              <CardTitle className="text-sm font-bold text-white">چالاکیی ڕستەیی</CardTitle>
+              <Badge className="text-[10px] h-4 px-1.5 bg-violet-500/20 text-violet-300 border-violet-500/30">زیندوو</Badge>
             </div>
-            <span className="text-[10px] text-muted-foreground">80ms</span>
+            <span className="text-[10px] text-zinc-500">80ms</span>
           </CardHeader>
           <CardContent className="p-0 pt-1">
-            <div className="h-28">
+            <div className="h-40">
               <LiveActivityChart />
             </div>
           </CardContent>
