@@ -1,4 +1,5 @@
 "use client";
+import { OreoAvatar } from "@/components/custom/OreoAvatar";
 import { useState } from "react";
 import { Truck, Plus, Trash2, Edit2, Check, Search, Wifi, RefreshCw, UserPlus } from "lucide-react";
 import { useData } from "@/lib/store";
@@ -153,10 +154,7 @@ export default function DriversPage() {
               <CardContent className="p-5">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "size-11 rounded-full flex items-center justify-center text-lg font-bold",
-                      d.isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                    )}>{d.name.charAt(0)}</div>
+                    <OreoAvatar name={d.name} size={44} />
                     <div>
                       <p className="font-bold text-base">{d.name}</p>
                       <p className="text-xs text-muted-foreground">{d.city}</p>

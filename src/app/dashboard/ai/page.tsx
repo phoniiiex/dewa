@@ -1,4 +1,5 @@
 "use client";
+import BorderBeam from "border-beam";
 
 import {
   useState, useCallback, useRef, useEffect,
@@ -685,6 +686,13 @@ export default function AiPage() {
 
       {/* ── Input ── */}
       <div className="shrink-0 py-4">
+        <BorderBeam
+          size="md"
+          colorVariant="colorful"
+          strength={0.9}
+          theme="auto"
+          borderRadius={16}
+        >
         <AIInput
           menuItems={menuItems}
           settingGroups={settingGroups}
@@ -695,8 +703,9 @@ export default function AiPage() {
           }}
           onSend={(message) => sendMessage(message)}
           onMic={handleMic}
-          placeholder={listening ? "🎙️ گوێدەگرم… (دووبارە کلیک بکە بۆ ناردن)" : transcribing ? "⏳ وەرگێڕانی دەنگ…" : loading ? "جواب دەدرێتەوە…" : "پەیامێک بنوسە…"}
+          placeholder={listening ? "🎙️ گوێدەگرم… (دووبارە کلیک بکە بۆ ناردن)" : transcribing ? "⏳ وەرگێڕانی دەنگ…" : loading ? "جواب دەدرێتەوە…" : "پەیامێک بنوسێ…"}
         />
+        </BorderBeam>
         <p className="text-[11px] text-muted-foreground text-center mt-2">
           Gemini · Dewa {new Date().getFullYear()} · هەموو وەڵامەکان دەتوانن هەڵەش بن
         </p>

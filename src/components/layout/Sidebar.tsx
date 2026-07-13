@@ -29,6 +29,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { OreoAvatar } from "@/components/custom/OreoAvatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,12 +90,7 @@ function EditProfileDialog({
         <div className="flex flex-col gap-4">
           <div className="flex justify-center">
             <div className="relative group cursor-pointer" onClick={() => fileRef.current?.click()}>
-              <Avatar className="size-20 border-2 border-primary/20">
-                <AvatarImage src={avatar} />
-                <AvatarFallback className="bg-primary text-primary-foreground text-xl font-bold">
-                  {name?.[0] || "؟"}
-                </AvatarFallback>
-              </Avatar>
+              <OreoAvatar src={avatar} name={name || "؟"} size={80} />
               <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Camera className="size-5 text-white" />
               </div>
@@ -353,12 +349,7 @@ export default function AppSidebar() {
                     />
                   }
                 >
-                  <Avatar className="size-8 rounded-lg shrink-0">
-                    <AvatarImage src={avatar} alt={currentUser?.name} />
-                    <AvatarFallback className="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground text-xs font-bold">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
+                  <OreoAvatar src={avatar} name={currentUser?.name || "بەکارهێنەر"} size={32} className="rounded-lg" />
                   <div className="grid flex-1 text-right text-sm leading-tight min-w-0">
                     <span className="truncate font-semibold">{currentUser?.name || "بەکارهێنەر"}</span>
                     <span className="truncate text-xs text-muted-foreground">{currentUser?.email}</span>
@@ -372,12 +363,7 @@ export default function AppSidebar() {
                   sideOffset={4}
                 >
                   <div className="flex items-center gap-2 px-2 py-2 text-right text-sm">
-                    <Avatar className="size-8 rounded-lg shrink-0">
-                      <AvatarImage src={avatar} alt={currentUser?.name} />
-                      <AvatarFallback className="rounded-lg bg-primary text-primary-foreground text-xs font-bold">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
+                    <OreoAvatar src={avatar} name={currentUser?.name || "بەکارهێنەر"} size={32} className="rounded-lg" />
                     <div className="grid flex-1 text-right leading-tight min-w-0">
                       <span className="truncate font-semibold text-sm">{currentUser?.name || "بەکارهێنەر"}</span>
                       <span className="truncate text-xs text-muted-foreground">{currentUser?.email}</span>

@@ -10,6 +10,7 @@ import { useData } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { OreoAvatar } from "@/components/custom/OreoAvatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -136,12 +137,7 @@ export default function TopBar() {
       >
         {/* Right: welcome */}
         <div className="flex items-center gap-3">
-          <Avatar className="size-9 border-2 border-primary/20">
-            <AvatarImage src={currentUser?.avatarUrl} alt={currentUser?.name} />
-            <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+          <OreoAvatar src={currentUser?.avatarUrl} name={currentUser?.name || "بەکارهێنەر"} size={36} className="border-2 border-primary/20" />
           <div className="hidden sm:block">
             <p className="text-sm font-bold leading-tight">بەخێربێیتەوە، {firstName}</p>
             <p className="text-xs text-muted-foreground">{formattedDate}</p>

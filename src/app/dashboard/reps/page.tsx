@@ -1,4 +1,5 @@
 "use client";
+import { OreoAvatar } from "@/components/custom/OreoAvatar";
 import { useState, FormEvent, useMemo, useRef } from "react";
 import { Search, Plus, UserCheck, Phone, MapPin, Edit3, Trash2, Camera } from "lucide-react";
 import { useData } from "@/lib/store";
@@ -142,11 +143,7 @@ export default function RepsPage() {
             <CardContent className="p-5">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="size-12 rounded-full overflow-hidden border-2 border-border bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shrink-0">
-                    {r.profilePic
-                      ? <img src={r.profilePic} alt={r.name} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                      : <span className="text-white text-lg font-black">{r.name.charAt(0)}</span>}
-                  </div>
+                <OreoAvatar src={r.profilePic} name={r.name} size={48} />
                   <div>
                     <h3 className="font-bold text-base">{r.name}</h3>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5"><MapPin className="size-3" />{r.city}</div>
@@ -198,18 +195,9 @@ export default function RepsPage() {
             <DialogDescription>زانیاری نوێنەری فرۆشتن پڕبکەوە</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Avatar upload */}
-            <div className="flex justify-center">
-              <div onClick={() => picInputRef.current?.click()}
-                className="relative size-20 rounded-full overflow-hidden border-2 border-primary bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center cursor-pointer">
-                {form.profilePic
-                  ? <img src={form.profilePic} className="w-full h-full object-cover" alt="" />
-                  : <span className="text-white text-3xl font-black">{form.name.charAt(0) || "?"}</span>
-                }
-                <div className="absolute inset-0 bg-black/35 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                  <Camera className="size-4 text-white" />
-                </div>
-              </div>
+              <div className="flex justify-center">
+              <OreoAvatar src={form.profilePic} name={form.name || "?"} size={80} className="cursor-pointer" />
+              <div className="absolute bottom-1 right-1 size-6 bg-primary rounded-full flex items-center justify-center"><Camera className="size-3 text-white" /></div>
               <input ref={picInputRef} type="file" accept="image/*" className="hidden"
                 onChange={async e => {
                   const f = e.target.files?.[0];

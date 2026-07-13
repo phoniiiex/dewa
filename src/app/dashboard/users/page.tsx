@@ -1,4 +1,5 @@
 "use client";
+import { OreoAvatar } from "@/components/custom/OreoAvatar";
 import { useState, useEffect, FormEvent, useRef } from "react";
 import {
   Users, Plus, Link2, Copy, Check, Trash2, Edit3,
@@ -352,14 +353,7 @@ export default function UsersPage() {
                       <TableCell>
                         <div className="flex items-center gap-2.5">
                           <div className="relative shrink-0">
-                            {u.avatar_url ? (
-                              <img src={u.avatar_url} alt={u.name} className="size-9 rounded-full object-cover border-2 border-primary/20" />
-                            ) : (
-                              <div className={cn("size-9 rounded-full flex items-center justify-center text-white text-xs font-bold",
-                                u.is_active ? "bg-gradient-to-br from-primary to-violet-500" : "bg-muted-foreground/40")}>
-                                {initials}
-                              </div>
-                            )}
+                            <OreoAvatar src={u.avatar_url} name={u.name} size={36} />
                             <div className={cn("absolute bottom-0 end-0 size-2.5 rounded-full border-2 border-background",
                               isOnline(u.last_seen) ? "bg-emerald-500" : "bg-muted-foreground/50")} />
                           </div>
