@@ -3,54 +3,64 @@
 /**
  * LiveActivityChart
  * -----------------
- * Real-time "chaos" line chart using `liveline`.
- * Configured for: chaotic, huge spikes, 80 ms tick rate.
- * Drops into the dashboard below the 4 KPI stat cards.
+ * Real-time chaos chart using `liveline`.
+ * Settings: 80 ms ticks, chaotic huge spikes, exaggerate + degen particles.
+ * Theme-aware: detects dark / light mode automatically via DOM class.
  */
 import { useEffect, useRef, useState } from "react";
 import { Liveline, type LivelinePoint } from "liveline";
 
-const WINDOW_SECS  = 30;   // visible time window
-const INTERVAL_MS  = 80;   // tick speed — 80 ms
-const MAX_POINTS   = Math.ceil((WINDOW_SECS * 1000) / INTERVAL_MS) + 50;
+const WINDOW_SECS = 30;
+const INTERVAL_MS = 80;
+const MAX_PTS = Math.ceil((WINDOW_SECS * 1000) / INTERVAL_MS) + 60;
 
-/** Seed the chart with plausible history so it isn't empty on mount */
-function makeHistory(): LivelinePoint[] {
+/** Seed the chart with history so it's never empty on mount */
+function makeHistory(base = 60): LivelinePoint[] {
   const now = Date.now();
   const pts: LivelinePoint[] = [];
-  let v = 50 + Math.random() * 20;
+  let v = base + (Math.random() - 0.5) * 20;
   for (let age = WINDOW_SECS * 1000; age >= 0; age -= INTERVAL_MS) {
-    const isSpike = Math.random() < 0.18;
-    const delta = isSpike
-      ? (Math.random() - 0.48) * 75   // huge spike
-      : (Math.random() - 0.5)  * 9;   // small noise
-    v = Math.max(4, Math.min(98, v + delta));
+    const spike = Math.random() < 0.18;
+    const delta = spike
+      ? (Math.random() - 0.46) * 72   // huge spike
+      : (Math.random() - 0.5)  * 8;   // noise
+    v = Math.max(3, Math.min(97, v + delta));
     pts.push({ time: now - age, value: v });
   }
   return pts;
 }
 
-interface LiveActivityChartProps {
-  /** Optional. If true uses the dark Liveline theme palette */
-  dark?: boolean;
+/** Read dark-mode state from the document root class */
+function isDarkMode() {
+  if (typeof document === "undefined") return true;
+  return document.documentElement.classList.contains("dark");
 }
 
-export function LiveActivityChart({ dark = false }: LiveActivityChartProps) {
-  const [data,  setData]  = useState<LivelinePoint[]>(makeHistory);
-  const [value, setValue] = useState(50);
-  const vRef = useRef(50);
+export function LiveActivityChart() {
+  const [data,  setData]  = useState<LivelinePoint[]>(() => makeHistory());
+  const [value, setValue] = useState(60);
+  const [dark,  setDark]  = useState(isDarkMode);
+  const vRef = useRef(60);
 
+  /* Theme observer — re-renders when user toggles dark/light */
+  useEffect(() => {
+    const obs = new MutationObserver(() => setDark(isDarkMode()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+
+  /* Data generator — 80 ms chaotic ticks */
   useEffect(() => {
     const id = setInterval(() => {
-      const isSpike = Math.random() < 0.18;
-      const delta = isSpike
-        ? (Math.random() - 0.48) * 75
-        : (Math.random() - 0.5)  * 9;
-      const next = Math.max(4, Math.min(98, vRef.current + delta));
+      const spike = Math.random() < 0.18;
+      const delta = spike
+        ? (Math.random() - 0.46) * 72
+        : (Math.random() - 0.5)  * 8;
+      const next = Math.max(3, Math.min(97, vRef.current + delta));
       vRef.current = next;
       setValue(next);
       setData(prev => {
-        const trimmed = prev.length >= MAX_POINTS ? prev.slice(1) : prev;
+        const trimmed = prev.length >= MAX_PTS ? prev.slice(1) : prev;
         return [...trimmed, { time: Date.now(), value: next }];
       });
     }, INTERVAL_MS);
@@ -61,18 +71,30 @@ export function LiveActivityChart({ dark = false }: LiveActivityChartProps) {
     <Liveline
       data={data}
       value={value}
-      color="hsl(263 70% 62%)"   /* matches --primary purple */
-      window={WINDOW_SECS}
+      color="hsl(263 70% 62%)"
       theme={dark ? "dark" : "light"}
+      window={WINDOW_SECS}
+      /* Visual drama */
       exaggerate
       momentum
       fill
       badge
       grid
       pulse
-      degen={{ scale: 1.8, downMomentum: false }}
+      scrub
+      showValue
+      valueMomentumColor
+      degen={{ scale: 2, downMomentum: true }}
+      /* Formatting */
       formatValue={(v) => v.toFixed(0)}
-      lineWidth={2.2}
+      lineWidth={2}
+      /* Time window buttons */
+      windows={[
+        { label: "10s", secs: 10 },
+        { label: "30s", secs: 30 },
+        { label: "2m",  secs: 120 },
+        { label: "5m",  secs: 300 },
+      ]}
       className="w-full h-full"
     />
   );
