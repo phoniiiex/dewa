@@ -147,7 +147,33 @@ function Pills({ options, value, onChange }: { options: string[]; value: string;
 }
 
 // ─── SVG Flag helper ─────────────────────────────────────────────────────────────
-function CountryFlag({ code, fallbackEmoji, size = 16 }: { code: string; fallbackEmoji?: string; size?: number }) {
+function KurdistanFlagSvg({ title }: { title?: string }) {
+  return (
+    <svg viewBox="0 0 513 342" fill="none" xmlns="http://www.w3.org/2000/svg" role="img">
+      {title && <title>{title}</title>}
+      <g clipPath="url(#krd_clip)">
+        <path d="M0 0H513V342H0V0Z" fill="white"/>
+        <path d="M0 0H513V114H0V0Z" fill="#ED2024"/>
+        <path d="M0 228H513V342H0V228Z" fill="#278E43"/>
+        <path d="M256.5 85.5L262.907 128.97L281.843 89.3196L275.153 132.748L304.935 100.44L285.741 139.966L323.722 117.873L293.731 149.985L336.537 140.068L298.412 161.914L342.24 165.055L299.37 174.693L340.324 190.613L296.519 187.186L330.961 214.47L290.111 198.284L314.982 234.508L280.717 207L293.806 248.946L269.172 212.56L269.314 256.5L256.5 214.47L243.685 256.5L243.828 212.56L219.195 248.946L232.283 207L198.019 234.508L222.889 198.284L182.039 214.47L216.482 187.186L172.676 190.613L213.63 174.692L170.761 165.055L214.588 161.914L176.464 140.068L219.269 149.985L189.278 117.873L227.26 139.966L208.066 100.44L237.847 132.748L231.157 89.3196L250.093 128.97L256.5 85.5Z" fill="#FEBD11"/>
+      </g>
+      <defs><clipPath id="krd_clip"><rect width="513" height="342" fill="white"/></clipPath></defs>
+    </svg>
+  );
+}
+
+function CountryFlag({ code, size = 16 }: { code: string; fallbackEmoji?: string; size?: number }) {
+  // Kurdistan custom SVG flag
+  if (code === "KRD") {
+    return (
+      <span
+        className="inline-flex items-center justify-center overflow-hidden rounded-[3px] [&_svg]:size-full!"
+        style={{ width: size, height: size * 0.75 }}
+      >
+        <KurdistanFlagSvg title="Kurdistan" />
+      </span>
+    );
+  }
   const Flag = flags[code as PhoneCountry];
   if (Flag) {
     return (
@@ -159,9 +185,9 @@ function CountryFlag({ code, fallbackEmoji, size = 16 }: { code: string; fallbac
       </span>
     );
   }
-  // Fallback for non-ISO codes (e.g. Kurdistan)
-  return <span className="text-sm leading-none">{fallbackEmoji || "🏳️"}</span>;
+  return <span className="text-sm leading-none">🏳️</span>;
 }
+
 
 // ─── Country Picker ─────────────────────────────────────────────────────────────
 function CountryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
