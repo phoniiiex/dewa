@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { COUNTRIES } from "@/lib/countries";
+import flags from "react-phone-number-input/flags";
+import type { Country as PhoneCountry } from "react-phone-number-input";
 
 // UI
 import { Drawer, DrawerContent }   from "@/components/ui/drawer";
@@ -144,7 +146,24 @@ function Pills({ options, value, onChange }: { options: string[]; value: string;
   );
 }
 
-// ─── Country Picker ───────────────────────────────────────────────────────────
+// ─── SVG Flag helper ─────────────────────────────────────────────────────────────
+function CountryFlag({ code, fallbackEmoji, size = 16 }: { code: string; fallbackEmoji?: string; size?: number }) {
+  const Flag = flags[code as PhoneCountry];
+  if (Flag) {
+    return (
+      <span
+        className="inline-flex items-center justify-center overflow-hidden rounded-[3px] [&_svg:not([class*='size-'])]:size-full!"
+        style={{ width: size, height: size * 0.75 }}
+      >
+        <Flag title={code} />
+      </span>
+    );
+  }
+  // Fallback for non-ISO codes (e.g. Kurdistan)
+  return <span className="text-sm leading-none">{fallbackEmoji || "🏳️"}</span>;
+}
+
+// ─── Country Picker ─────────────────────────────────────────────────────────────
 function CountryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   const sel = COUNTRIES.find(c => c.nameEn === value || c.name === value);
@@ -152,8 +171,10 @@ function CountryPicker({ value, onChange }: { value: string; onChange: (v: strin
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger className="inline-flex w-full h-10 items-center justify-between rounded-xl border border-border bg-background px-3 text-sm hover:bg-muted transition-colors">
         <span className="flex items-center gap-2">
-          <Globe size={13} className="text-muted-foreground" />
-          {sel ? `${sel.flag} ${sel.nameEn}` : <span className="text-muted-foreground">ووڵات هەڵبژێرە…</span>}
+          {sel
+            ? <><CountryFlag code={sel.code} fallbackEmoji={sel.flag} size={18} /> <span>{sel.name}</span></>
+            : <><Globe size={13} className="text-muted-foreground" /><span className="text-muted-foreground">ووڵات هەڵبژێرە…</span></>
+          }
         </span>
         <ChevronRight size={12} className="text-muted-foreground" />
       </PopoverTrigger>
@@ -165,11 +186,12 @@ function CountryPicker({ value, onChange }: { value: string; onChange: (v: strin
             <CommandGroup>
               <ScrollArea className="h-56">
                 {COUNTRIES.map(c => (
-                  <CommandItem key={c.nameEn} value={`${c.nameEn} ${c.name}`}
-                    onSelect={() => { onChange(c.nameEn); setOpen(false); }} className="cursor-pointer">
-                    <span className="mr-2">{c.flag}</span>
-                    <span className="flex-1 text-sm">{c.nameEn}</span>
-                    {sel?.nameEn === c.nameEn && <Check size={12} className="text-primary" />}
+                  <CommandItem key={c.code} value={`${c.nameEn} ${c.name} ${c.code}`}
+                    onSelect={() => { onChange(c.nameEn); setOpen(false); }} className="cursor-pointer gap-2">
+                    <CountryFlag code={c.code} fallbackEmoji={c.flag} size={18} />
+                    <span className="flex-1 text-sm">{c.name}</span>
+                    <span className="text-[11px] text-muted-foreground">{c.code}</span>
+                    {sel?.code === c.code && <Check size={12} className="text-primary" />}
                   </CommandItem>
                 ))}
               </ScrollArea>
