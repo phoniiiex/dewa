@@ -9,13 +9,14 @@ import {
   Sparkles, RotateCwIcon, BarChart3, ShoppingCart,
   Package, Users, CheckCircle2, AlertCircle,
   ChevronDown, ChevronUp, Loader2, TrendingUp,
-  Warehouse, Archive, Camera, LayoutGrid, Plug,
-  Phone, PhoneOff, Volume2,
+  Warehouse, Archive, Phone, PhoneOff, Volume2,
+  Check, Pencil, X, Gift,
 } from "lucide-react";
 import { useLayout } from "@/app/dashboard/layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { OreoAvatar } from "@/components/custom/OreoAvatar";
 import {
   AIInput,
   type AIInputMenuItem,
@@ -45,8 +46,9 @@ import {
 } from "@/components/ui/empty";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface OrderItem { productName: string; quantity: number; unitPrice: number; total: number; }
+interface OrderItem { productName: string; quantity: number; unitPrice: number; total: number; bonusQty?: number; bonusPct?: number; }
 interface OrderResult { success: boolean; orderNumber?: string; clientName?: string; repName?: string; warehouseName?: string; totalAmount?: number; status?: string; items?: OrderItem[]; error?: string; }
+interface PreviewResult { preview: true; clientName: string; repName?: string | null; warehouseName?: string | null; totalAmount: number; totalBonusQty: number; notes?: string; items: OrderItem[]; }
 interface BulkResult { bulk: boolean; count: number; orders: OrderResult[]; }
 interface ToolResult { name: string; result: unknown; }
 interface ChatMessage { id: string; role: "user" | "assistant"; text: string; toolResults?: ToolResult[]; loading?: boolean; error?: boolean; animated?: boolean; }
@@ -56,8 +58,6 @@ const STATUS_COLOR: Record<string, string> = {
   WAITING: "#f59e0b", IN_PROGRESS: "#3b82f6", READY: "#8b5cf6",
   SENT: "#06b6d4", DELIVERED: "#10b981", PAID: "#22c55e", NOT_ACCEPTED: "#ef4444",
 };
-
-// (AnimatedText replaced by StreamingText from @iconiq/streaming-text)
 
 // ─── Rich result cards ────────────────────────────────────────────────────────
 function OrderCard({ order }: { order: OrderResult }) {
@@ -89,7 +89,7 @@ function OrderCard({ order }: { order: OrderResult }) {
             <div className="flex flex-col gap-1 px-3 pb-3 pt-1.5">
               {order.items.map((item, i) => (
                 <div key={i} className="flex justify-between text-xs">
-                  <span>{item.productName} <span className="text-muted-foreground">×{item.quantity}</span></span>
+                  <span>{item.productName} <span className="text-muted-foreground">×{item.quantity}</span>{(item.bonusQty ?? 0) > 0 && <span className="text-emerald-600 font-semibold"> +{item.bonusQty} بۆنەس</span>}</span>
                   <span className="font-semibold text-green-700">{fmt(item.total)}</span>
                 </div>
               ))}
@@ -201,11 +201,113 @@ function WarehousesCard({ warehouses }: { warehouses: { id: string; name: string
   );
 }
 
-function ToolResultCards({ toolResults }: { toolResults: ToolResult[] }) {
+// ─── Order Preview Card (with BorderBeam) ─────────────────────────────────────
+function OrderPreviewCard({ preview, onAction }: { preview: PreviewResult; onAction: (action: "confirm" | "edit" | "cancel") => void }) {
+  const totalBonus = preview.totalBonusQty;
+  return (
+    <BorderBeam
+      size="md"
+      colorVariant="colorful"
+      strength={0.9}
+      theme="auto"
+      borderRadius={14}
+    >
+      <div className="rounded-[14px] bg-card border-0 overflow-hidden">
+        {/* Header */}
+        <div className="px-4 pt-4 pb-3 border-b border-border/50">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="size-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+              <ShoppingCart className="size-4 text-violet-600" />
+            </div>
+            <div>
+              <p className="text-[13px] font-bold">پێشبینی داواکاری</p>
+              <p className="text-[10px] text-muted-foreground">تکایە پشتڕاست بکەرەوە</p>
+            </div>
+          </div>
+          {/* Meta row */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] mt-1">
+            <span className="font-semibold">{preview.clientName}</span>
+            {preview.repName && <span className="text-muted-foreground">نوێنەر: {preview.repName}</span>}
+            {preview.warehouseName && <span className="text-muted-foreground">کۆگا: {preview.warehouseName}</span>}
+          </div>
+        </div>
+
+        {/* Items table */}
+        <div className="px-4 py-3 space-y-1.5">
+          {preview.items.map((item, i) => (
+            <div key={i} className="flex items-center justify-between text-[12px]">
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <span className="font-medium truncate">{item.productName}</span>
+                <span className="text-muted-foreground shrink-0">×{item.quantity}</span>
+                {(item.bonusQty ?? 0) > 0 && (
+                  <Badge variant="outline" className="text-[9px] h-4 px-1 text-emerald-600 border-emerald-300 shrink-0">
+                    <Gift className="size-2.5 me-0.5" />+{item.bonusQty}
+                  </Badge>
+                )}
+              </div>
+              <span className="font-semibold text-foreground shrink-0 ms-2">{fmt(item.total)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Total */}
+        <div className="mx-4 border-t border-border/50 pt-2.5 pb-1">
+          <div className="flex justify-between items-center">
+            <span className="text-[12px] text-muted-foreground">کۆی گشتی</span>
+            <span className="text-[15px] font-black text-primary">{fmt(preview.totalAmount)}</span>
+          </div>
+          {totalBonus > 0 && (
+            <div className="flex justify-between items-center mt-0.5">
+              <span className="text-[11px] text-muted-foreground">کۆی بۆنەس</span>
+              <span className="text-[12px] font-semibold text-emerald-600">+{totalBonus} دانە</span>
+            </div>
+          )}
+          {preview.notes && (
+            <p className="text-[11px] text-muted-foreground mt-1.5 bg-muted/50 rounded-lg px-2.5 py-1.5">
+              📝 {preview.notes}
+            </p>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 px-4 pt-2 pb-4">
+          <Button
+            size="sm"
+            className="flex-1 gap-1.5 h-9 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white border-0 font-semibold text-[12px]"
+            onClick={() => onAction("confirm")}
+          >
+            <Check className="size-3.5" /> پەسەندکردن
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 h-9 rounded-xl text-[12px]"
+            onClick={() => onAction("edit")}
+          >
+            <Pencil className="size-3" /> دەستکاری
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 h-9 rounded-xl text-[12px] text-muted-foreground hover:text-destructive"
+            onClick={() => onAction("cancel")}
+          >
+            <X className="size-3" /> پاشگەزبوون
+          </Button>
+        </div>
+      </div>
+    </BorderBeam>
+  );
+}
+
+function ToolResultCards({ toolResults, onPreviewAction }: { toolResults: ToolResult[]; onPreviewAction: (action: "confirm" | "edit" | "cancel") => void }) {
   return (
     <>
       {toolResults.map((tr, i) => {
         const r = tr.result as Record<string, unknown>;
+        if (tr.name === "preview_order" && r && (r as unknown as PreviewResult)?.preview) {
+          return <OrderPreviewCard key={i} preview={r as unknown as PreviewResult} onAction={onPreviewAction} />;
+        }
         if (tr.name === "create_order" && r) return <OrderCard key={i} order={r as unknown as OrderResult} />;
         if (tr.name === "create_bulk_orders" && (r as unknown as BulkResult)?.bulk) return <BulkOrderCard key={i} result={r as unknown as BulkResult} />;
         if (tr.name === "get_dashboard_stats" && r) return <StatsCard key={i} result={r as Record<string, number>} />;
@@ -267,7 +369,11 @@ const MENU_PROMPTS: Record<string, string> = {
 };
 
 // ─── Chat row ─────────────────────────────────────────────────────────────────
-function ChatRow({ msg, userInitials }: { msg: ChatMessage; userInitials: string }) {
+function ChatRow({ msg, user, onPreviewAction }: {
+  msg: ChatMessage;
+  user: { name: string; avatarUrl: string } | null;
+  onPreviewAction: (action: "confirm" | "edit" | "cancel") => void;
+}) {
   const isUser = msg.role === "user";
 
   if (msg.loading) {
@@ -309,13 +415,13 @@ function ChatRow({ msg, userInitials }: { msg: ChatMessage; userInitials: string
         )}
         {msg.toolResults && msg.toolResults.length > 0 && (
           <div className="w-full">
-            <ToolResultCards toolResults={msg.toolResults} />
+            <ToolResultCards toolResults={msg.toolResults} onPreviewAction={onPreviewAction} />
           </div>
         )}
       </MessageContent>
       {isUser && (
-        <MessageAvatar className="size-8 rounded-full bg-muted border border-border shrink-0">
-          <span className="text-foreground font-bold text-xs">{userInitials}</span>
+        <MessageAvatar className="size-8 rounded-full overflow-hidden shrink-0 p-0 border-0 bg-transparent">
+          <OreoAvatar src={user?.avatarUrl} name={user?.name || "?"} size={32} className="size-8" />
         </MessageAvatar>
       )}
     </Message>
@@ -335,10 +441,6 @@ export default function AiPage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [inputValue, setInputValue] = useState("");
-
-  const userInitials = currentUser?.name
-    ? currentUser.name.split(" ").map(w => w[0]).join("").slice(0, 2)
-    : "؟";
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || loading) return;
@@ -373,7 +475,17 @@ export default function AiPage() {
     } finally {
       setLoading(false);
     }
-  }, [messages, loading]);
+  }, [messages, loading, voiceMode]);
+
+  // Preview action handler
+  const handlePreviewAction = useCallback((action: "confirm" | "edit" | "cancel") => {
+    const prompts = {
+      confirm: "بەڵێ, پەسەندە — دروستی بکە",
+      edit: "دەتەوێت دەستکاری بکەم",
+      cancel: "نەخێر, هەڵیوەشێنەرەوە",
+    };
+    sendMessage(prompts[action]);
+  }, [sendMessage]);
 
   const handleMic = useCallback(async () => {
     // ── Stop recording → transcribe ───────────────────────────────────────────
@@ -673,7 +785,7 @@ export default function AiPage() {
                       key={msg.id}
                       scrollAnchor={msg.role === "user" && idx === messages.length - 2}
                     >
-                      <ChatRow msg={msg} userInitials={userInitials} />
+                      <ChatRow msg={msg} user={currentUser} onPreviewAction={handlePreviewAction} />
                     </MessageScrollerItem>
                   ))}
                 </MessageScrollerContent>
