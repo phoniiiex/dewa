@@ -11,6 +11,7 @@ import {
   ChevronDown, ChevronUp, Loader2, TrendingUp,
   Warehouse, Archive, Phone, PhoneOff, Volume2,
   Check, Pencil, X, Gift,
+  History, Trash2, MessageSquare, Clock, Plus,
 } from "lucide-react";
 import { useLayout } from "@/app/dashboard/layout";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,14 @@ import {
   EmptyDescription,
   EmptyContent,
 } from "@/components/ui/empty";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface OrderItem { productName: string; quantity: number; unitPrice: number; total: number; bonusQty?: number; bonusPct?: number; }
@@ -52,6 +61,60 @@ interface PreviewResult { preview: true; clientName: string; repName?: string | 
 interface BulkResult { bulk: boolean; count: number; orders: OrderResult[]; }
 interface ToolResult { name: string; result: unknown; }
 interface ChatMessage { id: string; role: "user" | "assistant"; text: string; toolResults?: ToolResult[]; loading?: boolean; error?: boolean; animated?: boolean; }
+
+// ─── Session types & localStorage helpers ─────────────────────────────────────
+interface AiSession {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: number;   // epoch ms
+  updatedAt: number;   // epoch ms
+}
+
+const STORAGE_KEY = "dewa-ai-sessions";
+const MAX_SESSIONS = 50;
+
+function loadSessions(): AiSession[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as AiSession[]) : [];
+  } catch { return []; }
+}
+
+function saveSessions(sessions: AiSession[]) {
+  try {
+    // Keep only the most recent MAX_SESSIONS
+    const trimmed = sessions.slice(0, MAX_SESSIONS);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  } catch { /* quota exceeded — silently fail */ }
+}
+
+function deleteSession(id: string) {
+  const sessions = loadSessions().filter(s => s.id !== id);
+  saveSessions(sessions);
+  return sessions;
+}
+
+/** Auto-generate a title from the first user message (Kurdish-friendly truncation) */
+function autoTitle(msgs: ChatMessage[]): string {
+  const first = msgs.find(m => m.role === "user" && m.text.trim());
+  if (!first) return "گفتوگۆی نوێ";
+  const text = first.text.trim();
+  return text.length > 40 ? text.slice(0, 40) + "…" : text;
+}
+
+/** Human-readable relative time in Kurdish */
+function timeAgo(epoch: number): string {
+  const diff = Date.now() - epoch;
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "ئێستا";
+  if (mins < 60) return `${mins} خولەک لەمەوبەر`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} کاتژمێر لەمەوبەر`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} ڕۆژ لەمەوبەر`;
+  return new Date(epoch).toLocaleDateString("ku", { month: "short", day: "numeric" });
+}
 
 const fmt = (n: number) => new Intl.NumberFormat("en-US").format(Math.round(n)) + " IQD";
 const STATUS_COLOR: Record<string, string> = {
@@ -428,6 +491,86 @@ function ChatRow({ msg, user, onPreviewAction }: {
   );
 }
 
+// ─── Session Panel ────────────────────────────────────────────────────────────
+function SessionPanel({
+  sessions,
+  activeId,
+  onSelect,
+  onDelete,
+  onNew,
+}: {
+  sessions: AiSession[];
+  activeId: string;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onNew: () => void;
+}) {
+  return (
+    <div className="flex flex-col h-full" dir="rtl">
+      <SheetHeader className="px-5 pt-5 pb-3 border-b border-border shrink-0">
+        <div className="flex items-center justify-between">
+          <SheetTitle className="text-sm font-bold">گفتوگۆکان</SheetTitle>
+          <Button size="sm" variant="outline" className="gap-1.5 h-8 rounded-lg text-[12px]" onClick={onNew}>
+            <Plus className="size-3" /> نوێ
+          </Button>
+        </div>
+      </SheetHeader>
+      <ScrollArea className="flex-1">
+        <div className="flex flex-col gap-1 px-3 py-3">
+          {sessions.length === 0 && (
+            <p className="text-[13px] text-muted-foreground text-center py-8">هیچ گفتوگۆیەک نییە</p>
+          )}
+          {sessions.map(s => {
+            const isActive = s.id === activeId;
+            const msgCount = s.messages.filter(m => !m.loading).length;
+            return (
+              <button
+                key={s.id}
+                onClick={() => onSelect(s.id)}
+                className={cn(
+                  "group w-full text-start rounded-xl px-3.5 py-3 transition-all",
+                  isActive
+                    ? "bg-primary/10 border border-primary/20"
+                    : "hover:bg-muted border border-transparent"
+                )}
+              >
+                <div className="flex items-start gap-2.5">
+                  <div className={cn(
+                    "size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-colors",
+                    isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                  )}>
+                    <MessageSquare className="size-3.5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      "text-[13px] font-semibold truncate leading-tight",
+                      isActive && "text-primary"
+                    )}>
+                      {s.title}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-0.5">
+                        <Clock className="size-2.5" /> {timeAgo(s.updatedAt)}
+                      </span>
+                      <span>{msgCount} پەیام</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(s.id); }}
+                    className="size-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AiPage() {
   const { currentUser } = useLayout();
@@ -441,6 +584,69 @@ export default function AiPage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [inputValue, setInputValue] = useState("");
+
+  // ── Session management ───────────────────────────────────────────────────
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+  const [sessions, setSessions] = useState<AiSession[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Load sessions from localStorage on mount
+  useEffect(() => {
+    setSessions(loadSessions());
+  }, []);
+
+  // Auto-save current session whenever messages change (skip empty/loading-only)
+  useEffect(() => {
+    const realMessages = messages.filter(m => !m.loading);
+    if (realMessages.length === 0) return;
+
+    setSessions(prev => {
+      const existing = prev.find(s => s.id === sessionId);
+      const now = Date.now();
+      const title = autoTitle(realMessages);
+
+      let updated: AiSession[];
+      if (existing) {
+        updated = prev.map(s => s.id === sessionId
+          ? { ...s, messages: realMessages, title, updatedAt: now }
+          : s
+        );
+      } else {
+        updated = [{ id: sessionId, title, messages: realMessages, createdAt: now, updatedAt: now }, ...prev];
+      }
+      // Sort by updatedAt descending
+      updated.sort((a, b) => b.updatedAt - a.updatedAt);
+      saveSessions(updated);
+      return updated;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, sessionId]);
+
+  const startNewSession = useCallback(() => {
+    setSessionId(crypto.randomUUID());
+    setMessages([]);
+    setHistoryOpen(false);
+  }, []);
+
+  const switchSession = useCallback((id: string) => {
+    const session = loadSessions().find(s => s.id === id);
+    if (session) {
+      setSessionId(session.id);
+      // Mark all messages as non-animated so they render instantly
+      setMessages(session.messages.map(m => ({ ...m, animated: false })));
+    }
+    setHistoryOpen(false);
+  }, []);
+
+  const handleDeleteSession = useCallback((id: string) => {
+    const updated = deleteSession(id);
+    setSessions(updated);
+    // If deleting the active session, start fresh
+    if (id === sessionId) {
+      setSessionId(crypto.randomUUID());
+      setMessages([]);
+    }
+  }, [sessionId]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || loading) return;
@@ -654,11 +860,34 @@ export default function AiPage() {
             {voiceMode ? <PhoneOff className="size-3.5" /> : <Phone className="size-3.5" />}
             {voiceMode ? "دەنگ کۆتابی بهێنە" : "گفتوگۆی دەنگی"}
           </Button>
+          <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+            <SheetTrigger
+              className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 relative cursor-pointer"
+            >
+              <History className="size-3.5" />
+              گفتوگۆکان
+              {sessions.length > 0 && (
+                <span className="absolute -top-1.5 -left-1.5 size-4 rounded-full bg-primary text-[9px] font-bold text-primary-foreground flex items-center justify-center">
+                  {sessions.length}
+                </span>
+              )}
+            </SheetTrigger>
+
+            <SheetContent side="left" className="w-80 p-0">
+              <SessionPanel
+                sessions={sessions}
+                activeId={sessionId}
+                onSelect={switchSession}
+                onDelete={handleDeleteSession}
+                onNew={startNewSession}
+              />
+            </SheetContent>
+          </Sheet>
           <Button
             variant="ghost"
             size="sm"
             className="gap-1.5 text-muted-foreground"
-            onClick={() => setMessages([])}
+            onClick={startNewSession}
             disabled={isEmpty || loading}
           >
             <RotateCwIcon className="size-3.5" />
