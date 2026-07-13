@@ -22,6 +22,7 @@
     "hooks": "@/hooks"
   },
   "registries": {
-    "@iconiq": "https://iconiqui.com/r/{name}.json"
+    "@iconiq": "https://iconiqui.com/r/{name}.json",
+    "@reui": "https://reui.io/r/{style}/{name}.json"
   }
 }
