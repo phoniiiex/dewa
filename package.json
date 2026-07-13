@@ -23,6 +23,7 @@
     "cmdk": "^1.1.1",
     "d3-scale": "^4.0.2",
     "d3-shape": "^3.2.0",
+    "html5-qrcode": "^2.3.8",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.21.0",
     "motion": "^12.42.0",

@@ -398,7 +398,33 @@ export default function ProductsPage() {
 
       {/* ── Wizards ── */}
       <AddProductWizard open={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleWizardSubmit} />
-      <AddProductWizard open={editModalOpen} onClose={() => setEditModalOpen(false)} onSubmit={handleEditSubmit} initialProduct={editingProduct ?? undefined} />
+      <AddProductWizard
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        onSubmit={handleEditSubmit}
+        initialProduct={editingProduct ? {
+          id:               editingProduct.id,
+          name:             editingProduct.name,
+          sku:              editingProduct.sku,
+          category:         editingProduct.category,
+          company:          editingProduct.company,
+          stock:            String(editingProduct.stock),
+          lowStock:         String(editingProduct.lowStock ?? 10),
+          unitType:         editingProduct.unitType,
+          origin:           editingProduct.origin,
+          supplier:         editingProduct.supplier,
+          issueDate:        editingProduct.issueDate,
+          expiryDate:       editingProduct.expiryDate,
+          batchNumber:      editingProduct.batchNumber,
+          isSample:         editingProduct.isSample,
+          imageUrl:         editingProduct.imageUrl,
+          barcode:          ((editingProduct as unknown as Record<string, unknown>).barcode as string) ?? "",
+          description:      ((editingProduct as unknown as Record<string, unknown>).description as string) ?? "",
+          activeIngredients:((editingProduct as unknown as Record<string, unknown>).activeIngredients as string) ?? "",
+          dosageForm:       ((editingProduct as unknown as Record<string, unknown>).dosageForm as string) ?? "",
+          prices:           (editingProduct.prices ?? []).map(p => ({ ...p, amount: String(p.amount) })),
+        } : undefined}
+      />
 
       {/* ── Detail Sheet ── */}
       <Sheet open={!!detailProduct} onOpenChange={open => !open && setDetailProduct(null)}>
