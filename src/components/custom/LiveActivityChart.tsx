@@ -4,8 +4,13 @@
  * LiveActivityChart
  * -----------------
  * Real-time chaos chart using `liveline`.
- * CRITICAL: Liveline expects time in SECONDS (Date.now() / 1000),
- * not milliseconds. Passing ms values causes all data to be filtered out.
+ * 80 ms ticks · huge spikes · exaggerate + degen particles.
+ *
+ * ⚠️ TIMESTAMPS: Liveline expects SECONDS (Date.now() / 1000).
+ * Passing milliseconds causes all data to be silently filtered out.
+ *
+ * Theme: auto-detects dark/light via MutationObserver on <html class>.
+ * The chart card background adapts accordingly in dashboard/page.tsx.
  */
 import { useEffect, useRef, useState } from "react";
 import { Liveline, type LivelinePoint } from "liveline";
@@ -14,18 +19,22 @@ const WINDOW_SECS = 30;
 const INTERVAL_MS = 80;
 const MAX_PTS = Math.ceil((WINDOW_SECS * 1000) / INTERVAL_MS) + 60;
 
+function isDark() {
+  return document.documentElement.classList.contains("dark");
+}
+
 /** Seed with 30 s of chaotic history — timestamps in SECONDS */
 function makeHistory(base = 55): LivelinePoint[] {
-  const nowSec = Date.now() / 1000;          // ← SECONDS
+  const nowSec = Date.now() / 1000;
   const pts: LivelinePoint[] = [];
   let v = base + (Math.random() - 0.5) * 15;
   for (let age = WINDOW_SECS; age >= 0; age -= INTERVAL_MS / 1000) {
     const spike = Math.random() < 0.18;
     const delta = spike
-      ? (Math.random() - 0.46) * 65          // huge spike
-      : (Math.random() - 0.5)  * 7;          // noise
+      ? (Math.random() - 0.46) * 65
+      : (Math.random() - 0.5)  * 7;
     v = Math.max(5, Math.min(95, v + delta));
-    pts.push({ time: nowSec - age, value: v }); // time in seconds
+    pts.push({ time: nowSec - age, value: v });
   }
   return pts;
 }
@@ -33,8 +42,23 @@ function makeHistory(base = 55): LivelinePoint[] {
 export function LiveActivityChart() {
   const [data,  setData]  = useState<LivelinePoint[]>(makeHistory);
   const [value, setValue] = useState(55);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const vRef = useRef(55);
 
+  /* Sync theme from <html class="dark"> */
+  useEffect(() => {
+    setTheme(isDark() ? "dark" : "light");
+    const obs = new MutationObserver(() =>
+      setTheme(isDark() ? "dark" : "light")
+    );
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => obs.disconnect();
+  }, []);
+
+  /* 80 ms chaotic data generator */
   useEffect(() => {
     const id = setInterval(() => {
       const spike = Math.random() < 0.18;
@@ -46,7 +70,7 @@ export function LiveActivityChart() {
       setValue(next);
       setData(prev => {
         const trimmed = prev.length >= MAX_PTS ? prev.slice(1) : prev;
-        return [...trimmed, { time: Date.now() / 1000, value: next }]; // ← seconds
+        return [...trimmed, { time: Date.now() / 1000, value: next }];
       });
     }, INTERVAL_MS);
     return () => clearInterval(id);
@@ -56,8 +80,8 @@ export function LiveActivityChart() {
     <Liveline
       data={data}
       value={value}
-      theme="dark"
-      color="#a78bfa"
+      theme={theme}
+      color="#a78bfa"          /* violet-400 */
       window={WINDOW_SECS}
       exaggerate
       momentum

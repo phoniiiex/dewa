@@ -6,6 +6,8 @@ export interface Country {
 }
 
 export const COUNTRIES: Country[] = [
+  // Kurdistan first
+  { name: "کوردستان ☀️", nameEn: "Kurdistan", flag: "☀️", code: "KRD" },
   // Middle East & Central Asia
   { name: "عێراق 🇮🇶", nameEn: "Iraq", flag: "🇮🇶", code: "IQ" },
   { name: "تورکیا 🇹🇷", nameEn: "Turkey", flag: "🇹🇷", code: "TR" },

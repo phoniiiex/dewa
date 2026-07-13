@@ -179,7 +179,7 @@ export default function ProductsPage() {
       stock: Number(data.stock), lowStock: Number(data.lowStock) || 10,
       unitType: data.unitType, origin: data.origin, supplier: data.supplier,
       issueDate: data.issueDate, expiryDate: data.expiryDate,
-      batchNumber: data.batchNumber, isSample: data.isSample, isActive: true, imageUrl: data.imageUrl,
+      batchNumber: data.batchNumber, isActive: true, imageUrl: data.imageUrl,
     });
   };
 
@@ -193,7 +193,7 @@ export default function ProductsPage() {
       stock: Number(data.stock), lowStock: Number(data.lowStock) || 10,
       unitType: data.unitType, origin: data.origin, supplier: data.supplier,
       issueDate: data.issueDate, expiryDate: data.expiryDate,
-      batchNumber: data.batchNumber, isSample: data.isSample, isActive: editingProduct.isActive, imageUrl: data.imageUrl,
+      batchNumber: data.batchNumber, isActive: editingProduct.isActive, imageUrl: data.imageUrl,
     });
     setEditModalOpen(false);
   };
@@ -416,7 +416,6 @@ export default function ProductsPage() {
           issueDate:        editingProduct.issueDate,
           expiryDate:       editingProduct.expiryDate,
           batchNumber:      editingProduct.batchNumber,
-          isSample:         editingProduct.isSample,
           imageUrl:         editingProduct.imageUrl,
           barcode:          ((editingProduct as unknown as Record<string, unknown>).barcode as string) ?? "",
           description:      ((editingProduct as unknown as Record<string, unknown>).description as string) ?? "",

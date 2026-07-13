@@ -50,7 +50,7 @@ export interface Product {
   issueDate: string;
   expiryDate: string;
   batchNumber: string;
-  isSample: boolean;
+  isSample?: boolean;
   isActive: boolean;
   imageUrl?: string;
   createdAt: string;

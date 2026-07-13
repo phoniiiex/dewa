@@ -41,7 +41,7 @@ export interface WizardFormData {
   stock: string; lowStock: string; unitType: string;
   origin: string; supplier: string;
   issueDate: string; expiryDate: string; batchNumber: string;
-  isSample: boolean; imageUrl: string;
+  imageUrl: string;
   barcode: string; description: string;
   activeIngredients: string; dosageForm: string;
 }
@@ -77,7 +77,7 @@ function empty(): WizardFormData {
     name:"", sku:"", category:"", company:"",
     prices:[], stock:"0", lowStock:"10", unitType:"حەبە",
     origin:"", supplier:"", issueDate:"", expiryDate:"", batchNumber:"",
-    isSample:false, imageUrl:"", barcode:"", description:"",
+    imageUrl:"", barcode:"", description:"",
     activeIngredients:"", dosageForm:"",
   };
 }
@@ -415,11 +415,6 @@ function ReviewContent({ form }: { form: WizardFormData }) {
           ))}
         </div>
       )}
-      {form.isSample && (
-        <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <Check size={12} className="text-primary" /> سامپڵەیە
-        </div>
-      )}
     </div>
   );
 }
@@ -556,7 +551,73 @@ function AutoMode({ form, upd, onClose, onDone, onSwitchManual, priceTypes }: {
   );
 }
 
-// ─── MANUAL MODE ──────────────────────────────────────────────────────────────
+// ─── Price Step (Step 3) ──────────────────────────────────────────────────────────────────────
+// Shows existing price-type rows (editable) + an inline row to add a brand-new type.
+function PriceStep({ form, upd }: {
+  form: WizardFormData;
+  upd: (k: keyof WizardFormData, v: WizardFormData[keyof WizardFormData]) => void;
+}) {
+  const [newName, setNewName] = useState("");
+
+  const addType = () => {
+    const name = newName.trim();
+    if (!name) return;
+    const id = `custom_${Date.now()}`;
+    upd("prices", [...form.prices, { typeId: id, typeName: name, amount: "" }]);
+    setNewName("");
+  };
+
+  const removeRow = (idx: number) => {
+    const next = form.prices.filter((_, i) => i !== idx);
+    upd("prices", next);
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Existing price type rows */}
+      {form.prices.map((p, i) => (
+        <div key={p.typeId} className="flex items-center gap-2">
+          <span className="text-[13px] font-medium flex-1 truncate">{p.typeName}</span>
+          <Input
+            type="number" min="0" placeholder="0"
+            value={p.amount}
+            onChange={e => {
+              const next = [...form.prices];
+              next[i] = { ...next[i], amount: e.target.value };
+              upd("prices", next);
+            }}
+            className="w-28 h-10 rounded-xl text-left font-mono text-[13px]"
+          />
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">دینار</span>
+          <button type="button" onClick={() => removeRow(i)}
+            className="size-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
+            <X size={13} />
+          </button>
+        </div>
+      ))}
+
+      {/* Add new price type inline */}
+      <div className="pt-1 border-t border-border">
+        <p className="text-[11px] text-muted-foreground mb-2">جۆری نرخی نوێ زیاد بکە</p>
+        <div className="flex gap-2">
+          <Input
+            placeholder="ناوی جۆری نرخ… نمونە: خەتە, کۆمەڵی"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addType()}
+            className="flex-1 h-10 rounded-xl text-[13px]"
+          />
+          <Button type="button" variant="outline" className="h-10 rounded-xl px-3 shrink-0 gap-1.5"
+            onClick={addType} disabled={!newName.trim()}>
+            <Tag size={13} /> زیاد
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MANUAL MODE ────────────────────────────────────────────────────────────────────
 // KEY FIX: Stepper wraps ONLY the nav (for visual indicator + click-to-go-back).
 // Step content uses plain {step === N && ...} — NO StepperPanel/StepperContent
 // which would call useStepper() outside the Stepper context and crash.
@@ -590,16 +651,6 @@ function ManualMode({ form, upd, onClose, onSwitchAuto, onSubmit, isEdit }: {
           </button>
         </div>
 
-        {/*
-          ── Stepper nav ──
-          dir="ltr" forces step bubbles to render left→right (1 2 3 4 5 6)
-          regardless of the parent RTL context, so progress reads correctly.
-          Completed steps are clickable (disabled={n > step} blocks future only).
-        */}
-        {/* dir="ltr" wrapper: StepperNav doesn't forward the dir prop, but
-            CSS direction is inherited — so wrapping forces the nav's flex-row
-            to flow left→right (steps 1,2,3,4,5,6) even inside the RTL drawer */}
-        <div dir="ltr" className="w-full">
         <Stepper value={step} onValueChange={goTo}>
           <StepperNav>
             {MANUAL_STEPS.map((s, i) => (
@@ -621,7 +672,6 @@ function ManualMode({ form, upd, onClose, onSwitchAuto, onSubmit, isEdit }: {
             ))}
           </StepperNav>
         </Stepper>
-        </div>{/* end dir="ltr" */}
       </div>{/* end header */}
 
       {/* ── Step heading ── */}
@@ -686,39 +736,12 @@ function ManualMode({ form, upd, onClose, onSwitchAuto, onSubmit, isEdit }: {
                     className="resize-none rounded-xl text-[13px]" />
                 </div>
               )}
-              <div className="flex items-center gap-2">
-                <Checkbox id="sample" checked={form.isSample} onCheckedChange={v => upd("isSample", !!v)} />
-                <Label htmlFor="sample" className="cursor-pointer text-[13px]">سامپڵەیە</Label>
-              </div>
             </div>
           )}
 
           {/* Step 3 — Pricing */}
           {step === 3 && (
-            <div className="space-y-3">
-              {form.prices.length === 0 ? (
-                <p className="text-center py-8 text-[13px] text-muted-foreground">
-                  جۆری نرخ لە رێکخستنەکان دروست بکە
-                </p>
-              ) : (
-                form.prices.map((p, i) => (
-                  <div key={p.typeId} className="flex items-center gap-3">
-                    <span className="text-[13px] font-medium flex-1 truncate">{p.typeName}</span>
-                    <Input
-                      type="number" min="0" placeholder="0"
-                      value={p.amount}
-                      onChange={e => {
-                        const next = [...form.prices];
-                        next[i] = { ...next[i], amount: e.target.value };
-                        upd("prices", next);
-                      }}
-                      className="w-28 h-10 rounded-xl text-left font-mono text-[13px]"
-                    />
-                    <span className="text-[11px] text-muted-foreground whitespace-nowrap">دینار</span>
-                  </div>
-                ))
-              )}
-            </div>
+            <PriceStep form={form} upd={upd} />
           )}
 
           {/* Step 4 — Stock & Origin */}
@@ -884,7 +907,6 @@ export default function AddProductWizard({ open, onClose, onSubmit, initialProdu
         issueDate:         initialProduct.issueDate         ?? "",
         expiryDate:        initialProduct.expiryDate        ?? "",
         batchNumber:       initialProduct.batchNumber       ?? "",
-        isSample:          initialProduct.isSample          ?? false,
         imageUrl:          initialProduct.imageUrl          ?? "",
         barcode:           initialProduct.barcode           ?? "",
         description:       initialProduct.description       ?? "",

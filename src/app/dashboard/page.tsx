@@ -612,14 +612,14 @@ export default function DashboardPage() {
 
       {/* ── Live Activity Chart ── */}
       {!loading && (
-        <Card className="mb-4 overflow-hidden bg-zinc-900 border-zinc-800">
+        <Card className="mb-4 overflow-hidden dark:bg-zinc-900 dark:border-zinc-800">
           <CardHeader className="px-4 pt-3 pb-0 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="size-2 rounded-full bg-violet-400 animate-pulse inline-block" />
-              <CardTitle className="text-sm font-bold text-white">چالاکیی ڕستەیی</CardTitle>
-              <Badge className="text-[10px] h-4 px-1.5 bg-violet-500/20 text-violet-300 border-violet-500/30">زیندوو</Badge>
+              <span className="size-2 rounded-full bg-violet-500 animate-pulse inline-block" />
+              <CardTitle className="text-sm font-bold dark:text-white">چالاکیی ڕستەیی</CardTitle>
+              <Badge className="text-[10px] h-4 px-1.5 bg-violet-500/10 text-violet-600 dark:text-violet-300 border-violet-300 dark:border-violet-500/30">زیندوو</Badge>
             </div>
-            <span className="text-[10px] text-zinc-500">80ms</span>
+            <span className="text-[10px] text-muted-foreground">80ms</span>
           </CardHeader>
           <CardContent className="p-0 pt-1">
             <div className="h-40">
