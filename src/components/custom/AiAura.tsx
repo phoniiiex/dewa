@@ -194,7 +194,10 @@ export function AiAura({
     <div className={cn("aspect-square", className)} {...props}>
       <ReactShaderToy
         fs={shaderSource}
-        devicePixelRatio={typeof window !== "undefined" ? window.devicePixelRatio : 1}
+        devicePixelRatio={1}
+        animateWhenNotVisible
+        clearColor={[0, 0, 0, 0]}
+        contextAttributes={{ premultipliedAlpha: false, alpha: true }}
         uniforms={{
           uSpeed:      { type: "1f", value: params.speed },
           uBlur:       { type: "1f", value: 0.2 },
