@@ -23,6 +23,7 @@
   },
   "registries": {
     "@iconiq": "https://iconiqui.com/r/{name}.json",
-    "@reui": "https://reui.io/r/{style}/{name}.json"
+    "@reui": "https://reui.io/r/{style}/{name}.json",
+    "@agents-ui": "https://livekit.com/ui/r/{name}.json"
   }
 }
