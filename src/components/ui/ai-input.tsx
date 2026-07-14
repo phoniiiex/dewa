@@ -8,7 +8,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Mic,
+  Paperclip,
   Plus,
+  X,
 } from "lucide-react";
 import {
   AnimatePresence,
@@ -769,6 +771,12 @@ function SendWave({ reducedMotion }: { reducedMotion: boolean }) {
 
 // ─── AIInput main component ───────────────────────────────────────────────────
 
+export type AIInputFileData = {
+  base64: string;
+  mimeType: string;
+  name: string;
+};
+
 export interface AIInputProps {
   className?: string;
   defaultSettings?: Record<string, string>;
@@ -778,7 +786,7 @@ export interface AIInputProps {
   onMenuSelect?: (value: string) => void;
   onMenuToggle?: (value: string, checked: boolean) => void;
   onMic?: () => void;
-  onSend?: (message: string, meta: { settings: Record<string, string> }) => void;
+  onSend?: (message: string, meta: { settings: Record<string, string>; fileData?: AIInputFileData }) => void;
   onSettingsChange?: (groupId: string, value: string) => void;
   placeholder?: string;
   settingGroups?: PromptSettingGroup[];
@@ -804,23 +812,46 @@ export function AIInput({
   );
   const [showWave, setShowWave] = useState(false);
   const textareaRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const reducedMotion = useReducedMotion() ?? false;
-  const canSend = value.trim().length > 0;
+  const [attachedFile, setAttachedFile] = useState<AIInputFileData | null>(null);
+  const canSend = value.trim().length > 0 || attachedFile !== null;
 
   const handleValueChange = useCallback((groupId: string, newValue: string) => {
     setSettings((prev) => ({ ...prev, [groupId]: newValue }));
     onSettingsChange?.(groupId, newValue);
   }, [onSettingsChange]);
 
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // 10MB limit
+    if (file.size > 10 * 1024 * 1024) {
+      alert("فایلەکە زۆر گەورەیە — تکایە فایلێکی کەمتر لە 10MB هەڵبژێرە.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      // "data:application/pdf;base64,AAAA..." → extract base64 part
+      const base64 = dataUrl.split(",")[1];
+      setAttachedFile({ base64, mimeType: file.type, name: file.name });
+    };
+    reader.readAsDataURL(file);
+    // Reset so re-selecting same file triggers change
+    e.target.value = "";
+  }, []);
+
   const handleSend = useCallback(() => {
     if (!canSend) return;
-    onSend?.(value.trim(), { settings });
+    onSend?.(value.trim(), { settings, fileData: attachedFile ?? undefined });
     setValue("");
+    setAttachedFile(null);
     if (!reducedMotion) {
       setShowWave(true);
       setTimeout(() => setShowWave(false), WAVE_DURATION_MS);
     }
-  }, [canSend, onSend, reducedMotion, settings, value]);
+  }, [canSend, onSend, reducedMotion, settings, value, attachedFile]);
 
   const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -846,11 +877,46 @@ export function AIInput({
       ) : null}
 
       {/* Input */}
-      <div className="flex items-end gap-2 px-3 py-3">
+      <div className="flex flex-col gap-0 px-3 py-3">
+        {/* File badge (if attached) */}
+        {attachedFile && (
+          <div className="flex items-center gap-1.5 mb-2 px-1">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-xs font-medium text-primary">
+              <Paperclip className="size-3" />
+              {attachedFile.name}
+              <button
+                type="button"
+                onClick={() => setAttachedFile(null)}
+                className="size-4 rounded-full bg-primary/20 hover:bg-primary/30 flex items-center justify-center transition-colors"
+              >
+                <X className="size-2.5" />
+              </button>
+            </span>
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
         {/* Plus menu */}
         {menuItems.length > 0 ? (
           <PlusMenu items={menuItems} onSelect={onMenuSelect} onToggle={onMenuToggle} />
         ) : null}
+
+        {/* Attach file button */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.png,.jpg,.jpeg,.webp"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+        <button
+          aria-label="Attach file"
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        >
+          <Paperclip className="size-3.5" />
+        </button>
 
         {/* Text input */}
         <InputPrimitive
@@ -890,6 +956,7 @@ export function AIInput({
             )}
           </AnimatePresence>
         </button>
+        </div>
       </div>
     </div>
   );

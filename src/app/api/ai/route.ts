@@ -27,6 +27,25 @@ const orderItemSchema = {
   },
 };
 
+// ── Product item schema (used by preview_products, create_products) ──
+const productItemSchema = {
+  type: "object",
+  required: ["name", "price"],
+  properties: {
+    name:         { type: "string", description: "Product name" },
+    sku:          { type: "string", description: "SKU or barcode" },
+    category:     { type: "string", description: "Product category" },
+    company:      { type: "string", description: "Manufacturer / company" },
+    price:        { type: "number", description: "Price in IQD" },
+    stock:        { type: "integer", description: "Initial stock quantity. Default 0." },
+    unit_type:    { type: "string", description: "e.g. box, piece, strip" },
+    origin:       { type: "string", description: "Country of origin" },
+    supplier:     { type: "string", description: "Supplier name" },
+    batch_number: { type: "string", description: "Batch/lot number" },
+    expiry_date:  { type: "string", description: "Expiry date (YYYY-MM-DD)" },
+  },
+};
+
 const orderParamsProperties = {
   client_id:      { type: "string" },
   client_name:    { type: "string" },
@@ -146,6 +165,42 @@ const functionDeclarations = [
       properties: {
         order_id:   { type: "string" },
         new_status: { type: "string", description: "WAITING | IN_PROGRESS | READY | SENT | DELIVERED | PAID | NOT_ACCEPTED" },
+      },
+    },
+  },
+  // ── Product import tools (PDF → Products) ──────────────────────────────────
+  {
+    name: "preview_products",
+    description:
+      "Build a preview of products extracted from a PDF, image, or user description. " +
+      "Returns structured data for the user to review before confirming. " +
+      "ALWAYS call this before create_products.",
+    parameters: {
+      type: "object",
+      required: ["items"],
+      properties: {
+        items: {
+          type: "array",
+          description: "Array of products to preview",
+          items: productItemSchema,
+        },
+      },
+    },
+  },
+  {
+    name: "create_products",
+    description:
+      "Bulk-create products in the database. " +
+      "Only call AFTER the user has confirmed a preview_products result.",
+    parameters: {
+      type: "object",
+      required: ["items"],
+      properties: {
+        items: {
+          type: "array",
+          description: "Array of products to create",
+          items: productItemSchema,
+        },
       },
     },
   },
@@ -328,6 +383,54 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       return { success: true, message: `Order status updated to ${args.new_status}` };
     }
 
+    case "preview_products": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items = ((args.items as any[]) || []).map(i => ({
+        name:         String(i.name || ""),
+        sku:          String(i.sku || ""),
+        category:     String(i.category || ""),
+        company:      String(i.company || ""),
+        price:        Number(i.price || 0),
+        stock:        Number(i.stock || 0),
+        unitType:     String(i.unit_type || i.unitType || ""),
+        origin:       String(i.origin || ""),
+        supplier:     String(i.supplier || ""),
+        batchNumber:  String(i.batch_number || i.batchNumber || ""),
+        expiryDate:   String(i.expiry_date || i.expiryDate || ""),
+      }));
+      return { preview: true, type: "products", count: items.length, items };
+    }
+
+    case "create_products": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items = ((args.items as any[]) || []).map(i => ({
+        name:         String(i.name || ""),
+        sku:          String(i.sku || `SKU-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`),
+        category:     String(i.category || ""),
+        company:      String(i.company || ""),
+        price:        Number(i.price || 0),
+        stock:        Number(i.stock || 0),
+        unit_type:    String(i.unit_type || i.unitType || ""),
+        origin:       String(i.origin || ""),
+        supplier:     String(i.supplier || ""),
+        batch_number: String(i.batch_number || i.batchNumber || ""),
+        expiry_date:  (i.expiry_date || i.expiryDate || null) as string | null,
+        issue_date:   null,
+        low_stock:    10,
+        is_active:    true,
+        is_sample:    false,
+        prices:       [],
+      }));
+
+      const results: { name: string; success: boolean; error?: string }[] = [];
+      for (const item of items) {
+        const { error } = await supabase.from("products").insert(item);
+        results.push({ name: item.name, success: !error, error: error?.message });
+      }
+      const successCount = results.filter(r => r.success).length;
+      return { success: successCount > 0, count: successCount, total: items.length, items: results };
+    }
+
     default:
       return { error: `Unknown tool: ${name}` };
   }
@@ -365,6 +468,16 @@ Language: Respond in the same language the user writes in (Kurdish Sorani, Arabi
 
 5. For multiple orders: gather all info, preview each, then create_bulk_orders after confirmation.
 
+## PRODUCT IMPORT FROM PDF / IMAGE:
+When the user attaches a PDF or image containing a product list (price list, catalog, invoice):
+1. Read the file carefully. Extract ALL products with: name, price, SKU/barcode, category, company, stock, unit type, origin, etc.
+2. Call **preview_products** with all extracted items — NEVER create directly.
+3. The frontend will show a confirmation card. Wait for the user's response.
+4. If user confirms → call **create_products** with the SAME items.
+5. If user wants edits → ask what to change, then re-preview.
+6. If user cancels → acknowledge and do NOT create products.
+7. If any field is unclear or missing from the PDF, use empty string. Do NOT guess prices.
+
 ## Currency format: [amount] دینار`;
 
 // Voice mode: always Kurdish Sorani, short & spoken
@@ -382,6 +495,12 @@ const VOICE_SYSTEM_PROMPT = `تۆ دەوا AI یت — یاریدەدەری زی
 3. چاوەڕوانی پەسەندکردنی بەکارهێنەر بکە.
 4. ئەگەر بەکارهێنەر بەڵێ گوت، create_order بانگ بکە بە هەمان داتا.
 
+## بۆ زیادکردنی بەرهەم لە PDF/وێنە:
+1. فایلەکە بخوێنەوە و هەموو بەرهەمەکان دەربکە.
+2. preview_products بانگ بکە بۆ پیشاندان.
+3. چاوەڕوانی پەسەندکردن بکە.
+4. ئەگەر پەسەند بوو، create_products بانگ بکە.
+
 ## دەستووری گرنگ:
 - هەموو کاڵا، کڕیار، کۆگا، و نوێنەرەکان لێرەیان خوارەوە بارکراون.
 - لگەڵ ناوەکان فێری فووچ-میتچ بکە (جیاوازی ئیملای کوردی، ناوی نیوەیی).
@@ -397,10 +516,16 @@ const VOICE_SYSTEM_PROMPT = `تۆ دەوا AI یت — یاریدەدەری زی
 // ── Main handler ────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const { messages, voiceMode } = await req.json() as {
+    const { messages, voiceMode, fileData } = await req.json() as {
       messages: { role: string; content: string }[];
       voiceMode?: boolean;
+      fileData?: { base64: string; mimeType: string; name: string };
     };
+
+    // Validate file size (base64 ≈ 1.37x raw → 10MB raw ≈ 13.7MB base64)
+    if (fileData && fileData.base64.length > 14_000_000) {
+      return NextResponse.json({ error: "فایلەکە زۆر گەورەیە. تکایە فایلێکی کەمتر لە ١٠MB بنێرە." }, { status: 413 });
+    }
 
     // Pre-load all reference data into the system prompt
     const [
@@ -440,8 +565,20 @@ ${(reps || []).map(r => `ID:${r.id} | ${r.name}`).join("\n")}`;
         role: (m.role === "user" ? "user" : "model") as "user" | "model",
         parts: [{ text: m.content }],
       })),
-      { role: "user" as const, parts: [{ text: messages[messages.length - 1].content }] },
     ];
+
+    // Build last user message parts (text + optional file)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lastParts: any[] = [{ text: messages[messages.length - 1].content || "فایلەکە بخوێنەوە و بەرهەمەکان دەربکە" }];
+    if (fileData) {
+      lastParts.push({
+        inline_data: {
+          mime_type: fileData.mimeType,
+          data: fileData.base64,
+        },
+      });
+    }
+    geminiHistory.push({ role: "user" as const, parts: lastParts });
 
     const toolResults: { name: string; result: unknown }[] = [];
 

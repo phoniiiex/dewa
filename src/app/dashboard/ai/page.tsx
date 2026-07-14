@@ -21,6 +21,7 @@ import { OreoAvatar } from "@/components/custom/OreoAvatar";
 import {
   AIInput,
   type AIInputMenuItem,
+  type AIInputFileData,
   type PromptSettingGroup,
 } from "@/components/ui/ai-input";
 import {
@@ -61,6 +62,11 @@ interface PreviewResult { preview: true; clientName: string; repName?: string | 
 interface BulkResult { bulk: boolean; count: number; orders: OrderResult[]; }
 interface ToolResult { name: string; result: unknown; }
 interface ChatMessage { id: string; role: "user" | "assistant"; text: string; toolResults?: ToolResult[]; loading?: boolean; error?: boolean; animated?: boolean; }
+
+// Product import types
+interface ProductPreviewItem { name: string; sku?: string; category?: string; company?: string; price: number; stock?: number; unitType?: string; origin?: string; supplier?: string; batchNumber?: string; expiryDate?: string; }
+interface ProductPreviewResult { preview: true; type: "products"; count: number; items: ProductPreviewItem[]; }
+interface ProductBulkResult { success: boolean; count: number; total: number; items: { name: string; success: boolean; error?: string }[]; }
 
 // ─── Session types & localStorage helpers ─────────────────────────────────────
 interface AiSession {
@@ -363,6 +369,130 @@ function OrderPreviewCard({ preview, onAction }: { preview: PreviewResult; onAct
   );
 }
 
+// ─── Products Preview Card ────────────────────────────────────────────────────
+function ProductsPreviewCard({ preview, onAction }: { preview: ProductPreviewResult; onAction: (action: "confirm" | "edit" | "cancel") => void }) {
+  return (
+    <BorderBeam
+      className="rounded-2xl overflow-hidden bg-card border border-border/60 shadow-sm my-2 max-w-lg"
+      colorVariant="colorful"
+      strength={0.9}
+      borderRadius={16}
+    >
+      <div className="divide-y divide-border/40">
+        {/* Header */}
+        <div className="px-4 pt-4 pb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="size-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <Package className="size-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-[13px] font-bold">پێشبینی بەرهەمەکان</p>
+              <p className="text-[10px] text-muted-foreground">{preview.count} بەرهەم دەردەچن لە فایلەکەوە</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Items table */}
+        <div className="px-4 py-3 space-y-1.5 max-h-[300px] overflow-y-auto">
+          {/* Table header */}
+          <div className="flex items-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wider pb-1 border-b border-border/30">
+            <span className="flex-1">ناو</span>
+            <span className="w-20 text-center">نرخ</span>
+            <span className="w-16 text-center">سەرژمێر</span>
+          </div>
+          {preview.items.map((item, i) => (
+            <div key={i} className="flex items-center text-[12px]">
+              <div className="flex-1 min-w-0">
+                <span className="font-medium truncate block">{item.name}</span>
+                {(item.company || item.category) && (
+                  <span className="text-[10px] text-muted-foreground truncate block">
+                    {[item.company, item.category].filter(Boolean).join(" · ")}
+                  </span>
+                )}
+              </div>
+              <span className="w-20 text-center font-semibold text-foreground shrink-0">{item.price > 0 ? fmt(item.price) : "—"}</span>
+              <span className="w-16 text-center text-muted-foreground shrink-0">{item.stock ?? 0}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Summary */}
+        <div className="mx-4 pt-2.5 pb-1">
+          <div className="flex justify-between items-center">
+            <span className="text-[12px] text-muted-foreground">کۆی بەرهەمەکان</span>
+            <span className="text-[15px] font-black text-primary">{preview.count}</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 px-4 pt-2 pb-4">
+          <Button
+            size="sm"
+            className="flex-1 gap-1.5 h-9 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white border-0 font-semibold text-[12px]"
+            onClick={() => onAction("confirm")}
+          >
+            <Check className="size-3.5" /> پەسەندکردن
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 h-9 rounded-xl text-[12px]"
+            onClick={() => onAction("edit")}
+          >
+            <Pencil className="size-3" /> دەستکاری
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="gap-1.5 h-9 rounded-xl text-[12px] text-muted-foreground hover:text-destructive"
+            onClick={() => onAction("cancel")}
+          >
+            <X className="size-3" /> پاشگەزبوون
+          </Button>
+        </div>
+      </div>
+    </BorderBeam>
+  );
+}
+
+// ─── Products Bulk Result Card ────────────────────────────────────────────────
+function ProductsBulkResultCard({ result }: { result: ProductBulkResult }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card shadow-sm p-4 space-y-3 my-2 max-w-lg">
+      <div className="flex items-center gap-2">
+        <div className={`size-8 rounded-lg flex items-center justify-center ${
+          result.success ? "bg-emerald-500/10" : "bg-red-500/10"
+        }`}>
+          {result.success
+            ? <CheckCircle2 className="size-4 text-emerald-600" />
+            : <AlertCircle className="size-4 text-red-600" />
+          }
+        </div>
+        <div>
+          <p className="text-[13px] font-bold">
+            {result.count}/{result.total} بەرهەم زیادکران
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            {result.success ? "سەرکەوتوو" : "هەندێک بەرهەم زیاد نەکران"}
+          </p>
+        </div>
+      </div>
+      <div className="space-y-1 max-h-[200px] overflow-y-auto">
+        {result.items.map((item, i) => (
+          <div key={i} className="flex items-center gap-2 text-[12px]">
+            {item.success
+              ? <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
+              : <AlertCircle className="size-3 text-red-500 shrink-0" />
+            }
+            <span className={item.success ? "" : "text-red-500"}>{item.name}</span>
+            {item.error && <span className="text-[10px] text-red-400 ms-auto">{item.error}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ToolResultCards({ toolResults, onPreviewAction }: { toolResults: ToolResult[]; onPreviewAction: (action: "confirm" | "edit" | "cancel") => void }) {
   return (
     <>
@@ -378,6 +508,13 @@ function ToolResultCards({ toolResults, onPreviewAction }: { toolResults: ToolRe
         if (tr.name === "list_clients" && Array.isArray(tr.result)) return <ClientsCard key={i} clients={tr.result} />;
         if (tr.name === "list_orders" && Array.isArray(tr.result)) return <OrdersListCard key={i} orders={tr.result} />;
         if (tr.name === "list_warehouses" && Array.isArray(tr.result)) return <WarehousesCard key={i} warehouses={tr.result as { id: string; name: string; city?: string }[]} />;
+        // Product import tools
+        if (tr.name === "preview_products" && r && (r as unknown as ProductPreviewResult)?.preview) {
+          return <ProductsPreviewCard key={i} preview={r as unknown as ProductPreviewResult} onAction={onPreviewAction} />;
+        }
+        if (tr.name === "create_products" && r) {
+          return <ProductsBulkResultCard key={i} result={r as unknown as ProductBulkResult} />;
+        }
         return null;
       })}
     </>
@@ -648,18 +785,23 @@ export default function AiPage() {
     }
   }, [sessionId]);
 
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || loading) return;
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", text: text.trim() };
+  const sendMessage = useCallback(async (text: string, fileData?: AIInputFileData) => {
+    if ((!text.trim() && !fileData) || loading) return;
+    const displayText = fileData ? (text.trim() || `📎 ${fileData.name}`) : text.trim();
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", text: displayText };
     const loadingMsg: ChatMessage = { id: crypto.randomUUID(), role: "assistant", text: "", loading: true };
     setMessages(prev => [...prev, userMsg, loadingMsg]);
     setLoading(true);
     try {
       const history = [...messages, userMsg].map(m => ({ role: m.role, content: m.text }));
+      const body: Record<string, unknown> = { messages: history, voiceMode };
+      if (fileData) {
+        body.fileData = { base64: fileData.base64, mimeType: fileData.mimeType, name: fileData.name };
+      }
       const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history, voiceMode }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       setMessages(prev => [
@@ -1042,7 +1184,7 @@ export default function AiPage() {
             const prompt = MENU_PROMPTS[value];
             if (prompt) sendMessage(prompt);
           }}
-          onSend={(message) => sendMessage(message)}
+          onSend={(message, meta) => sendMessage(message, meta?.fileData)}
           onMic={handleMic}
           placeholder={listening ? "🎙️ گوێدەگرم… (دووبارە کلیک بکە بۆ ناردن)" : transcribing ? "⏳ وەرگێڕانی دەنگ…" : loading ? "جواب دەدرێتەوە…" : "پەیامێک بنوسێ…"}
         />
