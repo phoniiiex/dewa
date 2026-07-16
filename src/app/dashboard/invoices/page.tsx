@@ -1,11 +1,12 @@
 "use client";
 import { useState, useEffect, ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
   FileText, Printer, Eye, EyeOff, GripVertical, QrCode,
   Type, Users as UsersIcon, Table, Calculator, Gift,
   StickyNote, Image as ImageIcon, MessageSquare, Plus,
   Trash2, Save, X, Receipt, FileCheck, LayoutTemplate,
-  Edit3, Copy,
+  Edit3, Copy, Wand2,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
@@ -72,6 +73,7 @@ const FALLBACK_ORDER = {
 const FALLBACK_CLIENT = { name: "دەرمانخانەی هەوار", phone: "0750 123 4567", city: "سلێمانی", type: "PHARMACY" };
 
 export default function TemplatesPage() {
+  const router = useRouter();
   const { invoiceTemplates, addTemplate, deleteTemplate, settings, showToast, orders, clients } = useData();
 
   // Use most recent real order for preview, fall back to static dummy
@@ -156,7 +158,7 @@ export default function TemplatesPage() {
   // ── Save ──
   const saveTemplate = () => {
     if (!editorName.trim()) { showToast("ناوی داڕێژە بنووسە", "error"); return; }
-    addTemplate({ name: editorName, docType: editorDocType, blocks, showBonusCol, defaultNote: customNote, defaultTerms: customTerms, defaultDiscount: customDiscount });
+    addTemplate({ name: editorName, docType: editorDocType, blocks, showBonusCol, defaultNote: customNote, defaultTerms: customTerms, defaultDiscount: customDiscount, options: { paperSize:"A4", primaryColor:"#4263EB", fontFamily:"system" } });
     showToast(`داڕێژەی "${editorName}" پاشەکەوت کرا`);
     setIsEditorOpen(false);
   };
@@ -209,9 +211,14 @@ export default function TemplatesPage() {
             <p className="text-sm text-muted-foreground">بەڕێوەبردنی داڕێژەی پسووڵە، وەسڵ، گەیاندن و نرخنامە</p>
           </div>
         </div>
-        <Button onClick={() => openNew()}>
-          <Plus className="size-4 me-1" /> داڕێژەی نوێ
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => router.push("/dashboard/invoices/builder")} className="gap-1.5">
+            <Wand2 className="size-4" /> بیلدەری داڕێژە
+          </Button>
+          <Button onClick={() => openNew()}>
+            <Plus className="size-4 me-1" /> داڕێژەی نوێ (کلاسیک)
+          </Button>
+        </div>
       </div>
 
       {/* Two-column layout */}

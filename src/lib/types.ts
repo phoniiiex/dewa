@@ -190,13 +190,33 @@ export interface CompanySettings {
 }
 
 export interface InvoiceBlockConfig {
-  id: string;
+  id: string;          // header | parties | items | summary | bonus | note | terms | signature | qr | footer | divider | custom
   label: string;
   visible: boolean;
   required?: boolean;
-  type: "builtin" | "custom";
-  customText?: string;
+  type: "builtin" | "custom" | "divider";
+  customText?: string; // for custom text blocks
+  // Per-block style overrides (all optional, builder sets them)
+  fontSize?: number;         // 10–18, default 13
+  bgColor?: string;          // block background (default transparent)
+  accentColor?: string;      // override template primaryColor for this block
+  showBorder?: boolean;      // draw a visible border around the block
 }
+
+export interface TemplateOptions {
+  paperSize: "A4" | "A5" | "thermal"; // thermal = 80mm receipt
+  primaryColor: string;               // accent/heading color, default "#4263EB"
+  logoUrl?: string;                   // uploaded company logo
+  watermark?: string;                 // faint diagonal background text e.g. "COPY"
+  fontFamily?: string;                // "system" | "serif" | "mono"
+}
+
+const DEFAULT_TEMPLATE_OPTIONS: TemplateOptions = {
+  paperSize: "A4",
+  primaryColor: "#4263EB",
+  fontFamily: "system",
+};
+export { DEFAULT_TEMPLATE_OPTIONS };
 
 export interface InvoiceTemplate {
   id: string;
@@ -207,6 +227,7 @@ export interface InvoiceTemplate {
   defaultNote: string;
   defaultTerms: string;
   defaultDiscount: number;
+  options: TemplateOptions; // paper, color, logo, watermark
   createdAt: string;
 }
 

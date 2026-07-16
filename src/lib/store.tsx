@@ -8,7 +8,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from "./supabase";
 import type {
   Product, Client, Rep, Warehouse, Supplier, Driver, Order,
-  Transaction, CompanySettings, User, InvoiceTemplate,
+  Transaction, CompanySettings, User, InvoiceTemplate, TemplateOptions,
   PriceType, ProductPrice, SampleRequest,
 } from "./types";
 
@@ -249,7 +249,25 @@ function toUser(r: Record<string, unknown>): User {
 }
 
 function toTemplate(r: Record<string, unknown>): InvoiceTemplate {
-  return { id: r.id as string, name: (r.name || "") as string, docType: (r.doc_type || "invoice") as InvoiceTemplate["docType"], blocks: (r.blocks || []) as InvoiceTemplate["blocks"], showBonusCol: r.show_bonus_col !== false, defaultNote: (r.default_note || "") as string, defaultTerms: (r.default_terms || "") as string, defaultDiscount: Number(r.default_discount || 0), createdAt: (r.created_at || "") as string };
+  const opts = (r.options as Record<string, unknown>) || {};
+  return {
+    id: r.id as string,
+    name: (r.name || "") as string,
+    docType: (r.doc_type || "invoice") as InvoiceTemplate["docType"],
+    blocks: (r.blocks || []) as InvoiceTemplate["blocks"],
+    showBonusCol: r.show_bonus_col !== false,
+    defaultNote: (r.default_note || "") as string,
+    defaultTerms: (r.default_terms || "") as string,
+    defaultDiscount: Number(r.default_discount || 0),
+    options: {
+      paperSize: (opts.paperSize as TemplateOptions["paperSize"]) || "A4",
+      primaryColor: (opts.primaryColor as string) || "#4263EB",
+      logoUrl: opts.logoUrl as string | undefined,
+      watermark: opts.watermark as string | undefined,
+      fontFamily: (opts.fontFamily as string) || "system",
+    },
+    createdAt: (r.created_at || "") as string,
+  };
 }
 function fromTemplate(t: Partial<InvoiceTemplate>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
@@ -261,6 +279,7 @@ function fromTemplate(t: Partial<InvoiceTemplate>): Record<string, unknown> {
   if (t.defaultNote !== undefined) m.default_note = t.defaultNote;
   if (t.defaultTerms !== undefined) m.default_terms = t.defaultTerms;
   if (t.defaultDiscount !== undefined) m.default_discount = t.defaultDiscount;
+  if (t.options !== undefined) m.options = t.options;
   if (t.createdAt !== undefined) m.created_at = t.createdAt;
   return m;
 }
@@ -375,6 +394,7 @@ interface DataStore {
   updateUser: (id: string, u: Partial<User>) => void;
   deleteUser: (id: string) => void;
   addTemplate: (t: Omit<InvoiceTemplate, "id" | "createdAt">) => Promise<InvoiceTemplate>;
+  updateTemplate: (id: string, t: Partial<Omit<InvoiceTemplate, "id" | "createdAt">>) => Promise<void>;
   deleteTemplate: (id: string) => void;
   addSampleRequest: (s: Omit<SampleRequest, "id" | "requestNumber" | "createdAt">) => Promise<SampleRequest>;
   updateSampleRequest: (id: string, s: Partial<SampleRequest>) => void;
@@ -839,6 +859,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داڕێژە سڕایەوە");
   }, [showToast]);
 
+  const updateTemplate = useCallback(async (id: string, t: Partial<Omit<InvoiceTemplate, "id" | "createdAt">>) => {
+    setInvoiceTemplates((prev) => prev.map((x) => (x.id === id ? { ...x, ...t } : x)));
+    const { error } = await supabase.from("invoice_templates").update(fromTemplate(t)).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("داڕێژە نوێکرایەوە");
+  }, [showToast]);
+
   const addSampleRequest = useCallback(async (s: Omit<SampleRequest, "id" | "requestNumber" | "createdAt">): Promise<SampleRequest> => {
     const rn = `SR-${String(Date.now()).slice(-6)}`;
     const ns: SampleRequest = { ...s, id: genId(), requestNumber: rn, createdAt: new Date().toISOString() };
@@ -876,7 +902,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         addDriver, updateDriver, deleteDriver,
         addTransaction,
         addUser, updateUser, deleteUser,
-        addTemplate, deleteTemplate,
+        addTemplate, updateTemplate, deleteTemplate,
         addSampleRequest, updateSampleRequest, deleteSampleRequest,
         updateSettings,
         showToast, toast, refreshData,
