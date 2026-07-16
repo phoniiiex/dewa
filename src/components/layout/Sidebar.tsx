@@ -10,7 +10,7 @@ import {
   Factory, Gift, UserCog, Wallet, Settings, HelpCircle,
   BadgeCheck, FileText, Bot, Camera, LogOut, Shield, FlaskConical,
   ChevronsUpDown, Map, Stethoscope, Activity, Save, X, User,
-  ChevronRight,
+  ChevronRight, RotateCcw,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup,
@@ -166,7 +166,8 @@ export default function AppSidebar() {
         { label: "داواکارییەکان", href: "/dashboard/orders",    icon: ShoppingCart },
         { label: "پسوولەکان",     href: "/dashboard/invoices",  icon: FileText },
         { label: "بۆنەس",         href: "/dashboard/bonus",     icon: Gift,           managerOnly: true },
-        { label: "نموونەکان",     href: "/dashboard/samples",   icon: FlaskConical },
+        { label: "نموونەکان",    href: "/dashboard/samples",  icon: FlaskConical },
+        { label: "گەڕاوەکان",    href: "/dashboard/returns",  icon: RotateCcw },
       ],
     },
     {

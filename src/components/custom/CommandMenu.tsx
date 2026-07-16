@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   Search, ShoppingCart, Users, Package, Truck,
   LayoutDashboard, FileText, Warehouse,
-  UserCog, BarChart2, Building2, User,
+  UserCog, BarChart2, Building2, User, RotateCcw,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import {
@@ -30,6 +30,7 @@ const navPages = [
   { label: "پسووڵەکان",       href: "/dashboard/invoices",   icon: <FileText className="size-4 text-amber-600" /> },
   { label: "بەکارهێنەرەکان",  href: "/dashboard/users",      icon: <User className="size-4 text-pink-500" /> },
   { label: "پاڵگرەکان",       href: "/dashboard/suppliers",  icon: <Building2 className="size-4 text-sky-600" /> },
+  { label: "گەڕاوەکان",       href: "/dashboard/returns",    icon: <RotateCcw className="size-4 text-rose-500" /> },
 ];
 
 const roleLabels: Record<string, string> = {

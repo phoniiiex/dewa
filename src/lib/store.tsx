@@ -9,8 +9,9 @@ import { supabase } from "./supabase";
 import type {
   Product, Client, Rep, Warehouse, Supplier, Driver, Order,
   Transaction, CompanySettings, User, InvoiceTemplate, TemplateOptions,
-  PriceType, ProductPrice, SampleRequest,
+  PriceType, ProductPrice, SampleRequest, ReturnRecord, ReturnStatus,
 } from "./types";
+import { RETURN_BONUS_RATE } from "./types";
 
 // ===== DB ↔ APP MAPPERS =====
 // Supabase uses snake_case, our app uses camelCase
@@ -223,6 +224,39 @@ function fromTransaction(t: Partial<Transaction>): Record<string, unknown> {
   return m;
 }
 
+function toReturn(r: Record<string, unknown>): ReturnRecord {
+  return {
+    id:                  r.id as string,
+    returnNumber:        (r.return_number   || "") as string,
+    clientId:            (r.client_id       || "") as string,
+    clientName:          (r.client_name     || "") as string,
+    status:              (r.status          || "PENDING") as ReturnStatus,
+    items:               (Array.isArray(r.items) ? r.items : []) as ReturnRecord["items"],
+    notes:               (r.notes           || "") as string,
+    totalReturnedUnits:  Number(r.total_returned_units || 0),
+    totalBonusUnits:     Number(r.total_bonus_units    || 0),
+    totalPaidUnits:      Number(r.total_paid_units     || 0),
+    totalDebtCredit:     Number(r.total_debt_credit    || 0),
+    createdAt:           (r.created_at      || "") as string,
+  };
+}
+function fromReturn(r: Partial<ReturnRecord>): Record<string, unknown> {
+  const m: Record<string, unknown> = {};
+  if (r.id                  !== undefined) m.id                    = r.id;
+  if (r.returnNumber        !== undefined) m.return_number         = r.returnNumber;
+  if (r.clientId            !== undefined) m.client_id             = r.clientId;
+  if (r.clientName          !== undefined) m.client_name           = r.clientName;
+  if (r.status              !== undefined) m.status                = r.status;
+  if (r.items               !== undefined) m.items                 = r.items;
+  if (r.notes               !== undefined) m.notes                 = r.notes;
+  if (r.totalReturnedUnits  !== undefined) m.total_returned_units  = r.totalReturnedUnits;
+  if (r.totalBonusUnits     !== undefined) m.total_bonus_units     = r.totalBonusUnits;
+  if (r.totalPaidUnits      !== undefined) m.total_paid_units      = r.totalPaidUnits;
+  if (r.totalDebtCredit     !== undefined) m.total_debt_credit     = r.totalDebtCredit;
+  if (r.createdAt           !== undefined) m.created_at            = r.createdAt;
+  return m;
+}
+
 function toSettings(r: Record<string, unknown>): CompanySettings {
   return { name: (r.name || "") as string, nameEn: (r.name_en || "") as string, phone: (r.phone || "") as string, email: (r.email || "") as string, city: (r.city || "") as string, address: (r.address || "") as string, currency: (r.currency || "IQD") as string, language: (r.language || "ckb") as string, logo: (r.logo || "") as string, profilePic: (r.profile_pic || "") as string, telegramBotToken: (r.telegram_bot_token || "") as string, telegramBotUsername: (r.telegram_bot_username || "") as string, telegramNotifyChatIds: Array.isArray(r.telegram_notify_chat_ids) ? r.telegram_notify_chat_ids as string[] : [] };
 }
@@ -363,7 +397,7 @@ interface DataStore {
   suppliers: Supplier[]; orders: Order[]; drivers: Driver[];
   transactions: Transaction[]; settings: CompanySettings; users: User[];
   invoiceTemplates: InvoiceTemplate[]; priceTypes: PriceType[];
-  sampleRequests: SampleRequest[]; loading: boolean;
+  sampleRequests: SampleRequest[]; returns: ReturnRecord[]; loading: boolean;
 
   addProduct: (p: Omit<Product, "id" | "createdAt">) => Promise<Product>;
   updateProduct: (id: string, p: Partial<Product>) => void;
@@ -399,6 +433,9 @@ interface DataStore {
   addSampleRequest: (s: Omit<SampleRequest, "id" | "requestNumber" | "createdAt">) => Promise<SampleRequest>;
   updateSampleRequest: (id: string, s: Partial<SampleRequest>) => void;
   deleteSampleRequest: (id: string) => void;
+  addReturn: (r: Omit<ReturnRecord, "id" | "returnNumber" | "createdAt">) => Promise<ReturnRecord>;
+  updateReturn: (id: string, r: Partial<ReturnRecord>) => Promise<void>;
+  deleteReturn: (id: string) => void;
   updateSettings: (s: Partial<CompanySettings>) => void;
   showToast: (message: string, type?: "success" | "error") => void;
   toast: { message: string; type: "success" | "error"; visible: boolean };
@@ -438,6 +475,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<User[]>((_c?.users as User[]) ?? []);
   const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>((_c?.invoiceTemplates as InvoiceTemplate[]) ?? []);
   const [sampleRequests, setSampleRequests] = useState<SampleRequest[]>((_c?.sampleRequests as SampleRequest[]) ?? []);
+  const [returns, setReturns] = useState<ReturnRecord[]>((_c?.returns as ReturnRecord[]) ?? []);
   // loading = false immediately if cache exists — no flash, no shimmer needed
   const [loading, setLoading] = useState(!_c);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error"; visible: boolean }>({ message: "", type: "success", visible: false });
@@ -450,7 +488,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Fetch all data from Supabase
   const refreshData = useCallback(async () => {
     try {
-      const [pRes, cRes, rRes, wRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes] = await Promise.all([
+      const [pRes, cRes, rRes, wRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes, retRes] = await Promise.all([
         supabase.from("products").select("*"),
         supabase.from("clients").select("*"),
         supabase.from("reps").select("*"),
@@ -464,6 +502,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         supabase.from("invoice_templates").select("*"),
         supabase.from("price_types").select("*").order("created_at"),
         supabase.from("sample_requests").select("*").order("created_at", { ascending: false }),
+        supabase.from("returns").select("*").order("created_at", { ascending: false }),
       ]);
 
       const fresh = {
@@ -480,6 +519,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         invoiceTemplates: itRes.data?.map(toTemplate) ?? [],
         priceTypes: ptRes.data?.map((r) => ({ id: r.id as string, name: r.name as string, createdAt: (r.created_at || "") as string })) ?? [],
         sampleRequests: srRes.data?.map(toSampleRequest) ?? [],
+        returns: retRes.data?.map(toReturn) ?? [],
       };
 
       setProducts(fresh.products);
@@ -495,6 +535,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setInvoiceTemplates(fresh.invoiceTemplates);
       setPriceTypes(fresh.priceTypes);
       setSampleRequests(fresh.sampleRequests);
+      setReturns(fresh.returns);
 
       // Cache fresh data for next load
       try { localStorage.setItem("dewa_data_cache_v1", JSON.stringify(fresh)); } catch { /* ignore quota errors */ }
@@ -519,11 +560,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("dewa_data_cache_v1", JSON.stringify({
         products, clients, reps, warehouses, suppliers, orders,
         drivers, transactions, settings, users, invoiceTemplates,
-        priceTypes, sampleRequests,
+        priceTypes, sampleRequests, returns,
       }));
     } catch { /* ignore quota errors */ }
   }, [products, clients, reps, warehouses, suppliers, orders, drivers,
-      transactions, settings, users, invoiceTemplates, priceTypes, sampleRequests, loading]);
+      transactions, settings, users, invoiceTemplates, priceTypes, sampleRequests, returns, loading]);
 
   // ── Supabase Realtime — live updates across users/sessions ────────────
   useEffect(() => {
@@ -888,11 +929,83 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("نموونە سڕایەوە");
   }, [showToast]);
 
+  // ── Returns CRUD ───────────────────────────────────────────────────────
+  const addReturn = useCallback(async (r: Omit<ReturnRecord, "id" | "returnNumber" | "createdAt">) => {
+    const now = new Date();
+    const seq = String(Date.now()).slice(-6);
+    const nr: ReturnRecord = {
+      ...r,
+      id: `ret-${Date.now()}`,
+      returnNumber: `RET-${seq}`,
+      createdAt: now.toISOString().split("T")[0],
+    };
+    setReturns((prev) => [nr, ...prev]);
+    const { error } = await supabase.from("returns").insert(fromReturn(nr));
+    if (error) showToast("هەڵە: " + error.message, "error");
+    else showToast(`گەڕاوە ${nr.returnNumber} تۆمارکرا ✅`);
+    return nr;
+  }, [showToast]);
+
+  const updateReturn = useCallback(async (id: string, patch: Partial<ReturnRecord>) => {
+    // Find current record
+    setReturns((prev) => {
+      const current = prev.find((x) => x.id === id);
+      if (!current) return prev;
+      const updated = { ...current, ...patch };
+
+      // On status → PROCESSED: adjust client balance + restore stock + log transaction
+      if (patch.status === "PROCESSED" && current.status !== "PROCESSED") {
+        const now = new Date();
+        // 1. Reduce client debt (balance -= totalDebtCredit)
+        if (updated.totalDebtCredit > 0) {
+          supabase.from("clients").select("balance").eq("id", updated.clientId).single().then(({ data }) => {
+            const oldBal = Number((data as Record<string,unknown>)?.balance ?? 0);
+            const newBal = Math.max(0, oldBal - updated.totalDebtCredit);
+            supabase.from("clients").update({ balance: newBal }).eq("id", updated.clientId);
+            setClients((cp) => cp.map((c) => c.id === updated.clientId ? { ...c, balance: newBal } : c));
+          });
+          // 2. Log transaction
+          const desc = `گەڕاوە ${updated.returnNumber} — ${updated.clientName}`;
+          const txn = { id: `txn-${Date.now()}`, type: "INCOME" as const, description: desc, amount: updated.totalDebtCredit, method: "CASH" as const, relatedOrderId: null, createdAt: now.toISOString().split("T")[0] };
+          supabase.from("transactions").insert(fromTransaction(txn));
+          setTransactions((tp) => [txn, ...tp]);
+        }
+        // 3. Restore stock for each returned item (all returned qty goes back to stock)
+        for (const item of updated.items) {
+          supabase.from("products").select("stock").eq("id", item.productId).single().then(({ data }) => {
+            const oldStock = Number((data as Record<string,unknown>)?.stock ?? 0);
+            const newStock = oldStock + item.returnedQty;
+            supabase.from("products").update({ stock: newStock }).eq("id", item.productId);
+            setProducts((pp) => pp.map((p) => p.id === item.productId ? { ...p, stock: newStock } : p));
+          });
+        }
+      }
+
+      supabase.from("returns").update(fromReturn(patch)).eq("id", id);
+      return prev.map((x) => x.id === id ? updated : x);
+    });
+  }, [showToast]);
+
+  const deleteReturn = useCallback(async (id: string) => {
+    setReturns((prev) => {
+      const record = prev.find((x) => x.id === id);
+      if (record?.status === "PROCESSED") {
+        showToast("گەڕاوەی پەسەندکراو ناتوانرێت بسڕێتەوە", "error");
+        return prev;
+      }
+      supabase.from("returns").delete().eq("id", id).then(({ error }) => {
+        if (error) showToast("هەڵە: " + error.message, "error");
+        else showToast("گەڕاوە سڕایەوە");
+      });
+      return prev.filter((x) => x.id !== id);
+    });
+  }, [showToast]);
+
   return (
     <DataContext.Provider
       value={{
         products, clients, reps, warehouses, suppliers, orders, drivers, transactions, settings,
-        users, invoiceTemplates, priceTypes, sampleRequests, loading,
+        users, invoiceTemplates, priceTypes, sampleRequests, returns, loading,
         addProduct, updateProduct, deleteProduct, addPriceType, deletePriceType,
         addClient, updateClient, deleteClient,
         addRep, updateRep, deleteRep,
@@ -904,6 +1017,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         addUser, updateUser, deleteUser,
         addTemplate, updateTemplate, deleteTemplate,
         addSampleRequest, updateSampleRequest, deleteSampleRequest,
+        addReturn, updateReturn, deleteReturn,
         updateSettings,
         showToast, toast, refreshData,
       }}

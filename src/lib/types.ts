@@ -173,6 +173,42 @@ export interface Transaction {
   createdAt: string;
 }
 
+// ── Returns ──────────────────────────────────────────────────
+// Company-wide bonus rate applied to returned quantities.
+// 30% of returned units are classified as bonus (free) — they
+// do NOT reduce the customer's debt.
+export const RETURN_BONUS_RATE = 0.30;
+
+export type ReturnStatus = "PENDING" | "PROCESSED" | "REJECTED";
+
+export interface ReturnItem {
+  productId: string;
+  productName: string;
+  returnedQty: number;
+  bonusQty: number;       // floor(returnedQty × RETURN_BONUS_RATE)
+  paidQty: number;        // returnedQty − bonusQty
+  unitPrice: number;      // pulled from the matched order
+  debtCredit: number;     // paidQty × unitPrice — this reduces client.balance
+  fromOrderId: string;    // which order the goods came from
+  fromOrderNumber: string;
+}
+
+export interface ReturnRecord {
+  id: string;
+  returnNumber: string;        // RET-XXXXXX
+  clientId: string;
+  clientName: string;
+  status: ReturnStatus;
+  items: ReturnItem[];
+  notes: string;
+  // Denormalized totals for fast list display
+  totalReturnedUnits: number;
+  totalBonusUnits: number;
+  totalPaidUnits: number;
+  totalDebtCredit: number;     // applied to client.balance when PROCESSED
+  createdAt: string;
+}
+
 export interface CompanySettings {
   name: string;
   nameEn: string;
