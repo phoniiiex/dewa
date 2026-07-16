@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor,
@@ -359,6 +359,24 @@ export default function TemplateBuilderPage() {
   const selectedBlock = blocks.find(b => b.id === selectedBlockId) ?? null;
   const accentColor = opts.primaryColor;
 
+  // Paper width — must be declared before the ResizeObserver useEffect
+  const paperWidths: Record<string, number> = { A4: 794, A5: 559, thermal: 302 };
+  const paperW = paperWidths[opts.paperSize] ?? 794;
+
+  // Dynamically measure the preview container to calculate scale
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const [previewScale, setPreviewScale] = useState(0.65);
+  useEffect(() => {
+    const el = previewContainerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([entry]) => {
+      const available = entry.contentRect.width - 64;
+      setPreviewScale(Math.min(0.85, available / paperW));
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [paperW]);
+
   // Build preview settings from store
   const previewSettings: PrintSettings = {
     name: settings.name || "دەوا فارما",
@@ -441,10 +459,6 @@ export default function TemplateBuilderPage() {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
-
-  // ── Preview scale ─────────────────────────────────────────
-  const paperWidths: Record<string, number> = { A4: 794, A5: 559, thermal: 302 };
-  const paperW = paperWidths[opts.paperSize] ?? 794;
 
   const dt = DOC_TYPES.find(d => d.id === docType)!;
 
@@ -582,12 +596,13 @@ export default function TemplateBuilderPage() {
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"/>
             </div>
           </div>
-          <div className="flex-1 overflow-auto flex items-start justify-center p-8">
-            {/* Scale wrapper — fits the paper in the preview pane */}
+          <div ref={previewContainerRef} className="flex-1 overflow-auto flex items-start justify-center p-8">
+            {/* Scale wrapper — measured via ResizeObserver */}
             <div
               style={{
                 transformOrigin: "top center",
-                transform: `scale(${Math.min(0.7, (window?.innerWidth - 580) / paperW)})`,
+                transform: `scale(${previewScale})`,
+                marginBottom: `-${Math.round(paperW * (1 - previewScale) * 0.5)}px`,
               }}
             >
               <div style={{ boxShadow:"0 4px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)",

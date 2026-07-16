@@ -266,10 +266,12 @@ export default function TemplatesPage() {
                       )}
                       {group.map(t => (
                         <div key={t.id}
-                          className={cn("px-4 py-3 border-b border-b-border/50 cursor-pointer transition-all border-e-2",
-                            editingTemplate?.id === t.id ? "bg-primary/5 border-e-primary" : "bg-background border-e-transparent hover:bg-muted/40")}>
+                          className={cn("px-4 py-3 border-b border-b-border/50 transition-all border-e-2",
+                            "bg-background border-e-transparent hover:bg-muted/40")}>
                           <div className="flex justify-between items-start gap-2">
-                            <div className="flex-1 min-w-0" onClick={() => openEdit(t)}>
+                            {/* Name + meta — click → builder */}
+                            <div className="flex-1 min-w-0 cursor-pointer"
+                              onClick={() => router.push(`/dashboard/invoices/builder?id=${t.id}`)}>
                               <p className="font-bold text-xs truncate">{t.name}</p>
                               <div className="flex items-center gap-1.5 mt-1">
                                 <Badge variant="secondary" className="text-[9px] px-1.5 py-0"
@@ -281,13 +283,31 @@ export default function TemplatesPage() {
                               </div>
                             </div>
                             <div className="flex gap-1 shrink-0">
-                              <Button variant="ghost" size="icon" className="size-6 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30" onClick={() => previewPrint(t)}><Printer className="size-3" /></Button>
-                              <Button variant="ghost" size="icon" className="size-3.5 text-primary hover:bg-primary/5" onClick={() => duplicateTemplate(t)}><Copy className="size-3" /></Button>
-                              <Button variant="ghost" size="icon" className="size-6 text-destructive hover:bg-destructive/5" onClick={() => { if (confirm("دەتەوێت بیسڕیتەوە؟")) deleteTemplate(t.id); }}><Trash2 className="size-3" /></Button>
+                              {/* Edit in builder */}
+                              <Button variant="ghost" size="icon" className="size-6 text-primary hover:bg-primary/5"
+                                onClick={() => router.push(`/dashboard/invoices/builder?id=${t.id}`)}>
+                                <Edit3 className="size-3" />
+                              </Button>
+                              {/* Print preview */}
+                              <Button variant="ghost" size="icon" className="size-6 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                onClick={() => window.open(`/print/${orders[0]?.id ?? "preview"}?t=${t.id}&preview=true`, "_blank")}>
+                                <Printer className="size-3" />
+                              </Button>
+                              {/* Duplicate */}
+                              <Button variant="ghost" size="icon" className="size-6 text-muted-foreground hover:bg-muted"
+                                onClick={() => duplicateTemplate(t)}>
+                                <Copy className="size-3" />
+                              </Button>
+                              {/* Delete */}
+                              <Button variant="ghost" size="icon" className="size-6 text-destructive hover:bg-destructive/5"
+                                onClick={() => { if (confirm("دەتەوێت بیسڕیتەوە؟")) deleteTemplate(t.id); }}>
+                                <Trash2 className="size-3" />
+                              </Button>
                             </div>
                           </div>
                         </div>
                       ))}
+
                     </div>
                   );
                 })}
