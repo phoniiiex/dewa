@@ -20,23 +20,52 @@ import {
 import {
   CheckCircle2, ChevronRight, ChevronLeft, PackageX,
   Search, X, Plus, AlertCircle, Info, TrendingDown,
-  ShoppingBag, Award, CircleDot,
+  ShoppingBag, Award, CircleDot, HelpCircle,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Order, ReturnItem, ReturnRecord } from "@/lib/types";
-import { RETURN_BONUS_RATE } from "@/lib/types";
 
-// ── Inline alert box (Alert component not available) ─────────────────────────
-function InfoBox({ children, variant = "info" }: { children: React.ReactNode; variant?: "info" | "warn" | "success" }) {
+// ── Calculation logic ─────────────────────────────────────────────────────────
+//
+// The bonus portion is derived from the ORIGINAL ORDER's bonus rate, not a flat %.
+//
+// Algebra:  paidQty + (paidQty × originalBonusRate) = returnedQty
+//           paidQty × (1 + originalBonusRate)        = returnedQty
+//           paidQty = returnedQty / (1 + originalBonusRate)
+//
+// Example (50% bonus rate):  returnedQty=75, rate=0.50
+//   paidQty  = round(75 / 1.50) = 50
+//   bonusQty = 75 − 50          = 25
+//
+// Example (30% bonus rate):  returnedQty=75, rate=0.30
+//   paidQty  = round(75 / 1.30) = 58
+//   bonusQty = 75 − 58          = 17
+
+function calcPaid(returnedQty: number, originalBonusRate: number): number {
+  if (originalBonusRate <= 0) return returnedQty; // no bonus → all paid
+  return Math.round(returnedQty / (1 + originalBonusRate));
+}
+function calcBonus(returnedQty: number, originalBonusRate: number): number {
+  return returnedQty - calcPaid(returnedQty, originalBonusRate);
+}
+
+// ── Inline info box (no alert component available) ────────────────────────────
+function InfoBox({
+  children,
+  variant = "info",
+}: {
+  children: React.ReactNode;
+  variant?: "info" | "warn" | "success";
+}) {
   const styles = {
     info:    "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300",
     warn:    "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300",
     success: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300",
   };
   const icons = {
-    info: <Info size={13} className="shrink-0 mt-0.5"/>,
-    warn: <AlertCircle size={13} className="shrink-0 mt-0.5"/>,
+    info:    <Info size={13} className="shrink-0 mt-0.5"/>,
+    warn:    <AlertCircle size={13} className="shrink-0 mt-0.5"/>,
     success: <CheckCircle2 size={13} className="shrink-0 mt-0.5"/>,
   };
   return (
@@ -47,16 +76,15 @@ function InfoBox({ children, variant = "info" }: { children: React.ReactNode; va
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function calcBonus(qty: number) { return Math.floor(qty * RETURN_BONUS_RATE); }
-function calcPaid(qty: number)  { return qty - calcBonus(qty); }
-
-// ── Order match scoring ───────────────────────────────────────────────────────
+// ── Order match type ──────────────────────────────────────────────────────────
 interface OrderMatch {
   orderId: string;
   orderNumber: string;
   orderDate: string;
-  originalQty: number;
+  originalQty: number;       // quantity + bonusQty from order item
+  paidQtyInOrder: number;    // item.quantity (what the client paid for)
+  bonusQtyInOrder: number;   // item.bonusQty
+  originalBonusRate: number; // bonusQtyInOrder / paidQtyInOrder  (e.g. 0.30, 0.50)
   unitPrice: number;
   alreadyReturned: number;
   returnable: number;
@@ -83,8 +111,14 @@ function getMatches(
   return eligible
     .map((order) => {
       const item = order.items.find((i) => i.productId === productId)!;
-      const originalQty = item.quantity + item.bonusQty;
-      const unitPrice = item.unitPrice;
+      const paidQtyInOrder  = item.quantity;
+      const bonusQtyInOrder = item.bonusQty;
+      const originalQty     = paidQtyInOrder + bonusQtyInOrder;
+      const unitPrice       = item.unitPrice;
+
+      // The actual bonus rate from this order: e.g. 15 bonus on 50 paid → 0.30
+      const originalBonusRate =
+        paidQtyInOrder > 0 ? bonusQtyInOrder / paidQtyInOrder : 0;
 
       const alreadyReturned = existingReturns
         .filter((r) => r.status !== "REJECTED")
@@ -92,26 +126,30 @@ function getMatches(
         .filter((ri) => ri.fromOrderId === order.id && ri.productId === productId)
         .reduce((s, ri) => s + ri.returnedQty, 0);
 
-      const returnable = Math.max(0, originalQty - alreadyReturned);
-      const canTake = Math.min(returnedQty, returnable);
+      const returnable    = Math.max(0, originalQty - alreadyReturned);
+      const canTake       = Math.min(returnedQty, returnable);
       const coverageScore = returnedQty === 0 ? 0 : canTake / returnedQty;
-      const ageDays = (now - new Date(order.createdAt).getTime()) / 86_400_000;
+      const ageDays       = (now - new Date(order.createdAt).getTime()) / 86_400_000;
 
-      const confidence: OrderMatch["confidence"] =
-        coverageScore >= 0.9 && ageDays < 60 ? "high" :
+      let confidence: OrderMatch["confidence"] =
+        coverageScore >= 0.9 && ageDays < 60 ? "high"   :
         coverageScore >= 0.5 || ageDays < 60 ? "medium" : "low";
+      if (returnable === 0) confidence = "low";
 
       return {
         orderId: order.id,
         orderNumber: order.orderNumber,
         orderDate: order.createdAt,
         originalQty,
+        paidQtyInOrder,
+        bonusQtyInOrder,
+        originalBonusRate,
         unitPrice,
         alreadyReturned,
         returnable,
         canTake,
         coverageScore,
-        confidence: returnable === 0 ? "low" : confidence,
+        confidence,
       };
     })
     .sort(
@@ -125,9 +163,9 @@ function getMatches(
 // ── Confidence badge ──────────────────────────────────────────────────────────
 function ConfBadge({ c }: { c: OrderMatch["confidence"] }) {
   const map = {
-    high:   { label: "پێشنیاری بەرز",    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400", dot: "bg-emerald-500" },
-    medium: { label: "پێشنیاری ناوەند",  cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",   dot: "bg-amber-500" },
-    low:    { label: "پێشنیاری کەم",     cls: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400",       dot: "bg-rose-500" },
+    high:   { label: "پێشنیاری بەرز",   cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400", dot: "bg-emerald-500" },
+    medium: { label: "پێشنیاری ناوەند", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",   dot: "bg-amber-500" },
+    low:    { label: "پێشنیاری کەم",    cls: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400",       dot: "bg-rose-500" },
   };
   const { label, cls, dot } = map[c];
   return (
@@ -139,20 +177,17 @@ function ConfBadge({ c }: { c: OrderMatch["confidence"] }) {
 
 // ── Step bar ──────────────────────────────────────────────────────────────────
 const STEPS = ["کڕیار", "بەرهەم", "داواکاری", "پشتڕاستکردن"];
-
 function StepBar({ step }: { step: number }) {
   return (
     <div className="flex items-center justify-center gap-1 py-4 px-6">
       {STEPS.map((label, i) => (
         <div key={i} className="flex items-center gap-1">
           <div className="flex flex-col items-center gap-0.5">
-            <div
-              className={`size-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all ${
-                i < step  ? "bg-primary text-primary-foreground" :
-                i === step ? "bg-primary text-primary-foreground ring-4 ring-primary/20 scale-110" :
-                "bg-muted text-muted-foreground"
-              }`}
-            >
+            <div className={`size-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all ${
+              i < step  ? "bg-primary text-primary-foreground" :
+              i === step ? "bg-primary text-primary-foreground ring-4 ring-primary/20 scale-110" :
+              "bg-muted text-muted-foreground"
+            }`}>
               {i < step ? <CheckCircle2 size={13}/> : i + 1}
             </div>
             <span className={`text-[10px] font-medium whitespace-nowrap ${i === step ? "text-primary" : "text-muted-foreground"}`}>
@@ -176,9 +211,10 @@ interface DraftItem {
   selectedOrderId: string | null;
   selectedOrderNumber: string;
   unitPrice: number;
+  originalBonusRate: number; // 0 until an order is selected; then set from order
 }
 
-// ── Main Wizard ───────────────────────────────────────────────────────────────
+// ── Main wizard ───────────────────────────────────────────────────────────────
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -190,19 +226,20 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
   const [step, setStep] = useState(0);
 
   // Step 1
-  const [clientId, setClientId]       = useState(editReturn?.clientId ?? "");
+  const [clientId, setClientId]         = useState(editReturn?.clientId ?? "");
   const [clientSearch, setClientSearch] = useState("");
-  const [clientOpen, setClientOpen]   = useState(false);
+  const [clientOpen, setClientOpen]     = useState(false);
 
   // Step 2
   const [draftItems, setDraftItems] = useState<DraftItem[]>(
     editReturn?.items.map((ri) => ({
-      productId: ri.productId,
-      productName: ri.productName,
-      returnedQty: ri.returnedQty,
-      selectedOrderId: ri.fromOrderId || null,
+      productId:         ri.productId,
+      productName:       ri.productName,
+      returnedQty:       ri.returnedQty,
+      selectedOrderId:   ri.fromOrderId || null,
       selectedOrderNumber: ri.fromOrderNumber || "",
-      unitPrice: ri.unitPrice,
+      unitPrice:         ri.unitPrice,
+      originalBonusRate: ri.originalBonusRate,
     })) ?? [],
   );
   const [productSearch, setProductSearch] = useState("");
@@ -213,20 +250,21 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
 
   const selectedClient = clients.find((c) => c.id === clientId);
 
-  // Build final items from drafts
+  // Build final items
   const finalItems: ReturnItem[] = draftItems.map((d) => {
-    const bonusQty = calcBonus(d.returnedQty);
-    const paidQty  = calcPaid(d.returnedQty);
+    const paidQty  = calcPaid(d.returnedQty, d.originalBonusRate);
+    const bonusQty = calcBonus(d.returnedQty, d.originalBonusRate);
     return {
-      productId: d.productId,
-      productName: d.productName,
-      returnedQty: d.returnedQty,
+      productId:         d.productId,
+      productName:       d.productName,
+      returnedQty:       d.returnedQty,
       bonusQty,
       paidQty,
-      unitPrice: d.unitPrice,
-      debtCredit: paidQty * d.unitPrice,
-      fromOrderId: d.selectedOrderId ?? "",
-      fromOrderNumber: d.selectedOrderNumber,
+      originalBonusRate: d.originalBonusRate,
+      unitPrice:         d.unitPrice,
+      debtCredit:        paidQty * d.unitPrice,
+      fromOrderId:       d.selectedOrderId ?? "",
+      fromOrderNumber:   d.selectedOrderNumber,
     };
   });
 
@@ -236,27 +274,17 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
   const totalDebtCredit    = finalItems.reduce((s, i) => s + i.debtCredit,  0);
 
   function reset() {
-    setStep(0);
-    setClientId("");
-    setClientSearch("");
-    setDraftItems([]);
-    setNotes("");
+    setStep(0); setClientId(""); setClientSearch("");
+    setDraftItems([]); setNotes("");
   }
-
   function handleClose() { reset(); onClose(); }
 
   async function handleConfirm() {
     if (!selectedClient) return;
     const payload = {
-      clientId,
-      clientName: selectedClient.name,
-      status: "PENDING" as const,
-      items: finalItems,
-      notes,
-      totalReturnedUnits,
-      totalBonusUnits,
-      totalPaidUnits,
-      totalDebtCredit,
+      clientId, clientName: selectedClient.name,
+      status: "PENDING" as const, items: finalItems, notes,
+      totalReturnedUnits, totalBonusUnits, totalPaidUnits, totalDebtCredit,
     };
     if (editReturn) {
       await updateReturn(editReturn.id, payload);
@@ -274,7 +302,7 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
         <Label className="text-sm font-semibold mb-2 block">کڕیار / داروخانە هەڵبژێرە</Label>
         <Popover open={clientOpen} onOpenChange={setClientOpen}>
           <PopoverTrigger>
-            <div className="w-full flex h-10 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background cursor-pointer hover:bg-accent/50 transition-colors">
+            <div className="w-full flex h-10 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm cursor-pointer hover:bg-accent/50 transition-colors">
               {selectedClient ? (
                 <span className="flex items-center gap-2">
                   <span className="font-semibold">{selectedClient.name}</span>
@@ -290,21 +318,14 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
               <CommandList>
                 <CommandEmpty>کڕیارێک نەدۆزرایەوە</CommandEmpty>
                 <CommandGroup>
-                  {clients
-                    .filter((c) => c.isActive && c.name.toLowerCase().includes(clientSearch.toLowerCase()))
-                    .slice(0, 30)
-                    .map((c) => (
-                      <CommandItem
-                        key={c.id}
-                        value={c.id}
-                        onSelect={() => { setClientId(c.id); setClientOpen(false); }}
-                      >
-                        <div className="flex justify-between w-full">
-                          <span>{c.name}</span>
-                          <span className="text-xs text-muted-foreground">{c.city}</span>
-                        </div>
-                      </CommandItem>
-                    ))}
+                  {clients.filter((c) => c.isActive && c.name.toLowerCase().includes(clientSearch.toLowerCase())).slice(0, 30).map((c) => (
+                    <CommandItem key={c.id} value={c.id} onSelect={() => { setClientId(c.id); setClientOpen(false); }}>
+                      <div className="flex justify-between w-full">
+                        <span>{c.name}</span>
+                        <span className="text-xs text-muted-foreground">{c.city}</span>
+                      </div>
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
               </CommandList>
             </Command>
@@ -347,36 +368,37 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
               <CommandList>
                 <CommandEmpty>بەرهەمێک نەدۆزرایەوە</CommandEmpty>
                 <CommandGroup>
-                  {products
-                    .filter((p) => p.isActive && p.name.toLowerCase().includes(productSearch.toLowerCase()))
-                    .slice(0, 40)
-                    .map((p) => (
-                      <CommandItem
-                        key={p.id}
-                        value={p.id}
-                        disabled={draftItems.some((d) => d.productId === p.id)}
-                        onSelect={() => {
-                          if (draftItems.some((d) => d.productId === p.id)) return;
-                          setDraftItems((prev) => [
-                            ...prev,
-                            { productId: p.id, productName: p.name, returnedQty: 1, selectedOrderId: null, selectedOrderNumber: "", unitPrice: p.price },
-                          ]);
-                          setProductOpen(false);
-                          setProductSearch("");
-                        }}
-                      >
-                        <div className="flex justify-between w-full">
-                          <span>{p.name}</span>
-                          <span className="text-xs text-muted-foreground">{formatIQD(p.price)}</span>
-                        </div>
-                      </CommandItem>
-                    ))}
+                  {products.filter((p) => p.isActive && p.name.toLowerCase().includes(productSearch.toLowerCase())).slice(0, 40).map((p) => (
+                    <CommandItem
+                      key={p.id} value={p.id}
+                      disabled={draftItems.some((d) => d.productId === p.id)}
+                      onSelect={() => {
+                        if (draftItems.some((d) => d.productId === p.id)) return;
+                        setDraftItems((prev) => [...prev, {
+                          productId: p.id, productName: p.name,
+                          returnedQty: 1, selectedOrderId: null,
+                          selectedOrderNumber: "", unitPrice: p.price,
+                          originalBonusRate: 0, // unknown until order selected in step 3
+                        }]);
+                        setProductOpen(false); setProductSearch("");
+                      }}
+                    >
+                      <div className="flex justify-between w-full">
+                        <span>{p.name}</span>
+                        <span className="text-xs text-muted-foreground">{formatIQD(p.price)}</span>
+                      </div>
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
               </CommandList>
             </Command>
           </PopoverContent>
         </Popover>
       </div>
+
+      <InfoBox variant="info">
+        ڕێژەی بۆنەس لەسەر بنچینەی داواکاری ڕەسەن دیاردەبێت — لە هەنگاوی ٣ داواکاری هەڵبژێرە.
+      </InfoBox>
 
       {draftItems.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground text-sm border-2 border-dashed rounded-xl">
@@ -386,8 +408,11 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
       ) : (
         <div className="space-y-3">
           {draftItems.map((d, idx) => {
-            const bonus = calcBonus(d.returnedQty);
-            const paid  = calcPaid(d.returnedQty);
+            const hasRate = d.originalBonusRate > 0 || d.selectedOrderId !== null;
+            const paidQty  = calcPaid(d.returnedQty, d.originalBonusRate);
+            const bonusQty = calcBonus(d.returnedQty, d.originalBonusRate);
+            const ratePct  = Math.round(d.originalBonusRate * 100);
+
             return (
               <div key={d.productId} className="border rounded-xl p-4 bg-card space-y-3">
                 <div className="flex items-center justify-between">
@@ -403,42 +428,48 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
                 <div className="flex items-center gap-3">
                   <Label className="text-xs text-muted-foreground shrink-0">بڕی گەڕاو</Label>
                   <Input
-                    type="number"
-                    min={1}
+                    type="number" min={1}
                     value={d.returnedQty}
-                    onChange={(e) =>
-                      setDraftItems((prev) =>
-                        prev.map((x, i) => i === idx ? { ...x, returnedQty: Math.max(1, +e.target.value) } : x)
-                      )
-                    }
+                    onChange={(e) => setDraftItems((prev) => prev.map((x, i) => i === idx ? { ...x, returnedQty: Math.max(1, +e.target.value) } : x))}
                     className="h-8 w-24 text-center text-sm"
                   />
                 </div>
 
-                {/* 30% breakdown */}
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-muted/60 rounded-lg p-2">
-                    <p className="text-[10px] text-muted-foreground font-medium">کۆی گەڕاوە</p>
-                    <p className="font-bold text-sm">{d.returnedQty}</p>
+                {/* Breakdown — only meaningful once order is selected */}
+                {!hasRate ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+                    <HelpCircle size={12} className="shrink-0"/>
+                    ڕێژەی بۆنەس دیارناکرێت تا داواکاری هەڵبژێردرێت (هەنگاوی ٣)
                   </div>
-                  <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-2 border border-amber-200/50">
-                    <p className="text-[10px] text-amber-600 font-medium flex items-center justify-center gap-0.5">
-                      <Award size={9}/> بۆنەس ٣٠٪
-                    </p>
-                    <p className="font-bold text-sm text-amber-700 dark:text-amber-300">{bonus}</p>
-                  </div>
-                  <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-lg p-2 border border-emerald-200/50">
-                    <p className="text-[10px] text-emerald-600 font-medium flex items-center justify-center gap-0.5">
-                      <TrendingDown size={9}/> قەرز کەم دەبێت
-                    </p>
-                    <p className="font-bold text-sm text-emerald-700 dark:text-emerald-300">{paid}</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center text-xs text-muted-foreground pt-1 border-t">
-                  <span>کەمکردنەوەی قەرز:</span>
-                  <span className="font-bold text-foreground">{formatIQD(paid * d.unitPrice)}</span>
-                </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-muted/60 rounded-lg p-2">
+                        <p className="text-[10px] text-muted-foreground font-medium">کۆی گەڕاوە</p>
+                        <p className="font-bold text-sm">{d.returnedQty}</p>
+                      </div>
+                      <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-2 border border-amber-200/50">
+                        <p className="text-[10px] text-amber-600 font-medium flex items-center justify-center gap-0.5">
+                          <Award size={9}/> بۆنەس ({ratePct}٪)
+                        </p>
+                        <p className="font-bold text-sm text-amber-700 dark:text-amber-300">{bonusQty}</p>
+                      </div>
+                      <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-lg p-2 border border-emerald-200/50">
+                        <p className="text-[10px] text-emerald-600 font-medium flex items-center justify-center gap-0.5">
+                          <TrendingDown size={9}/> قەرز کەم دەبێت
+                        </p>
+                        <p className="font-bold text-sm text-emerald-700 dark:text-emerald-300">{paidQty}</p>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-2 py-1">
+                      paidQty = round({d.returnedQty} ÷ {(1 + d.originalBonusRate).toFixed(2)}) = {paidQty}
+                    </div>
+                    <div className="flex justify-between items-center text-xs text-muted-foreground pt-1 border-t">
+                      <span>کەمکردنەوەی قەرز:</span>
+                      <span className="font-bold text-foreground">{formatIQD(paidQty * d.unitPrice)}</span>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
@@ -451,7 +482,7 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
   const renderStep3 = () => (
     <div className="flex flex-col gap-4 p-6">
       <InfoBox variant="info">
-        سیستەمەکە داواکارییەکانی پێشنیارکراوی پیدەبینێت بەپێی کڕیار و بەرهەم. دەتوانیت بگۆڕیتەوە.
+        هەڵبژاردنی داواکاری ڕێژەی بۆنەسی ڕەسەن دیاردەکات. ئەم ڕێژەیە بەکاردێت لە حیسابکردنی بەشی بۆنەس.
       </InfoBox>
 
       <ScrollArea className="max-h-[420px] pr-1">
@@ -469,13 +500,20 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
 
                 {matches.length === 0 ? (
                   <InfoBox variant="warn">
-                    هیچ داواکارییەکی گونجاو نەدۆزرایەوە — داواکارییەکی تر نییە بۆ ئەم کڕیارە
+                    هیچ داواکارییەکی گونجاو نەدۆزرایەوە بۆ ئەم کڕیارە
                   </InfoBox>
                 ) : (
                   <div className="space-y-2">
-                    {matches.map((m) => {
-                      const isSelected = d.selectedOrderId === m.orderId ||
-                        (d.selectedOrderId === null && matches[0].orderId === m.orderId);
+                    {matches.map((m, mi) => {
+                      const isSelected =
+                        d.selectedOrderId === m.orderId ||
+                        (d.selectedOrderId === null && mi === 0);
+
+                      // Preview what the calculation would be with this order's rate
+                      const previewPaid  = calcPaid(d.returnedQty, m.originalBonusRate);
+                      const previewBonus = calcBonus(d.returnedQty, m.originalBonusRate);
+                      const ratePct      = Math.round(m.originalBonusRate * 100);
+
                       return (
                         <button
                           key={m.orderId}
@@ -484,7 +522,13 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
                             setDraftItems((prev) =>
                               prev.map((x, i) =>
                                 i === idx
-                                  ? { ...x, selectedOrderId: m.orderId, selectedOrderNumber: m.orderNumber, unitPrice: m.unitPrice }
+                                  ? {
+                                      ...x,
+                                      selectedOrderId: m.orderId,
+                                      selectedOrderNumber: m.orderNumber,
+                                      unitPrice: m.unitPrice,
+                                      originalBonusRate: m.originalBonusRate, // ← key update
+                                    }
                                   : x
                               )
                             )
@@ -502,10 +546,21 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
                                 <ConfBadge c={m.confidence}/>
                               </div>
                               <p className="text-xs text-muted-foreground">{m.orderDate}</p>
-                              <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground mt-1">
-                                <span>ڕەسەن: <b className="text-foreground">{m.originalQty}</b></span>
-                                <span>گەڕاوەی پێشوو: <b className="text-foreground">{m.alreadyReturned}</b></span>
-                                <span className="text-emerald-600">ماوەی گەڕاندن: <b>{m.returnable}</b></span>
+                              <div className="flex flex-wrap gap-2 text-[11px] mt-1">
+                                <span className="text-muted-foreground">
+                                  داواکاری: <b className="text-foreground">{m.paidQtyInOrder}+{m.bonusQtyInOrder}</b>
+                                </span>
+                                <span className="text-primary font-semibold">
+                                  ڕێژەی بۆنەس: {ratePct}٪
+                                </span>
+                              </div>
+                              {/* Calculation preview for this order */}
+                              <div className="flex gap-3 text-[11px] mt-1 bg-muted/40 rounded px-2 py-1">
+                                <span className="text-muted-foreground">پارەدار:</span>
+                                <span className="font-bold text-emerald-600">{previewPaid}</span>
+                                <span className="text-muted-foreground">بۆنەس:</span>
+                                <span className="font-bold text-amber-600">{previewBonus}</span>
+                                <span className="text-muted-foreground">= round({d.returnedQty}÷{(1 + m.originalBonusRate).toFixed(2)})</span>
                               </div>
                             </div>
                             <div className="flex flex-col items-end gap-1 shrink-0">
@@ -535,8 +590,9 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
             <TableRow className="bg-muted/50">
               <TableHead className="text-xs font-bold">بەرهەم</TableHead>
               <TableHead className="text-xs font-bold text-center">گەڕاوە</TableHead>
-              <TableHead className="text-xs font-bold text-center text-amber-600">بۆنەس ٣٠٪</TableHead>
-              <TableHead className="text-xs font-bold text-center text-emerald-600">پارەدار ٧٠٪</TableHead>
+              <TableHead className="text-xs font-bold text-center text-primary">ڕێژەی بۆنەس</TableHead>
+              <TableHead className="text-xs font-bold text-center text-amber-600">بۆنەس</TableHead>
+              <TableHead className="text-xs font-bold text-center text-emerald-600">پارەدار</TableHead>
               <TableHead className="text-xs font-bold text-right">کەمکردنەوەی قەرز</TableHead>
             </TableRow>
           </TableHeader>
@@ -550,6 +606,9 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
                   )}
                 </TableCell>
                 <TableCell className="text-center text-xs font-bold">{item.returnedQty}</TableCell>
+                <TableCell className="text-center text-xs font-semibold text-primary">
+                  {Math.round(item.originalBonusRate * 100)}٪
+                </TableCell>
                 <TableCell className="text-center text-xs font-bold text-amber-600">{item.bonusQty}</TableCell>
                 <TableCell className="text-center text-xs font-bold text-emerald-600">{item.paidQty}</TableCell>
                 <TableCell className="text-right text-xs font-bold">{formatIQD(item.debtCredit)}</TableCell>
@@ -566,11 +625,11 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
           <span className="font-bold">{totalReturnedUnits} دانە</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-amber-600 flex items-center gap-1"><Award size={12}/> بۆنەس (٣٠٪)</span>
+          <span className="text-amber-600 flex items-center gap-1"><Award size={12}/> بۆنەس</span>
           <span className="font-bold text-amber-700 dark:text-amber-300">{totalBonusUnits} دانە</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-emerald-600 flex items-center gap-1"><CircleDot size={12}/> پارەدار (٧٠٪)</span>
+          <span className="text-emerald-600 flex items-center gap-1"><CircleDot size={12}/> پارەدار</span>
           <span className="font-bold text-emerald-700 dark:text-emerald-300">{totalPaidUnits} دانە</span>
         </div>
         <Separator/>
@@ -588,7 +647,6 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
         )}
       </div>
 
-      {/* Notes */}
       <div className="space-y-1.5">
         <Label className="text-sm font-semibold">تێبینی (ئەختیاری)</Label>
         <Textarea
@@ -606,7 +664,6 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
     </div>
   );
 
-  // ── Can proceed ──────────────────────────────────────────────────────────
   const canNext = useMemo(() => {
     if (step === 0) return !!clientId;
     if (step === 1) return draftItems.length > 0 && draftItems.every((d) => d.returnedQty > 0);
@@ -617,7 +674,7 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <SheetContent side="right" className="w-full sm:max-w-[520px] p-0 flex flex-col gap-0 overflow-hidden">
+      <SheetContent side="right" className="w-full sm:max-w-[540px] p-0 flex flex-col gap-0 overflow-hidden">
         <SheetHeader className="px-6 pt-6 pb-0 shrink-0">
           <SheetTitle className="flex items-center gap-2 text-base">
             <PackageX size={18} className="text-rose-500"/>
@@ -635,7 +692,6 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
           {stepContent[step]}
         </ScrollArea>
 
-        {/* Footer navigation */}
         <div className="border-t p-4 flex items-center justify-between shrink-0 bg-background">
           <Button
             variant="ghost"
@@ -645,16 +701,12 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
             <ChevronRight size={14}/>
             {step === 0 ? "هەڵوەشاندنەوە" : "دواوە"}
           </Button>
-
           {step < 3 ? (
             <Button onClick={() => setStep((s) => s + 1)} disabled={!canNext} className="gap-1">
               دواتر <ChevronLeft size={14}/>
             </Button>
           ) : (
-            <Button
-              onClick={handleConfirm}
-              className="gap-2 bg-rose-600 hover:bg-rose-700 text-white"
-            >
+            <Button onClick={handleConfirm} className="gap-2 bg-rose-600 hover:bg-rose-700 text-white">
               <CheckCircle2 size={14}/>
               {editReturn ? "گۆڕین پاشەکەوت بکە" : "تۆمارکردنی گەڕاوە"}
             </Button>

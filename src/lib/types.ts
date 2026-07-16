@@ -185,8 +185,9 @@ export interface ReturnItem {
   productId: string;
   productName: string;
   returnedQty: number;
-  bonusQty: number;       // floor(returnedQty × RETURN_BONUS_RATE)
-  paidQty: number;        // returnedQty − bonusQty
+  bonusQty: number;       // returnedQty − paidQty
+  paidQty: number;        // Math.round(returnedQty / (1 + originalBonusRate))
+  originalBonusRate: number; // bonusQty / quantity from the original order (e.g. 0.50 for 50+100)
   unitPrice: number;      // pulled from the matched order
   debtCredit: number;     // paidQty × unitPrice — this reduces client.balance
   fromOrderId: string;    // which order the goods came from
