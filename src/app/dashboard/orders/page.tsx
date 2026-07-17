@@ -3,6 +3,7 @@ import { useState, FormEvent, useRef, useMemo, useEffect } from "react";
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
   CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign, Pencil,
+  PackageCheck, TriangleAlert,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
@@ -15,9 +16,15 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter,
+} from "@/components/ui/drawer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import ExportButton from "@/components/custom/ExportButton";
 import PrintModal from "@/components/custom/PrintModal";
 import ClientCombobox from "@/components/custom/ClientCombobox";
@@ -50,7 +57,7 @@ const STATUS: Record<OrderStatus, StatusMeta> = {
   PAID:         { label: "پارەدراوە",  color: "#059669", bg: "#D1FAE5", icon: <DollarSign size={13} /> },
 };
 
-const STATUS_TABS = ["هەموو", ...Object.values(STATUS).map(s => s.label), "📝 گۆڕانکاری"];
+const STATUS_TABS = ["هەموو", ...Object.values(STATUS).map(s => s.label), "📝 گۆڕانکاری", "👤 ماوەی نوێنەر"];
 
 const STATUS_BADGE_CLS: Record<string, string> = {
   WAITING:      "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
@@ -128,8 +135,9 @@ export default function OrdersPage() {
 
   // ── New order form ────────────────────────────────────────────────────
   const [form, setForm] = useState({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
-  // Each item: productId, quantity, manualBonusPct (direct bonus), repBonusPct (rep bonus per product)
-  const [orderItems, setOrderItems] = useState<{ productId: string; quantity: string; manualBonusPct: string; repBonusPct: string }[]>([{ productId: "", quantity: "", manualBonusPct: "", repBonusPct: "" }]);
+  // Each item: productId, quantity, repBonusPct = TOTAL agreed bonus %, overrideWarehouseFulfillment
+  type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean };
+  const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false }]);
   // Edit mode
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   // "To warehouse" toggle — warehouse is the customer, not transit
@@ -138,7 +146,7 @@ export default function OrdersPage() {
 
   const resetForm = () => {
     setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
-    setOrderItems([{ productId: "", quantity: "", manualBonusPct: "", repBonusPct: "" }]);
+    setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false }]);
     setEditOrder(null);
     setToWarehouse(false);
     setToWarehouseId("");
@@ -146,34 +154,37 @@ export default function OrdersPage() {
 
   const isDirect = !form.warehouseId && !toWarehouse;
   const selectedWarehouse = toWarehouse ? warehouses.find(w => w.id === toWarehouseId) : warehouses.find(w => w.id === form.warehouseId);
-  const isToWarehouse = toWarehouse && !!toWarehouseId;
 
-  // Bonus calculation — warehouse order: use warehouse rules; direct order: use manual %
-  const getItemBonusPct = (productId: string, manualPct: string): { pct: number; isCustom: boolean } => {
-    if (isDirect) {
-      const pct = parseFloat(manualPct) || 0;
-      return { pct, isCustom: false };
-    }
-    if (!selectedWarehouse) return { pct: 0, isCustom: false };
+  // Returns the warehouse's standard bonus % for a product
+  const getWarehousePct = (productId: string): number => {
+    if (!selectedWarehouse) return 0;
     const rule = (selectedWarehouse.bonusRules || []).find(r => r.productId === productId);
-    return rule ? { pct: rule.percent, isCustom: true } : { pct: selectedWarehouse.bonusPct, isCustom: false };
+    return rule ? rule.percent : selectedWarehouse.bonusPct;
   };
+
+  // ── Split Bonus Fulfillment Calculation ──────────────────────────────────
+  // repBonusPct  = total agreed bonus % with the pharmacy (what pharmacy receives)
+  // warehousePct = warehouse standard % (what warehouse ships)
+  // agentPending = totalBonus - warehouseBonus (rep delivers this personally)
+  //
+  // Override case: warehouse ships ALL of totalBonus, agentPending = 0
 
   const liveBonusItems = orderItems.filter(i => i.productId && i.quantity).map((i) => {
     const prod = products.find(p => p.id === i.productId);
-    const qty = Number(i.quantity);
+    const qty  = Number(i.quantity);
     if (isDirect) {
-      // Direct: only manual bonus, no warehouse or rep split
-      const directPct = parseFloat(i.manualBonusPct) || 0;
-      const directBonus = Math.round(qty * directPct / 100);
-      return { name: prod?.name || "", qty, pct: directPct, isCustom: false, bonusQty: directBonus, warehouseBonusQty: 0, repBonusQty: 0, repPct: 0 };
+      const pct        = parseFloat(i.repBonusPct) || 0;
+      const totalBonus = Math.round(qty * pct / 100);
+      return { name: prod?.name || "", qty, warehousePct: 0, repAgreedPct: pct, totalBonusQty: totalBonus, warehouseBonusQty: 0, agentPendingQty: 0, override: false };
     }
-    // Warehouse: warehouse bonus from rules + per-item rep bonus
-    const { pct, isCustom } = getItemBonusPct(i.productId, i.manualBonusPct);
-    const warehouseBonusQty = Math.round(qty * pct / 100);
-    const itemRepPct = parseFloat(i.repBonusPct) || 0;
-    const repBonusQty = Math.round(qty * itemRepPct / 100);
-    return { name: prod?.name || "", qty, pct, isCustom, bonusQty: warehouseBonusQty + repBonusQty, warehouseBonusQty, repBonusQty, repPct: itemRepPct };
+    const warehousePct   = getWarehousePct(i.productId);
+    const repAgreedPct   = parseFloat(i.repBonusPct) || warehousePct; // default to warehouse% if blank
+    const totalBonusQty  = Math.round(qty * repAgreedPct / 100);
+    const warehouseBonusQty = i.overrideWarehouseFulfillment
+      ? totalBonusQty
+      : Math.round(qty * warehousePct / 100);
+    const agentPendingQty = totalBonusQty - warehouseBonusQty;
+    return { name: prod?.name || "", qty, warehousePct, repAgreedPct, totalBonusQty, warehouseBonusQty, agentPendingQty, override: i.overrideWarehouseFulfillment };
   });
 
   const handleSubmit = async (e: FormEvent) => {
@@ -202,17 +213,25 @@ export default function OrdersPage() {
       const prod = products.find(p => p.id === i.productId);
       const qty  = Number(i.quantity);
       if (isDirect) {
-        const directPct = parseFloat(i.manualBonusPct) || 0;
-        const directBonus = Math.round(qty * directPct / 100);
-        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: directBonus, unitPrice: prod?.price || 0, bonusPct: directPct, warehouseBonusQty: 0, repBonusQty: 0 };
+        const pct        = parseFloat(i.repBonusPct) || 0;
+        const totalBonus = Math.round(qty * pct / 100);
+        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonus, unitPrice: prod?.price || 0, bonusPct: 0, repBonusPct: pct, warehouseBonusQty: 0, repBonusQty: 0, overrideWarehouseFulfillment: false };
       }
-      // Warehouse order (transit or toWarehouse)
-      const { pct } = getItemBonusPct(i.productId, i.manualBonusPct);
-      const warehouseBonusQty = Math.round(qty * pct / 100);
-      // No rep bonus when sending to warehouse
-      const itemRepPct = toWarehouse ? 0 : (parseFloat(i.repBonusPct) || 0);
-      const repBQ = Math.round(qty * itemRepPct / 100);
-      return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: warehouseBonusQty + repBQ, unitPrice: prod?.price || 0, bonusPct: pct, warehouseBonusQty, repBonusQty: repBQ };
+      // Warehouse order — split fulfillment logic
+      const warehousePct    = getWarehousePct(i.productId);
+      const repAgreedPct    = toWarehouse ? 0 : (parseFloat(i.repBonusPct) || warehousePct);
+      const totalBonusQty   = Math.round(qty * repAgreedPct / 100);
+      const warehouseBonusQty = i.overrideWarehouseFulfillment
+        ? totalBonusQty
+        : Math.round(qty * warehousePct / 100);
+      const agentPendingQty = totalBonusQty - warehouseBonusQty;
+      return {
+        productId: i.productId, productName: prod?.name || "", quantity: qty,
+        bonusQty: totalBonusQty, unitPrice: prod?.price || 0,
+        bonusPct: warehousePct, repBonusPct: repAgreedPct,
+        warehouseBonusQty, repBonusQty: agentPendingQty,
+        overrideWarehouseFulfillment: i.overrideWarehouseFulfillment,
+      };
     });
     if (items.length === 0) { showToast("تکایە بەرهەمێک زیادبکە", "error"); return; }
 
@@ -266,7 +285,9 @@ export default function OrdersPage() {
       notes: o.notes.startsWith("[EDIT_REQUEST]:") ? "" : o.notes,
     });
     setOrderItems(o.items.map(i => ({
-      productId: i.productId, quantity: String(i.quantity), manualBonusPct: String(i.bonusPct || ""), repBonusPct: "",
+      productId: i.productId, quantity: String(i.quantity),
+      repBonusPct: String(i.repBonusPct || i.bonusPct || ""),
+      overrideWarehouseFulfillment: i.overrideWarehouseFulfillment ?? false,
     })));
     setNewOrderOpen(true);
   };
@@ -405,6 +426,7 @@ export default function OrdersPage() {
     if (isRep && myRep && o.repId !== myRep.id && o.repName !== myRep.name) return false;
     const matchSearch = o.orderNumber.includes(searchTerm) || o.clientName.includes(searchTerm) || o.repName.includes(searchTerm);
     if (statusFilter === "📝 گۆڕانکاری") return matchSearch && o.notes.startsWith("[EDIT_REQUEST]:");
+    if (statusFilter === "👤 ماوەی نوێنەر") return matchSearch && o.items.some(i => (i.repBonusQty ?? 0) > 0);
     const matchStatus = statusFilter === "هەموو" || STATUS[o.status]?.label === statusFilter;
     return matchSearch && matchStatus;
   }), [orders, isRep, myRep, searchTerm, statusFilter]);
@@ -573,30 +595,44 @@ export default function OrdersPage() {
       </Card>
 
       {/* ════════════════════════════════════════════════════════════════
-          NEW ORDER MODAL
+          NEW / EDIT ORDER — DRAWER (right-side panel)
       ════════════════════════════════════════════════════════════════ */}
-      <Dialog open={newOrderOpen} onOpenChange={open => { if (!open) { setNewOrderOpen(false); resetForm(); } }}>
-        <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-y-auto" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>{editOrder ? `گۆڕینی داواکاری — ${editOrder.orderNumber}` : "داواکاری نوێ"}</DialogTitle>
-            <DialogDescription>زانیاری داواکاری پڕبکەوە</DialogDescription>
-          </DialogHeader>
-        <form onSubmit={handleSubmit}>
+      <Drawer
+        open={newOrderOpen}
+        onOpenChange={open => { if (!open) { setNewOrderOpen(false); resetForm(); } }}
+        swipeDirection="right"
+      >
+        <DrawerContent
+          style={{ "--drawer-content-width": "min(92vw, 620px)" } as React.CSSProperties}
+          className="flex flex-col h-full"
+        >
+          <DrawerHeader className="border-b shrink-0 px-6 py-4" dir="rtl">
+            <DrawerTitle className="flex items-center gap-2">
+              <ShoppingCart size={18} className="text-orange-500" />
+              {editOrder ? `گۆڕینی داواکاری — ${editOrder.orderNumber}` : "داواکاری نوێ"}
+            </DrawerTitle>
+            <DrawerDescription>زانیاری داواکاری پڕبکەوە</DrawerDescription>
+          </DrawerHeader>
+
+          <ScrollArea className="flex-1 overflow-auto">
+          <form id="order-form" onSubmit={handleSubmit} dir="rtl">
+            <div className="px-6 py-5 space-y-5">
+
           {/* To-warehouse toggle */}
           {!editOrder && (
-            <div className="mb-3.5 flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5">
               <Button type="button" variant={toWarehouse ? "outline" : "ghost"}
                 onClick={() => { setToWarehouse(!toWarehouse); setToWarehouseId(""); setForm({ ...form, warehouseId: "" }); }}
                 className={cn("gap-1.5 font-bold text-[13px] rounded-[10px] border-[1.5px]",
                   toWarehouse ? 'border-violet-600 bg-violet-50 dark:bg-violet-950/30 text-violet-600' : 'border-border text-muted-foreground')}>
                 🏪 {toWarehouse ? "داواکاری بۆ کۆگا ✓" : "داواکاری بۆ کۆگا"}
               </Button>
-              {toWarehouse && <span className="text-xs text-violet-600">کۆگا وەکو وەرگر — بۆنەسی کۆگا بەکاردەهێنرێت، بۆنەسی نوێنەر نییە</span>}
+              {toWarehouse && <span className="text-xs text-violet-600">کۆگا وەکو وەرگر — بۆنەسی کۆگا بەکاردەهێنرێت</span>}
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Client or Warehouse selector based on toggle */}
+            {/* Client or Warehouse selector */}
             {toWarehouse ? (
               <div className="space-y-2">
                 <Label>🏪 کۆگا (وەرگر) *</Label>
@@ -672,39 +708,60 @@ export default function OrdersPage() {
           )}
 
           {/* Product rows */}
-          <div className="mt-1">
-            <div className="flex justify-between items-center mb-2.5">
-              <span className="font-semibold text-sm">بەرهەمەکان</span>
-              <Button type="button" variant="ghost" size="sm" className="bg-primary/10 text-primary hover:bg-primary/20 text-[13px] font-semibold" onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", manualBonusPct: "", repBonusPct: "" }])}>+ زیادکردن</Button>
+          <div>
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2">
+                <Package size={15} className="text-muted-foreground"/>
+                <span className="font-semibold text-sm">بەرهەمەکان</span>
+              </div>
+              <Button type="button" variant="ghost" size="sm"
+                className="bg-primary/10 text-primary hover:bg-primary/20 text-[13px] font-semibold"
+                onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false }])}>
+                + زیادکردن
+              </Button>
             </div>
             {/* Column headers */}
-            <div className="mb-1 gap-2" style={{ display: "grid", gridTemplateColumns: toWarehouse ? "1fr 120px auto" : "1fr 120px 110px auto" }}>
+            <div className="mb-1 grid gap-2" style={{ gridTemplateColumns: toWarehouse ? "1fr 100px auto" : "1fr 90px 90px 100px auto" }}>
               <div className="text-xs font-semibold text-muted-foreground">بەرهەم</div>
               <div className="text-xs font-semibold text-muted-foreground">ژمارە</div>
-              {!toWarehouse && <div className={`text-xs font-semibold ${isDirect ? 'text-amber-600' : 'text-emerald-600'}`}>{isDirect ? "بۆنەس %" : "👤 نوێنەر %"}</div>}
+              {!toWarehouse && <div className={`text-xs font-semibold ${isDirect ? 'text-amber-600' : 'text-violet-600'}`}>{isDirect ? "بۆنەس %" : "کۆی بۆنەس %"}</div>}
+              {!toWarehouse && !isDirect && <div className="text-xs font-semibold text-emerald-600">ئەگوێرێت</div>}
               <div />
             </div>
             {orderItems.map((item, idx) => (
-              <div key={idx} className="mb-2 gap-2 items-center" style={{ display: "grid", gridTemplateColumns: toWarehouse ? "1fr 120px auto" : "1fr 120px 110px auto" }}>
+              <div key={idx} className="mb-2.5 grid gap-2 items-start"
+                style={{ gridTemplateColumns: toWarehouse ? "1fr 100px auto" : "1fr 90px 90px 100px auto" }}>
                 <Select value={item.productId || null} onValueChange={(v: string | null) => v && setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v } : x))}>
                   <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
-                  <SelectContent>
-                    {products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                  </SelectContent>
+                  <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                 </Select>
                 <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
                   onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
-                {/* Bonus % input: direct = manualBonusPct, warehouse transit = repBonusPct, toWarehouse = hidden */}
+                {/* Total agreed bonus % input */}
                 {!toWarehouse && (
                   <div className="relative">
-                    <Input type="number" min={0} max={100} className="ps-7" placeholder="0"
-                      value={isDirect ? item.manualBonusPct : item.repBonusPct}
-                      onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, [isDirect ? "manualBonusPct" : "repBonusPct"]: e.target.value } : x))} />
+                    <Input type="number" min={0} max={200} className="ps-7" placeholder="0"
+                      value={item.repBonusPct}
+                      onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, repBonusPct: e.target.value } : x))} />
                     <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
                   </div>
                 )}
+                {/* Override checkbox (warehouse orders only) */}
+                {!toWarehouse && !isDirect && (
+                  <div className="flex flex-col items-center gap-1 pt-1">
+                    <Checkbox
+                      id={`override-${idx}`}
+                      checked={item.overrideWarehouseFulfillment}
+                      onCheckedChange={v => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, overrideWarehouseFulfillment: !!v } : x))}
+                    />
+                    <label htmlFor={`override-${idx}`} className="text-[10px] text-center text-emerald-600 cursor-pointer leading-tight">
+                      🏪<br/>هەمووی
+                    </label>
+                  </div>
+                )}
                 {orderItems.length > 1 && (
-                  <Button type="button" variant="ghost" size="icon" className="size-9 bg-red-100 dark:bg-red-950/30 text-red-600 hover:bg-red-200" onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}>
+                  <Button type="button" variant="ghost" size="icon" className="size-9 bg-red-100 dark:bg-red-950/30 text-red-600 hover:bg-red-200"
+                    onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}>
                     <X size={14} />
                   </Button>
                 )}
@@ -712,46 +769,68 @@ export default function OrdersPage() {
             ))}
           </div>
 
-          {/* Bonus preview */}
-          {liveBonusItems.some(i => i.bonusQty > 0) && (
-            <div className="mt-3.5 p-3 bg-muted rounded-[10px] border border-border">
-              <div className="font-semibold text-[13px] mb-2.5 text-muted-foreground">داڕێژەی بۆنەس</div>
-              {liveBonusItems.filter(i => i.bonusQty > 0).map((i, idx) => (
-                <div key={idx} className="mb-2.5 p-2.5 bg-card rounded-lg border border-border">
-                  <div className="font-bold text-[13px] text-foreground mb-1.5">{i.name}</div>
-                  <div className="text-xs text-muted-foreground py-0.5">
-                    دەبێیت: <strong>{i.qty} + {i.bonusQty} = {i.qty + i.bonusQty}</strong> دانە
+          {/* Bonus split preview */}
+          {liveBonusItems.some(i => i.totalBonusQty > 0) && (
+            <div className="p-4 bg-muted/60 rounded-xl border border-border space-y-3">
+              <div className="font-semibold text-[13px] text-muted-foreground flex items-center gap-1.5">
+                <PackageCheck size={14}/> داڕێژەی بۆنەس
+              </div>
+              {liveBonusItems.filter(i => i.totalBonusQty > 0).map((i, idx) => (
+                <div key={idx} className="bg-card rounded-lg border border-border p-3 space-y-1.5">
+                  <div className="font-bold text-[13px]">{i.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    دەبێیت: <strong>{i.qty} + {i.totalBonusQty} = {i.qty + i.totalBonusQty}</strong> دانە
                   </div>
-                  {isDirect && i.bonusQty > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-amber-600 py-0.5">
-                      <span className="w-5 text-center">📦</span>
-                      <span>بۆنەس: <strong>+{i.bonusQty}</strong> ({i.pct}%)</span>
+                  {isDirect ? (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-600">
+                      <span>📦</span>
+                      <span>بۆنەس: <strong>+{i.totalBonusQty}</strong> ({i.repAgreedPct}%)</span>
                     </div>
-                  )}
-                  {!isDirect && i.warehouseBonusQty > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-violet-600 py-0.5">
-                      <span className="w-5 text-center">🏪</span>
-                      <span>بۆنەسی کۆگا: <strong>+{i.warehouseBonusQty}</strong> ({i.pct}%) — لەگەڵ کاڵاکە دەنێردرێت</span>
-                    </div>
-                  )}
-                  {!isDirect && i.repBonusQty > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-600 py-0.5">
-                      <span className="w-5 text-center">👤</span>
-                      <span>بۆنەسی نوێنەر: <strong>+{i.repBonusQty}</strong> ({i.repPct}%) — نوێنەر وەردەگرێت</span>
-                    </div>
+                  ) : (
+                    <>
+                      {i.override ? (
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 rounded px-2 py-1">
+                          <CheckCircle size={11}/>
+                          <span>کۆگا هەمووی ئەگوێرێت: <strong>+{i.warehouseBonusQty}</strong> — نوێنەر: 0</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5 text-xs text-violet-600">
+                            <span>🏪 کۆگا دەنێرێت:</span>
+                            <strong>+{i.warehouseBonusQty}</strong>
+                            <span className="text-muted-foreground">({i.warehousePct}%)</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-orange-600">
+                            <span>👤 نوێنەر خۆی دەگواستێنەوە:</span>
+                            <strong>+{i.agentPendingQty}</strong>
+                            <span className="text-muted-foreground">({i.repAgreedPct - i.warehousePct}%)</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="text-[10px] text-muted-foreground border-t pt-1">
+                        کۆی بۆنەس: <strong>{i.totalBonusQty}</strong> دانە ({i.repAgreedPct}%)
+                      </div>
+                    </>
                   )}
                 </div>
               ))}
             </div>
           )}
 
-          <DialogFooter className="gap-2 sm:gap-0 mt-4">
-            <Button type="button" variant="outline" onClick={() => { setNewOrderOpen(false); resetForm(); }}>پاشگەزبوونەوە</Button>
-            <Button type="submit">{editOrder ? (isManager ? "پاشەکەوتکردنی گۆڕانکاری" : "ناردنی داوای گۆڕانکاری") : "تۆمارکردنی داواکاری"}</Button>
-          </DialogFooter>
-        </form>
-        </DialogContent>
-      </Dialog>
+            </div>{/* end px-6 py-5 space-y-5 */}
+          </form>
+          </ScrollArea>
+
+          <DrawerFooter className="border-t shrink-0 px-6 py-4" dir="rtl">
+            <div className="flex gap-2 justify-between">
+              <Button type="button" variant="outline" onClick={() => { setNewOrderOpen(false); resetForm(); }}>پاشگەزبوونەوە</Button>
+              <Button type="submit" form="order-form">
+                {editOrder ? (isManager ? "پاشەکەوتکردنی گۆڕانکاری" : "ناردنی داوای گۆڕانکاری") : "تۆمارکردنی داواکاری"}
+              </Button>
+            </div>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
 
       {/* ════════════════════════════════════════════════════════════════
           ORDER DETAIL DRAWER (view only)
@@ -788,7 +867,7 @@ export default function OrdersPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {["بەرهەم", "ژمارە", "🏪 کۆگا", "👤 نوێنەر", "نرخ", "کۆ"].map(h => <TableHead key={h}>{h}</TableHead>)}
+                      {["بەرهەم", "ژمارە", "🏪 کۆگا", "👤 ماوەی نوێنەر", "نرخ", "کۆ"].map(h => <TableHead key={h}>{h}</TableHead>)}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -796,8 +875,8 @@ export default function OrdersPage() {
                       <TableRow key={idx}>
                         <TableCell>{item.productName}</TableCell>
                         <TableCell>{item.quantity}</TableCell>
-                        <TableCell className="text-violet-600 font-semibold">{(item.warehouseBonusQty || item.bonusQty || 0) > 0 ? `+${item.warehouseBonusQty ?? item.bonusQty}` : "—"}</TableCell>
-                        <TableCell className="text-emerald-600 font-semibold">{(item.repBonusQty || 0) > 0 ? `+${item.repBonusQty}` : "—"}</TableCell>
+                        <TableCell className="text-violet-600 font-semibold">{(item.warehouseBonusQty || 0) > 0 ? `+${item.warehouseBonusQty}` : "—"}</TableCell>
+                        <TableCell className="text-orange-600 font-semibold">{(item.repBonusQty || 0) > 0 ? `+${item.repBonusQty}` : "—"}</TableCell>
                         <TableCell>{formatIQD(item.unitPrice)}</TableCell>
                         <TableCell className="font-semibold">{formatIQD(item.quantity * item.unitPrice)}</TableCell>
                       </TableRow>
@@ -805,6 +884,15 @@ export default function OrdersPage() {
                   </TableBody>
                 </Table>
               </div>
+              {/* Rep pending banner */}
+              {o.items.some(i => (i.repBonusQty ?? 0) > 0) && (
+                <div className="flex items-start gap-2 px-3.5 py-2.5 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-[10px] text-[13px] text-orange-700">
+                  <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+                  <span>
+                    نوێنەر پێویستە <strong>{o.items.reduce((s,i) => s + (i.repBonusQty ?? 0), 0)}</strong> دانە بۆنەس خۆی بگواستێنەوە بە داروخانەکە
+                  </span>
+                </div>
+              )}
               {o.signedInvoiceUrl && <a href={o.signedInvoiceUrl} target="_blank" rel="noopener noreferrer" className="text-primary text-[13px] font-semibold">📄 پسوولەی واژووکراو</a>}
               {o.signedReceiptUrl && <a href={o.signedReceiptUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-600 text-[13px] font-semibold">🧾 پسوولەی پارەدان</a>}
               {o.notes && <p className="text-[13px] text-muted-foreground bg-muted px-3.5 py-2.5 rounded-[10px] m-0">{o.notes}</p>}

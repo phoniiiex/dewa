@@ -79,17 +79,30 @@ export default function RepsPage() {
   );
 
   const repStats = useMemo(() => {
-    const map: Record<string, { clientCount: number; orderCount: number; revenue: number }> = {};
+    const map: Record<string, { clientCount: number; orderCount: number; revenue: number; pendingBonusQty: number }> = {};
     reps.forEach(r => {
       const repOrders = orders.filter(o => o.repId === r.id);
       map[r.id] = {
         clientCount: clients.filter(c => c.repId === r.id).length,
         orderCount:  repOrders.length,
         revenue:     repOrders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0),
+        pendingBonusQty: repOrders
+          .filter(o => !["PAID", "NOT_ACCEPTED"].includes(o.status))
+          .reduce((s, o) => s + o.items.reduce((si, i) => si + (i.repBonusQty ?? 0), 0), 0),
       };
     });
     return map;
   }, [reps, orders, clients]);
+
+  // All pending bonus lines for a rep (for detail sheet)
+  const getRepPendingLines = (repId: string) =>
+    orders
+      .filter(o => o.repId === repId && !["PAID", "NOT_ACCEPTED"].includes(o.status))
+      .flatMap(o =>
+        o.items
+          .filter(i => (i.repBonusQty ?? 0) > 0)
+          .map(i => ({ orderNumber: o.orderNumber, clientName: o.clientName, productName: i.productName, pending: i.repBonusQty ?? 0, status: o.status }))
+      );
 
   return (
     <div className="page-stagger">
@@ -116,7 +129,7 @@ export default function RepsPage() {
           { title: "کۆی نوێنەران",  value: reps.length,                                                                      cls: "text-primary" },
           { title: "چالاک",           value: reps.filter(r => r.isActive).length,                                               cls: "text-emerald-600" },
           { title: "کۆی کڕیاران",  value: clients.length,                                                                    cls: "text-sky-600" },
-          { title: "کۆی داهات",   value: formatIQD(orders.filter(o => o.status === "PAID").reduce((s, o) => s + o.totalAmount, 0)), cls: "text-cyan-600" },
+          { title: "👤 بۆنەسی ماوە", value: `${reps.reduce((s,r) => s + (repStats[r.id]?.pendingBonusQty ?? 0), 0)} دانە`, cls: "text-orange-600" },
         ].map(k => (
           <Card key={k.title} className="card-interactive">
             <CardContent className="p-4">
@@ -171,6 +184,13 @@ export default function RepsPage() {
                   <p className="text-[10px] text-muted-foreground">داهات</p>
                 </div>
               </div>
+              {/* Pending bonus badge on card */}
+              {(repStats[r.id]?.pendingBonusQty ?? 0) > 0 && (
+                <div className="mb-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg text-xs text-orange-700">
+                  <span>👤</span>
+                  <span>بۆنەسی ماوە: <strong>{repStats[r.id]?.pendingBonusQty}</strong> دانە</span>
+                </div>
+              )}
 
               <div className="flex gap-2 justify-end">
                 <Button size="sm" variant="outline" className="text-xs h-7" onClick={e => { e.stopPropagation(); openEdit(r); }}>
@@ -275,7 +295,7 @@ export default function RepsPage() {
                 ))}
               </div>
               <h4 className="font-bold text-sm mb-3">داواکارییەکان ({orders.filter(o => o.repId === detailRep.id).length})</h4>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 mb-6">
                 {orders.filter(o => o.repId === detailRep.id).map(o => (
                   <div key={o.id} className="flex justify-between items-center px-3 py-2 bg-muted/50 rounded-lg">
                     <div><span className="font-semibold text-sm">{o.orderNumber}</span> <span className="text-xs text-muted-foreground">{o.clientName}</span></div>
@@ -283,6 +303,36 @@ export default function RepsPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Pending Bonus Deliveries section */}
+              {(() => {
+                const lines = getRepPendingLines(detailRep.id);
+                return (
+                  <>
+                    <h4 className="font-bold text-sm mb-3 flex items-center gap-2">
+                      <span>👤 بۆنەسی ماوەی نوێنەر</span>
+                      <span className="ml-auto text-xs font-normal text-orange-600 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-full px-2 py-0.5">
+                        {lines.reduce((s, l) => s + l.pending, 0)} دانە
+                      </span>
+                    </h4>
+                    {lines.length === 0 ? (
+                      <div className="text-center text-xs text-muted-foreground py-4">بۆنەسی ماوە نییە ✔️</div>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        {lines.map((l, idx) => (
+                          <div key={idx} className="flex items-center justify-between px-3 py-2 bg-orange-50 dark:bg-orange-950/10 border border-orange-100 dark:border-orange-900/30 rounded-lg">
+                            <div>
+                              <span className="font-semibold text-sm">{l.productName}</span>
+                              <div className="text-[10px] text-muted-foreground">{l.orderNumber} — {l.clientName}</div>
+                            </div>
+                            <span className="text-orange-600 font-bold text-sm">+{l.pending}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </SheetContent>

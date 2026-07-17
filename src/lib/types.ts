@@ -128,11 +128,13 @@ export interface OrderItem {
   productId: string;
   productName: string;
   quantity: number;
-  bonusQty: number;
+  bonusQty: number;                       // = totalBonusQty — what the pharmacy receives
   unitPrice: number;
-  bonusPct: number; // actual bonus % applied (custom rule or warehouse default)
-  warehouseBonusQty: number; // bonus units sent through the warehouse
-  repBonusQty: number;       // bonus units the representative takes
+  bonusPct: number;                       // warehouse standard bonus % for this product
+  repBonusPct: number;                    // total bonus % agreed with pharmacy by the rep
+  warehouseBonusQty: number;              // units shipped by the warehouse inside the delivery
+  repBonusQty: number;                    // units the rep must personally deliver (agentPendingBonusQty)
+  overrideWarehouseFulfillment: boolean;  // if true, warehouse ships ALL of totalBonusQty (agentPending = 0)
 }
 
 export interface Order {
