@@ -842,13 +842,13 @@ export default function OrdersPage() {
             })}
           </div>
 
-          {/* Bonus split preview */}
-          {liveBonusItems.some(i => i.totalBonusQty > 0 || i.belowMinimum || i.isDWFraction) && (
+          {/* Bonus split preview — Rule 5: hidden entirely when any item has belowMinimum */}
+          {liveBonusItems.some(i => (i.totalBonusQty > 0 || i.isDWFraction) && !i.belowMinimum) && (
             <div className="p-4 bg-muted/60 rounded-xl border border-border space-y-3">
               <div className="font-semibold text-[13px] text-muted-foreground flex items-center gap-1.5">
                 <PackageCheck size={14}/> داڕێژەی بۆنەس
               </div>
-              {liveBonusItems.filter(i => i.totalBonusQty > 0 || i.belowMinimum).map((i, idx) => (
+              {liveBonusItems.filter(i => (i.totalBonusQty > 0 || i.isDWFraction) && !i.belowMinimum).map((i, idx) => (
                 <div key={idx} className="bg-card rounded-lg border border-border p-3 space-y-1.5">
                   <div className="font-bold text-[13px]">{i.name}</div>
                   {form.orderFlow === 'DIRECT_WAREHOUSE' ? (
