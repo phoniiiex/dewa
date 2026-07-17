@@ -125,10 +125,12 @@ export default function AddProductWizard({open,onClose,onSubmit,initialProduct,e
   const canScanNext=(scanPhase==="review")||(scanPhase==="missing"&&missingOk);
 
   // Price rows (shared between auto+manual)
-  const PriceRows=()=>(<>{form.prices.map((p,i)=>(<div key={p.typeId} className="flex items-center gap-2"><span className="text-[13px] font-medium flex-1 truncate">{p.typeName}</span><Input type="number" min="0" placeholder="0" value={p.amount} onChange={e=>{const n=[...form.prices];n[i]={...n[i],amount:e.target.value};upd("prices",n);}} className="w-28 h-10 rounded-xl text-left font-mono text-[13px]"/><span className="text-[11px] text-muted-foreground">دینار</span><button type="button" onClick={()=>upd("prices",form.prices.filter((_,j)=>j!==i))} className="size-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><X size={13}/></button></div>))}</>);
+  // NOTE: called as {priceRows()} not <PriceRows/> — avoids remount on every render
+  const priceRows=()=>(<>{form.prices.map((p,i)=>(<div key={p.typeId} className="flex items-center gap-2"><span className="text-[13px] font-medium flex-1 truncate">{p.typeName}</span><Input type="number" min="0" placeholder="0" value={p.amount} onChange={e=>{const n=[...form.prices];n[i]={...n[i],amount:e.target.value};upd("prices",n);}} className="w-28 h-10 rounded-xl text-left font-mono text-[13px]"/><span className="text-[11px] text-muted-foreground">دینار</span><button type="button" onClick={()=>upd("prices",form.prices.filter((_,j)=>j!==i))} className="size-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><X size={13}/></button></div>))}</>);
 
   // Add price type — NESTED drawer (used in step 3 of both flows)
-  const AddTypeDrawer=()=>(<Drawer showSwipeHandle={isMobile} swipeDirection={sw}><DrawerTrigger render={<button type="button" className="flex items-center gap-2 text-[12px] text-primary font-medium hover:text-primary/80 transition-colors"><Tag size={12}/>جۆری نرخی نوێ زیاد بکە</button>}/><DrawerContent style={dcStyle} className={dcCls}><DrawerHeader><DrawerTitle dir="rtl">جۆری نرخی نوێ</DrawerTitle><DrawerDescription dir="rtl">ئەم جۆرە دەچێت بۆ هەموو بەرهەمەکان</DrawerDescription></DrawerHeader><div className="flex-1 p-4"><div className={cn(BOX,"space-y-3")} dir="rtl"><Input autoFocus placeholder="نمونە: خەتە، کۆمەڵی…" value={npt} onChange={e=>setNpt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&npt.trim())addPriceRow();}} className="h-10 rounded-xl text-[13px]"/></div></div><DrawerFooter><DrawerClose render={<Button onClick={addPriceRow} disabled={!npt.trim()}><Tag size={13} className="me-1.5"/>زیادکردن</Button>}/><DrawerClose render={<Button variant="outline">داخستن</Button>}/></DrawerFooter></DrawerContent></Drawer>);
+  // NOTE: called as {addTypeDrawer()} not <AddTypeDrawer/> — avoids remount on every render
+  const addTypeDrawer=()=>(<Drawer showSwipeHandle={isMobile} swipeDirection={sw}><DrawerTrigger render={<button type="button" className="flex items-center gap-2 text-[12px] text-primary font-medium hover:text-primary/80 transition-colors"><Tag size={12}/>جۆری نرخی نوێ زیاد بکە</button>}/><DrawerContent style={dcStyle} className={dcCls}><DrawerHeader><DrawerTitle dir="rtl">جۆری نرخی نوێ</DrawerTitle><DrawerDescription dir="rtl">ئەم جۆرە دەچێت بۆ هەموو بەرهەمەکان</DrawerDescription></DrawerHeader><div className="flex-1 p-4"><div className={cn(BOX,"space-y-3")} dir="rtl"><Input autoFocus placeholder="نمونە: خەتە، کۆمەڵی…" value={npt} onChange={e=>setNpt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&npt.trim())addPriceRow();}} className="h-10 rounded-xl text-[13px]"/></div></div><DrawerFooter><DrawerClose render={<Button onClick={addPriceRow} disabled={!npt.trim()}><Tag size={13} className="me-1.5"/>زیادکردن</Button>}/><DrawerClose render={<Button variant="outline">داخستن</Button>}/></DrawerFooter></DrawerContent></Drawer>);
 
   return (
     <>
@@ -170,7 +172,7 @@ export default function AddProductWizard({open,onClose,onSubmit,initialProduct,e
                       <DrawerContent style={dcStyle} className={dcCls}>
                         <DrawerHeader><DrawerTitle dir="rtl">02 — نرخ و ستۆک</DrawerTitle><DrawerDescription dir="rtl">نرخی هەر جۆرێک و بڕی ستۆک</DrawerDescription></DrawerHeader>
                         <div className="flex-1 p-4"><div className={cn(BOX,"space-y-3")} dir="rtl">
-                          <PriceRows/><AddTypeDrawer/>
+                          {priceRows()}{addTypeDrawer()}
                           <div className="border-t border-border pt-3 grid grid-cols-2 gap-3">
                             <Field label="بڕی ستۆک"><Input type="number" min="0" value={form.stock} onChange={e=>upd("stock",e.target.value)} className="h-10 rounded-xl"/></Field>
                             <Field label="یەکە"><select value={form.unitType} onChange={e=>upd("unitType",e.target.value)} className="w-full h-10 rounded-xl border border-border bg-background px-3 text-[13px]">{UNIT_TYPES.map(u=><option key={u}>{u}</option>)}</select></Field>
@@ -225,7 +227,7 @@ export default function AddProductWizard({open,onClose,onSubmit,initialProduct,e
                               <DrawerHeader><DrawerTitle dir="rtl">03 — نرخەکان</DrawerTitle><DrawerDescription dir="rtl">نرخی هەر جۆرێک دابنێ</DrawerDescription></DrawerHeader>
                               <div className="flex-1 p-4"><div className={cn(BOX,"space-y-3")} dir="rtl">
                                 <p className="text-[11px] text-muted-foreground">جۆرەکان هاوبەشن — نرخی هەر بەرهەمێک جیاوازە</p>
-                                <PriceRows/><AddTypeDrawer/>
+                                {priceRows()}{addTypeDrawer()}
                               </div></div>
                               <DrawerFooter>
                                 <Drawer showSwipeHandle={isMobile} swipeDirection={sw}>
