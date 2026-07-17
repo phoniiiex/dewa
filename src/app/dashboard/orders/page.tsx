@@ -138,13 +138,13 @@ export default function OrdersPage() {
     clientId: string; clientName: string; repId: string;
     orderFlow: OrderFlow; pharmacyId: string; notes: string;
   }>({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "" });
-  type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean; priceTypeId: string };
-  const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "" }]);
+  type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean; priceTypeId: string; bonusRounding: 'floor' | 'ceil' | null };
+  const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null }]);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
 
   const resetForm = () => {
     setForm({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "" });
-    setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "" }]);
+    setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null }]);
     setEditOrder(null);
   };
 
@@ -159,29 +159,39 @@ export default function OrdersPage() {
   };
 
   // ── Split Bonus Fulfillment Calculation ──────────────────────────────────
-  // repBonusPct  = total agreed bonus % with the pharmacy (what pharmacy receives)
-  // warehousePct = warehouse standard % (what warehouse ships)
-  // agentPending = totalBonus - warehouseBonus (rep delivers this personally)
-  //
-  // Override case: warehouse ships ALL of totalBonus, agentPending = 0
+  // Rule 1: repAgreedPct must be >= warehousePct  → belowMinimum flag
+  // Rule 2: bonus qty must be a whole number      → isFraction + pendingRounding flags
+  // Warehouse always takes its base % (Math.floor — safe side)
+  // Rep gets the remainder: totalBonusQty - warehouseBonusQty
 
-  const liveBonusItems = orderItems.filter(i => i.productId && i.quantity).map((i) => {
+  const liveBonusItems = orderItems.filter(i => i.productId && i.quantity).map((i, idx) => {
     const prod = products.find(p => p.id === i.productId);
     const qty  = Number(i.quantity);
     if (isDirect) {
-      const pct        = parseFloat(i.repBonusPct) || 0;
-      const totalBonus = Math.round(qty * pct / 100);
-      return { name: prod?.name || "", qty, warehousePct: 0, repAgreedPct: pct, totalBonusQty: totalBonus, warehouseBonusQty: 0, agentPendingQty: 0, override: false };
+      const pct          = parseFloat(i.repBonusPct) || 0;
+      const rawTotal     = qty * pct / 100;
+      const isFraction   = !Number.isInteger(rawTotal);
+      const pendingRounding = isFraction && i.bonusRounding === null;
+      const totalBonusQty = isFraction
+        ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal))
+        : rawTotal;
+      return { idx, name: prod?.name || "", qty, warehousePct: 0, repAgreedPct: pct, rawTotal, isFraction, pendingRounding, belowMinimum: false, totalBonusQty, warehouseBonusQty: 0, agentPendingQty: totalBonusQty };
     }
-    const warehousePct   = getWarehousePct(i.productId);
-    const repAgreedPct   = parseFloat(i.repBonusPct) || warehousePct;
-    const totalBonusQty  = Math.round(qty * repAgreedPct / 100);
-    const warehouseBonusQty = i.overrideWarehouseFulfillment
-      ? totalBonusQty
-      : Math.round(qty * warehousePct / 100);
-    const agentPendingQty = totalBonusQty - warehouseBonusQty;
-    return { name: prod?.name || "", qty, warehousePct, repAgreedPct, totalBonusQty, warehouseBonusQty, agentPendingQty, override: i.overrideWarehouseFulfillment };
+    const warehousePct    = getWarehousePct(i.productId);
+    const repAgreedPct    = form.orderFlow === 'DIRECT_WAREHOUSE' ? 0 : (parseFloat(i.repBonusPct) || warehousePct);
+    const belowMinimum    = form.orderFlow !== 'DIRECT_WAREHOUSE' && repAgreedPct < warehousePct;
+    const rawTotal        = qty * repAgreedPct / 100;
+    const isFraction      = !Number.isInteger(rawTotal);
+    const pendingRounding = isFraction && i.bonusRounding === null;
+    const totalBonusQty   = isFraction
+      ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal))
+      : rawTotal;
+    const warehouseBonusQty = Math.floor(qty * warehousePct / 100); // warehouse always floors
+    const agentPendingQty   = totalBonusQty - warehouseBonusQty;
+    return { idx, name: prod?.name || "", qty, warehousePct, repAgreedPct, rawTotal, isFraction, pendingRounding, belowMinimum, totalBonusQty, warehouseBonusQty, agentPendingQty };
   });
+
+  const hasAnyViolation = liveBonusItems.some(i => i.belowMinimum || i.pendingRounding);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -202,25 +212,28 @@ export default function OrdersPage() {
       const priceTypeName = priceEntry?.typeName ?? "";
       if (isDirect) {
         const pct        = parseFloat(i.repBonusPct) || 0;
-        const totalBonus = Math.round(qty * pct / 100);
-        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonus, unitPrice, priceTypeId: i.priceTypeId, priceTypeName, bonusPct: 0, repBonusPct: pct, warehouseBonusQty: 0, repBonusQty: 0, overrideWarehouseFulfillment: false };
+        const rawTotal   = qty * pct / 100;
+        const isFraction = !Number.isInteger(rawTotal);
+        const totalBonus = isFraction ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal)) : rawTotal;
+        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonus, unitPrice, priceTypeId: i.priceTypeId, priceTypeName, bonusPct: 0, repBonusPct: pct, warehouseBonusQty: 0, repBonusQty: totalBonus, overrideWarehouseFulfillment: false };
       }
-      const warehousePct    = getWarehousePct(i.productId);
-      const repAgreedPct    = form.orderFlow === "DIRECT_WAREHOUSE" ? 0 : (parseFloat(i.repBonusPct) || warehousePct);
-      const totalBonusQty   = Math.round(qty * repAgreedPct / 100);
-      const warehouseBonusQty = i.overrideWarehouseFulfillment
-        ? totalBonusQty
-        : Math.round(qty * warehousePct / 100);
-      const agentPendingQty = totalBonusQty - warehouseBonusQty;
+      const warehousePct      = getWarehousePct(i.productId);
+      const repAgreedPct      = form.orderFlow === "DIRECT_WAREHOUSE" ? 0 : (parseFloat(i.repBonusPct) || warehousePct);
+      const rawTotal          = qty * repAgreedPct / 100;
+      const isFraction        = !Number.isInteger(rawTotal);
+      const totalBonusQty     = isFraction ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal)) : rawTotal;
+      const warehouseBonusQty = Math.floor(qty * warehousePct / 100);
+      const agentPendingQty   = totalBonusQty - warehouseBonusQty;
       return {
         productId: i.productId, productName: prod?.name || "", quantity: qty,
         bonusQty: totalBonusQty, unitPrice, priceTypeId: i.priceTypeId, priceTypeName,
         bonusPct: warehousePct, repBonusPct: repAgreedPct,
         warehouseBonusQty, repBonusQty: agentPendingQty,
-        overrideWarehouseFulfillment: i.overrideWarehouseFulfillment,
+        overrideWarehouseFulfillment: false,
       };
     });
     if (items.length === 0) { showToast("تکایە بەرهەمێک زیادبکە", "error"); return; }
+    if (hasAnyViolation) { showToast("تکایە کێشەکانی بۆنەس چارەسەر بکە", "error"); return; }
 
     const totalAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
     const orderPayload = {
@@ -271,6 +284,7 @@ export default function OrdersPage() {
       repBonusPct: String(i.repBonusPct || i.bonusPct || ""),
       overrideWarehouseFulfillment: i.overrideWarehouseFulfillment ?? false,
       priceTypeId: i.priceTypeId || "",
+      bonusRounding: null,
     })));
     setNewOrderOpen(true);
   };
@@ -703,66 +717,83 @@ export default function OrdersPage() {
               </div>
               <Button type="button" variant="ghost" size="sm"
                 className="bg-primary/10 text-primary hover:bg-primary/20 text-[13px] font-semibold"
-              onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "" }])}>
+              onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null }])}>
                 + زیادکردن
               </Button>
             </div>
             {/* Column headers */}
-            <div className="mb-1 grid gap-2" style={{ gridTemplateColumns: form.orderFlow === 'DIRECT_WAREHOUSE' ? '1fr 100px auto' : '1fr 90px 90px 100px auto' }}>
+            <div className="mb-1 grid gap-2" style={{ gridTemplateColumns: form.orderFlow === 'DIRECT_WAREHOUSE' ? '1fr 100px auto' : '1fr 100px 100px auto' }}>
               <div className="text-xs font-semibold text-muted-foreground">بەرهەم</div>
               <div className="text-xs font-semibold text-muted-foreground">ژمارە</div>
               {form.orderFlow !== 'DIRECT_WAREHOUSE' && <div className={`text-xs font-semibold ${isDirect ? 'text-amber-600' : 'text-violet-600'}`}>{isDirect ? 'بۆنەس %' : 'کۆی بۆنەس %'}</div>}
-              {form.orderFlow === 'STANDARD' && <div className="text-xs font-semibold text-emerald-600">ئەگوێرێت</div>}
               <div />
             </div>
-            {orderItems.map((item, idx) => (
-              <div key={idx} className="mb-2.5 grid gap-2 items-start"
-                style={{ gridTemplateColumns: form.orderFlow === 'DIRECT_WAREHOUSE' ? '1fr 100px auto' : '1fr 90px 90px 100px auto' }}>
-                <Select value={item.productId || null} onValueChange={(v: string | null) => v && setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v } : x))}>
-                  <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
-                  <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                </Select>
-                <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
-                  onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
-                {/* Bonus % input — hidden for DIRECT_WAREHOUSE */}
-                {form.orderFlow !== 'DIRECT_WAREHOUSE' && (
-                  <div className="relative">
-                    <Input type="number" min={0} max={200} className="ps-7" placeholder="0"
-                      value={item.repBonusPct}
-                      onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, repBonusPct: e.target.value } : x))} />
-                    <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+            {orderItems.map((item, idx) => {
+              const live = liveBonusItems.find(l => l.idx === idx);
+              return (
+              <div key={idx} className="mb-2.5 space-y-1.5">
+                <div className="grid gap-2 items-start"
+                  style={{ gridTemplateColumns: form.orderFlow === 'DIRECT_WAREHOUSE' ? '1fr 100px auto' : '1fr 100px 100px auto' }}>
+                  <Select value={item.productId || null} onValueChange={(v: string | null) => v && setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v } : x))}>
+                    <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
+                    <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
+                    onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value, bonusRounding: null } : x))} />
+                  {/* Bonus % input — hidden for DIRECT_WAREHOUSE */}
+                  {form.orderFlow !== 'DIRECT_WAREHOUSE' && (
+                    <div className="relative">
+                      <Input type="number" min={0} max={200}
+                        className={`ps-7 ${live?.belowMinimum ? 'border-amber-400 focus-visible:ring-amber-400' : ''}`}
+                        placeholder="0"
+                        value={item.repBonusPct}
+                        onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, repBonusPct: e.target.value, bonusRounding: null } : x))} />
+                      <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                    </div>
+                  )}
+                  {orderItems.length > 1 && (
+                    <Button type="button" variant="ghost" size="icon" className="size-9 bg-red-100 dark:bg-red-950/30 text-red-600 hover:bg-red-200"
+                      onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}>
+                      <X size={14} />
+                    </Button>
+                  )}
+                </div>
+                {/* Rule 1: below-minimum warning */}
+                {live?.belowMinimum && (
+                  <div className="flex items-center gap-1.5 text-[12px] text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-1.5">
+                    <span>⚠️</span>
+                    <span>کۆی بۆنەس ({live.repAgreedPct}%) کەمتر نابێت لە بۆنەسی کۆگا ({live.warehousePct}%)</span>
                   </div>
                 )}
-                {/* Override checkbox — STANDARD only */}
-                {form.orderFlow === 'STANDARD' && (
-                  <div className="flex flex-col items-center gap-1 pt-1">
-                    <Checkbox
-                      id={`override-${idx}`}
-                      checked={item.overrideWarehouseFulfillment}
-                      onCheckedChange={v => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, overrideWarehouseFulfillment: !!v } : x))}
-                    />
-                    <label htmlFor={`override-${idx}`} className="text-[10px] text-center text-emerald-600 cursor-pointer leading-tight">
-                      🏪<br/>هەمووی
-                    </label>
+                {/* Rule 2: fraction alert with floor/ceil choice */}
+                {live?.isFraction && item.quantity && (
+                  <div className="flex items-center gap-2 text-[12px] bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
+                    <span>🔢</span>
+                    <span className="flex-1 text-blue-700 dark:text-blue-300">ژمارەی بۆنەس <strong>{live.rawTotal.toFixed(2)}</strong> دانەیە — ژمارەی تەواو نییە</span>
+                    <button type="button"
+                      onClick={() => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, bonusRounding: 'floor' } : x))}
+                      className={`px-2 py-0.5 rounded border text-[11px] font-semibold transition-colors ${
+                        item.bonusRounding === 'floor' ? 'bg-blue-600 text-white border-blue-600' : 'border-blue-300 text-blue-600 hover:bg-blue-100'
+                      }`}>↓ {Math.floor(live.rawTotal)}</button>
+                    <button type="button"
+                      onClick={() => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, bonusRounding: 'ceil' } : x))}
+                      className={`px-2 py-0.5 rounded border text-[11px] font-semibold transition-colors ${
+                        item.bonusRounding === 'ceil' ? 'bg-blue-600 text-white border-blue-600' : 'border-blue-300 text-blue-600 hover:bg-blue-100'
+                      }`}>↑ {Math.ceil(live.rawTotal)}</button>
                   </div>
-                )}
-                {orderItems.length > 1 && (
-                  <Button type="button" variant="ghost" size="icon" className="size-9 bg-red-100 dark:bg-red-950/30 text-red-600 hover:bg-red-200"
-                    onClick={() => setOrderItems(orderItems.filter((_, i) => i !== idx))}>
-                    <X size={14} />
-                  </Button>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
 
           {/* Bonus split preview */}
-          {liveBonusItems.some(i => i.totalBonusQty > 0) && (
+          {liveBonusItems.some(i => i.totalBonusQty > 0 || i.belowMinimum || i.isFraction) && (
             <div className="p-4 bg-muted/60 rounded-xl border border-border space-y-3">
               <div className="font-semibold text-[13px] text-muted-foreground flex items-center gap-1.5">
                 <PackageCheck size={14}/> داڕێژەی بۆنەس
               </div>
-              {liveBonusItems.filter(i => i.totalBonusQty > 0).map((i, idx) => (
+              {liveBonusItems.filter(i => i.totalBonusQty > 0 || i.belowMinimum).map((i, idx) => (
                 <div key={idx} className="bg-card rounded-lg border border-border p-3 space-y-1.5">
                   <div className="font-bold text-[13px]">{i.name}</div>
                   <div className="text-xs text-muted-foreground">
@@ -775,25 +806,16 @@ export default function OrdersPage() {
                     </div>
                   ) : (
                     <>
-                      {i.override ? (
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 rounded px-2 py-1">
-                          <CheckCircle size={11}/>
-                          <span>کۆگا هەمووی ئەگوێرێت: <strong>+{i.warehouseBonusQty}</strong> — نوێنەر: 0</span>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-1.5 text-xs text-violet-600">
-                            <span>🏪 کۆگا دەنێرێت:</span>
-                            <strong>+{i.warehouseBonusQty}</strong>
-                            <span className="text-muted-foreground">({i.warehousePct}%)</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs text-orange-600">
-                            <span>👤 نوێنەر خۆی دەگواستێنەوە:</span>
-                            <strong>+{i.agentPendingQty}</strong>
-                            <span className="text-muted-foreground">({i.repAgreedPct - i.warehousePct}%)</span>
-                          </div>
-                        </>
-                      )}
+                      <div className="flex items-center gap-1.5 text-xs text-violet-600">
+                        <span>🏪 کۆگا دەنێرێت:</span>
+                        <strong>+{i.warehouseBonusQty}</strong>
+                        <span className="text-muted-foreground">({i.warehousePct}%)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-orange-600">
+                        <span>👤 نوێنەر خۆی دەگواستێنەوە:</span>
+                        <strong>+{i.agentPendingQty}</strong>
+                        <span className="text-muted-foreground">({Math.max(0, i.repAgreedPct - i.warehousePct)}%)</span>
+                      </div>
                       <div className="text-[10px] text-muted-foreground border-t pt-1">
                         کۆی بۆنەس: <strong>{i.totalBonusQty}</strong> دانە ({i.repAgreedPct}%)
                       </div>
@@ -811,7 +833,7 @@ export default function OrdersPage() {
           <DrawerFooter className="border-t shrink-0 px-6 py-4" dir="rtl">
             <div className="flex gap-2 justify-between">
               <Button type="button" variant="outline" onClick={() => { setNewOrderOpen(false); resetForm(); }}>پاشگەزبوونەوە</Button>
-              <Button type="submit" form="order-form">
+              <Button type="submit" form="order-form" disabled={hasAnyViolation}>
                 {editOrder ? (isManager ? "پاشەکەوتکردنی گۆڕانکاری" : "ناردنی داوای گۆڕانکاری") : "تۆمارکردنی داواکاری"}
               </Button>
             </div>

@@ -86,6 +86,7 @@ export default function AddProductWizard({open,onClose,onSubmit,initialProduct,e
   const [scanError,setScanError] = useState("");
   const [missingF,setMissingF]   = useState<string[]>([]);
   const [npt,setNpt]             = useState(""); // new price type name
+  const [addTypeOpen,setAddTypeOpen] = useState(false);
   const [cameraOn,setCameraOn]   = useState(false);
   const imgRef    = useRef<HTMLInputElement>(null);
   const videoRef  = useRef<HTMLVideoElement>(null);
@@ -117,7 +118,14 @@ export default function AddProductWizard({open,onClose,onSubmit,initialProduct,e
   const isDup=(f:WizardFormData)=>!isEdit&&existingProducts.some(p=>p.name.trim().toLowerCase()===f.name.trim().toLowerCase()||(f.barcode&&p.barcode&&f.barcode.trim()===p.barcode.trim()));
   const doSubmit=()=>{clearDraft();setDraft(false);onSubmit(form);setForm(empty());setScanPhase("capture");onClose();};
   const handleSubmit=()=>{if(isDup(form)){setDupOpen(true);return;}doSubmit();};
-  const addPriceRow=useCallback(()=>{const name=npt.trim();if(!name||form.prices.some(p=>p.typeName.toLowerCase()===name.toLowerCase())){setNpt("");return;}upd("prices",[...form.prices,{typeId:`tmp_${Date.now()}`,typeName:name,amount:""}]);addPriceType(name);setNpt("");},[npt,form.prices,upd,addPriceType]);
+  const addPriceRow=useCallback(async()=>{
+    const name=npt.trim();
+    if(!name||form.prices.some(p=>p.typeName.toLowerCase()===name.toLowerCase())){setNpt("");setAddTypeOpen(false);return;}
+    setNpt("");
+    setAddTypeOpen(false);
+    const nt = await addPriceType(name);
+    upd("prices",[...form.prices,{typeId:nt.id,typeName:nt.name,amount:""}]);
+  },[npt,form.prices,upd,addPriceType]);
 
   const missingOk=missingF.every(k=>!!(form[k as keyof WizardFormData]));
   const canStep2=form.name.trim().length>0;
@@ -128,9 +136,8 @@ export default function AddProductWizard({open,onClose,onSubmit,initialProduct,e
   // NOTE: called as {priceRows()} not <PriceRows/> — avoids remount on every render
   const priceRows=()=>(<>{form.prices.map((p,i)=>(<div key={p.typeId} className="flex items-center gap-2"><span className="text-[13px] font-medium flex-1 truncate">{p.typeName}</span><Input type="number" min="0" placeholder="0" value={p.amount} onChange={e=>{const n=[...form.prices];n[i]={...n[i],amount:e.target.value};upd("prices",n);}} className="w-28 h-10 rounded-xl text-left font-mono text-[13px]"/><span className="text-[11px] text-muted-foreground">دینار</span><button type="button" onClick={()=>upd("prices",form.prices.filter((_,j)=>j!==i))} className="size-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><X size={13}/></button></div>))}</>);
 
-  // Add price type — NESTED drawer (used in step 3 of both flows)
-  // NOTE: called as {addTypeDrawer()} not <AddTypeDrawer/> — avoids remount on every render
-  const addTypeDrawer=()=>(<Drawer showSwipeHandle={isMobile} swipeDirection={sw}><DrawerTrigger render={<button type="button" className="flex items-center gap-2 text-[12px] text-primary font-medium hover:text-primary/80 transition-colors"><Tag size={12}/>جۆری نرخی نوێ زیاد بکە</button>}/><DrawerContent style={dcStyle} className={dcCls}><DrawerHeader><DrawerTitle dir="rtl">جۆری نرخی نوێ</DrawerTitle><DrawerDescription dir="rtl">ئەم جۆرە دەچێت بۆ هەموو بەرهەمەکان</DrawerDescription></DrawerHeader><div className="flex-1 p-4"><div className={cn(BOX,"space-y-3")} dir="rtl"><Input autoFocus placeholder="نمونە: خەتە، کۆمەڵی…" value={npt} onChange={e=>setNpt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&npt.trim())addPriceRow();}} className="h-10 rounded-xl text-[13px]"/></div></div><DrawerFooter><DrawerClose render={<Button onClick={addPriceRow} disabled={!npt.trim()}><Tag size={13} className="me-1.5"/>زیادکردن</Button>}/><DrawerClose render={<Button variant="outline">داخستن</Button>}/></DrawerFooter></DrawerContent></Drawer>);
+  // Add price type — NESTED drawer (controlled open state to reliably fire addPriceRow)
+  const addTypeDrawer=()=>(<Drawer open={addTypeOpen} onOpenChange={setAddTypeOpen} showSwipeHandle={isMobile} swipeDirection={sw}><DrawerTrigger render={<button type="button" onClick={()=>setAddTypeOpen(true)} className="flex items-center gap-2 text-[12px] text-primary font-medium hover:text-primary/80 transition-colors"><Tag size={12}/>جۆری نرخی نوێ زیاد بکە</button>}/><DrawerContent style={dcStyle} className={dcCls}><DrawerHeader><DrawerTitle dir="rtl">جۆری نرخی نوێ</DrawerTitle><DrawerDescription dir="rtl">ئەم جۆرە دەچێت بۆ هەموو بەرهەمەکان</DrawerDescription></DrawerHeader><div className="flex-1 p-4"><div className={cn(BOX,"space-y-3")} dir="rtl"><Input autoFocus placeholder="نمونە: خەتە، کۆمەڵی…" value={npt} onChange={e=>setNpt(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&npt.trim())addPriceRow();}} className="h-10 rounded-xl text-[13px]"/></div></div><DrawerFooter><Button onClick={addPriceRow} disabled={!npt.trim()}><Tag size={13} className="me-1.5"/>زیادکردن</Button><Button variant="outline" onClick={()=>{setAddTypeOpen(false);setNpt("");}}>داخستن</Button></DrawerFooter></DrawerContent></Drawer>);
 
   return (
     <>
