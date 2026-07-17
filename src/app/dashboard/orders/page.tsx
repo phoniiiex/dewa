@@ -3,8 +3,9 @@ import { useState, FormEvent, useRef, useMemo, useEffect } from "react";
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
   CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign, Pencil,
-  PackageCheck, TriangleAlert,
+  PackageCheck, TriangleAlert, Tag,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
@@ -763,7 +764,13 @@ export default function OrdersPage() {
               <div key={idx} className="mb-2.5 space-y-1.5">
                 <div className="grid gap-2 items-start"
                   style={{ gridTemplateColumns: form.orderFlow === 'DIRECT_WAREHOUSE' ? '1fr 100px auto' : '1fr 100px 100px auto' }}>
-                  <Select value={item.productId || null} onValueChange={(v: string | null) => v && setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v } : x))}>
+                  <Select value={item.productId || null} onValueChange={(v: string | null) => {
+                    if (!v) return;
+                    const prod = products.find(p => p.id === v);
+                    // Auto-select price type if only one exists
+                    const autoPriceTypeId = prod?.prices.length === 1 ? prod.prices[0].typeId : "";
+                    setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v, priceTypeId: autoPriceTypeId } : x));
+                  }}>
                     <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
                     <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                   </Select>
@@ -787,6 +794,35 @@ export default function OrdersPage() {
                     </Button>
                   )}
                 </div>
+                {/* Price type selector — shown when product has price types defined */}
+                {(() => {
+                  const prod = item.productId ? products.find(p => p.id === item.productId) : null;
+                  if (!prod || prod.prices.length === 0) return null;
+                  if (prod.prices.length === 1) return (
+                    <div className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground" dir="rtl">
+                      <Tag size={11}/>
+                      <span>{prod.prices[0].typeName}</span>
+                      <span className="font-mono">{prod.prices[0].amount.toLocaleString()} دینار</span>
+                    </div>
+                  );
+                  return (
+                    <div className="flex items-center gap-2" dir="rtl">
+                      <Tag size={12} className="shrink-0 text-muted-foreground"/>
+                      <Select value={item.priceTypeId || null} onValueChange={(v: string | null) => v && setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, priceTypeId: v } : x))}>
+                        <SelectTrigger className="h-8 text-[12px]">
+                          <SelectValue placeholder="جۆری نرخ هەڵبژێرە..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {prod.prices.map(p => (
+                            <SelectItem key={p.typeId} value={p.typeId}>
+                              {p.typeName} — {p.amount.toLocaleString()} دینار
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })()}
                 {/* Rule 1: below-minimum warning */}
                 {live?.belowMinimum && (
                   <div className="flex items-center gap-1.5 text-[12px] text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-1.5">
@@ -822,18 +858,12 @@ export default function OrdersPage() {
                 )}
                 {/* Rule 3: Full Bonus to Warehouse toggle (STANDARD only, when bonus is valid) */}
                 {form.orderFlow === 'STANDARD' && item.productId && !live?.belowMinimum && !live?.pendingRounding && (live?.totalBonusQty ?? 0) > 0 && (
-                  <div className="flex items-center gap-2 px-1">
-                    <button
-                      type="button"
-                      onClick={() => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, fullBonusToWarehouse: !x.fullBonusToWarehouse } : x))}
-                      className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
-                        item.fullBonusToWarehouse ? 'bg-emerald-500' : 'bg-muted-foreground/30'
-                      }`}
-                    >
-                      <span className={`inline-block size-3 rounded-full bg-white shadow transition-transform ${
-                        item.fullBonusToWarehouse ? 'translate-x-3.5' : 'translate-x-0.5'
-                      }`}/>
-                    </button>
+                  <div className="flex items-center gap-2 px-1" dir="rtl">
+                    <Switch
+                      size="sm"
+                      checked={item.fullBonusToWarehouse}
+                      onCheckedChange={(v) => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, fullBonusToWarehouse: v } : x))}
+                    />
                     <span className="text-[11px] text-muted-foreground">هەموو بۆنەس بۆ کۆگا</span>
                   </div>
                 )}
