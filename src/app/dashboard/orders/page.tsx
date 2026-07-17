@@ -138,13 +138,13 @@ export default function OrdersPage() {
     clientId: string; clientName: string; repId: string;
     orderFlow: OrderFlow; pharmacyId: string; notes: string;
   }>({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "" });
-  type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean; priceTypeId: string; bonusRounding: 'floor' | 'ceil' | null };
-  const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null }]);
+  type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean; priceTypeId: string; bonusRounding: 'floor' | 'ceil' | null; fullBonusToWarehouse: boolean };
+  const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null, fullBonusToWarehouse: false }]);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
 
   const resetForm = () => {
     setForm({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "" });
-    setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null }]);
+    setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null, fullBonusToWarehouse: false }]);
     setEditOrder(null);
   };
 
@@ -159,15 +159,16 @@ export default function OrdersPage() {
   };
 
   // ── Split Bonus Fulfillment Calculation ──────────────────────────────────
-  // Rule 1: repAgreedPct must be >= warehousePct  → belowMinimum flag
-  // Rule 2: bonus qty must be a whole number      → isFraction + pendingRounding flags
-  // Warehouse always takes its base % (Math.floor — safe side)
-  // Rep gets the remainder: totalBonusQty - warehouseBonusQty
+  // Rule 1: Total Bonus% >= Warehouse Base%  → belowMinimum    (STANDARD only)
+  // Rule 2: Bonus qty must be whole number   → isFraction + floor/ceil choice (STANDARD/DIRECT_PHARMACY)
+  // Rule 3: Full Bonus to Warehouse toggle   → fullBonusToWarehouse (STANDARD only)
+  // Rule 4: Direct Warehouse auto-applies base%; fractional qty → adjust qty alert
 
   const liveBonusItems = orderItems.filter(i => i.productId && i.quantity).map((i, idx) => {
     const prod = products.find(p => p.id === i.productId);
     const qty  = Number(i.quantity);
-    if (isDirect) {
+
+    if (isDirect) { // DIRECT_PHARMACY
       const pct          = parseFloat(i.repBonusPct) || 0;
       const rawTotal     = qty * pct / 100;
       const isFraction   = !Number.isInteger(rawTotal);
@@ -175,21 +176,38 @@ export default function OrdersPage() {
       const totalBonusQty = isFraction
         ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal))
         : rawTotal;
-      return { idx, name: prod?.name || "", qty, warehousePct: 0, repAgreedPct: pct, rawTotal, isFraction, pendingRounding, belowMinimum: false, totalBonusQty, warehouseBonusQty: 0, agentPendingQty: totalBonusQty };
+      return { idx, name: prod?.name || "", qty, warehousePct: 0, repAgreedPct: pct, rawTotal, isFraction, isDWFraction: false, pendingRounding, belowMinimum: false, totalBonusQty, warehouseBonusQty: 0, agentPendingQty: totalBonusQty, fullBonusToWarehouse: false };
     }
+
+    if (form.orderFlow === 'DIRECT_WAREHOUSE') {
+      // Rule 4: auto-apply warehouse base%, user does NOT enter a bonus%
+      const warehousePct  = getWarehousePct(i.productId);
+      const rawTotal      = qty * warehousePct / 100;
+      // Rule 4B: fractional → user must adjust qty (no floor/ceil — different from Rule 2)
+      const isDWFraction  = !Number.isInteger(rawTotal);
+      const pendingRounding = isDWFraction; // blocks submit until qty is fixed
+      const totalBonusQty = isDWFraction ? Math.floor(rawTotal) : rawTotal;
+      return { idx, name: prod?.name || "", qty, warehousePct, repAgreedPct: warehousePct, rawTotal, isFraction: false, isDWFraction, pendingRounding, belowMinimum: false, totalBonusQty, warehouseBonusQty: totalBonusQty, agentPendingQty: 0, fullBonusToWarehouse: false };
+    }
+
+    // STANDARD flow
     const warehousePct    = getWarehousePct(i.productId);
-    const repAgreedPct    = form.orderFlow === 'DIRECT_WAREHOUSE' ? 0 : (parseFloat(i.repBonusPct) || warehousePct);
-    const belowMinimum    = form.orderFlow !== 'DIRECT_WAREHOUSE' && repAgreedPct < warehousePct;
+    const repAgreedPct    = parseFloat(i.repBonusPct) || warehousePct;
+    const belowMinimum    = repAgreedPct < warehousePct;
     const rawTotal        = qty * repAgreedPct / 100;
-    // Rule 1 has priority — only evaluate fraction (Rule 2) if Rule 1 passes
+    // Rule 1 has priority — only evaluate Rule 2 if Rule 1 passes
     const isFraction      = !belowMinimum && !Number.isInteger(rawTotal);
     const pendingRounding = isFraction && i.bonusRounding === null;
-    const totalBonusQty   = isFraction
-      ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal))
-      : rawTotal;
-    const warehouseBonusQty = Math.floor(qty * warehousePct / 100); // warehouse always floors
-    const agentPendingQty   = totalBonusQty - warehouseBonusQty;
-    return { idx, name: prod?.name || "", qty, warehousePct, repAgreedPct, rawTotal, isFraction, pendingRounding, belowMinimum, totalBonusQty, warehouseBonusQty, agentPendingQty };
+    const totalBonusQty   = belowMinimum ? 0
+      : isFraction
+        ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal))
+        : rawTotal;
+    // Rule 3: Full Bonus to Warehouse override
+    const warehouseBonusQty = i.fullBonusToWarehouse
+      ? totalBonusQty
+      : Math.floor(qty * warehousePct / 100);
+    const agentPendingQty = totalBonusQty - warehouseBonusQty;
+    return { idx, name: prod?.name || "", qty, warehousePct, repAgreedPct, rawTotal, isFraction, isDWFraction: false, pendingRounding, belowMinimum, totalBonusQty, warehouseBonusQty, agentPendingQty, fullBonusToWarehouse: i.fullBonusToWarehouse };
   });
 
   const hasAnyViolation = liveBonusItems.some(i => i.belowMinimum || i.pendingRounding);
@@ -218,19 +236,28 @@ export default function OrdersPage() {
         const totalBonus = isFraction ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal)) : rawTotal;
         return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonus, unitPrice, priceTypeId: i.priceTypeId, priceTypeName, bonusPct: 0, repBonusPct: pct, warehouseBonusQty: 0, repBonusQty: totalBonus, overrideWarehouseFulfillment: false };
       }
+      if (form.orderFlow === 'DIRECT_WAREHOUSE') {
+        // Rule 4: auto bonus = warehousePct, all goes to warehouse
+        const warehousePct  = getWarehousePct(i.productId);
+        const rawTotal      = qty * warehousePct / 100;
+        const totalBonusQty = Number.isInteger(rawTotal) ? rawTotal : Math.floor(rawTotal);
+        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonusQty, unitPrice, priceTypeId: i.priceTypeId, priceTypeName, bonusPct: warehousePct, repBonusPct: 0, warehouseBonusQty: totalBonusQty, repBonusQty: 0, overrideWarehouseFulfillment: false };
+      }
+      // STANDARD flow
       const warehousePct      = getWarehousePct(i.productId);
-      const repAgreedPct      = form.orderFlow === "DIRECT_WAREHOUSE" ? 0 : (parseFloat(i.repBonusPct) || warehousePct);
+      const repAgreedPct      = parseFloat(i.repBonusPct) || warehousePct;
       const rawTotal          = qty * repAgreedPct / 100;
       const isFraction        = !Number.isInteger(rawTotal);
       const totalBonusQty     = isFraction ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal)) : rawTotal;
-      const warehouseBonusQty = Math.floor(qty * warehousePct / 100);
+      // Rule 3: Full Bonus to Warehouse override
+      const warehouseBonusQty = i.fullBonusToWarehouse ? totalBonusQty : Math.floor(qty * warehousePct / 100);
       const agentPendingQty   = totalBonusQty - warehouseBonusQty;
       return {
         productId: i.productId, productName: prod?.name || "", quantity: qty,
         bonusQty: totalBonusQty, unitPrice, priceTypeId: i.priceTypeId, priceTypeName,
         bonusPct: warehousePct, repBonusPct: repAgreedPct,
         warehouseBonusQty, repBonusQty: agentPendingQty,
-        overrideWarehouseFulfillment: false,
+        overrideWarehouseFulfillment: i.fullBonusToWarehouse,
       };
     });
     if (items.length === 0) { showToast("تکایە بەرهەمێک زیادبکە", "error"); return; }
@@ -286,6 +313,7 @@ export default function OrdersPage() {
       overrideWarehouseFulfillment: i.overrideWarehouseFulfillment ?? false,
       priceTypeId: i.priceTypeId || "",
       bonusRounding: null,
+      fullBonusToWarehouse: i.overrideWarehouseFulfillment ?? false,
     })));
     setNewOrderOpen(true);
   };
@@ -718,7 +746,7 @@ export default function OrdersPage() {
               </div>
               <Button type="button" variant="ghost" size="sm"
                 className="bg-primary/10 text-primary hover:bg-primary/20 text-[13px] font-semibold"
-              onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null }])}>
+              onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null, fullBonusToWarehouse: false }])}>
                 + زیادکردن
               </Button>
             </div>
@@ -766,7 +794,7 @@ export default function OrdersPage() {
                     <span>کۆی بۆنەس ({live.repAgreedPct}%) کەمتر نابێت لە بۆنەسی کۆگا ({live.warehousePct}%)</span>
                   </div>
                 )}
-                {/* Rule 2: fraction alert with floor/ceil choice */}
+                {/* Rule 2: fraction alert with floor/ceil choice (STANDARD / DIRECT_PHARMACY) */}
                 {live?.isFraction && item.quantity && (
                   <div className="flex items-center gap-2 text-[12px] bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
                     <span>🔢</span>
@@ -783,13 +811,39 @@ export default function OrdersPage() {
                       }`}>↑ {Math.ceil(live.rawTotal)}</button>
                   </div>
                 )}
+                {/* Rule 4B: DW fraction alert — user must adjust qty, no floor/ceil choice */}
+                {live?.isDWFraction && item.quantity && (
+                  <div className="flex items-center gap-2 text-[12px] bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                    <span>⚠️</span>
+                    <span className="text-amber-700 dark:text-amber-300">
+                      <strong>{live.qty}</strong> دانە × <strong>{live.warehousePct}%</strong> = <strong>{live.rawTotal.toFixed(2)}</strong> — ژمارەی تەواو نییە. ژمارەی بەرهەم بگۆڕە.
+                    </span>
+                  </div>
+                )}
+                {/* Rule 3: Full Bonus to Warehouse toggle (STANDARD only, when bonus is valid) */}
+                {form.orderFlow === 'STANDARD' && item.productId && !live?.belowMinimum && !live?.pendingRounding && (live?.totalBonusQty ?? 0) > 0 && (
+                  <div className="flex items-center gap-2 px-1">
+                    <button
+                      type="button"
+                      onClick={() => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, fullBonusToWarehouse: !x.fullBonusToWarehouse } : x))}
+                      className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                        item.fullBonusToWarehouse ? 'bg-emerald-500' : 'bg-muted-foreground/30'
+                      }`}
+                    >
+                      <span className={`inline-block size-3 rounded-full bg-white shadow transition-transform ${
+                        item.fullBonusToWarehouse ? 'translate-x-3.5' : 'translate-x-0.5'
+                      }`}/>
+                    </button>
+                    <span className="text-[11px] text-muted-foreground">هەموو بۆنەس بۆ کۆگا</span>
+                  </div>
+                )}
               </div>
             );
             })}
           </div>
 
           {/* Bonus split preview */}
-          {liveBonusItems.some(i => i.totalBonusQty > 0 || i.belowMinimum || i.isFraction) && (
+          {liveBonusItems.some(i => i.totalBonusQty > 0 || i.belowMinimum || i.isDWFraction) && (
             <div className="p-4 bg-muted/60 rounded-xl border border-border space-y-3">
               <div className="font-semibold text-[13px] text-muted-foreground flex items-center gap-1.5">
                 <PackageCheck size={14}/> داڕێژەی بۆنەس
@@ -797,26 +851,49 @@ export default function OrdersPage() {
               {liveBonusItems.filter(i => i.totalBonusQty > 0 || i.belowMinimum).map((i, idx) => (
                 <div key={idx} className="bg-card rounded-lg border border-border p-3 space-y-1.5">
                   <div className="font-bold text-[13px]">{i.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    دەبێیت: <strong>{i.qty} + {i.totalBonusQty} = {i.qty + i.totalBonusQty}</strong> دانە
-                  </div>
-                  {isDirect ? (
-                    <div className="flex items-center gap-1.5 text-xs text-amber-600">
-                      <span>📦</span>
-                      <span>بۆنەس: <strong>+{i.totalBonusQty}</strong> ({i.repAgreedPct}%)</span>
-                    </div>
-                  ) : (
+                  {form.orderFlow === 'DIRECT_WAREHOUSE' ? (
+                    // Rule 4A: breakdown display — qty + auto bonus = total
                     <>
-                      <div className="flex items-center gap-1.5 text-xs text-violet-600">
-                        <span>🏪 کۆگا دەنێرێت:</span>
-                        <strong>+{i.warehouseBonusQty}</strong>
-                        <span className="text-muted-foreground">({i.warehousePct}%)</span>
+                      <div className="flex items-center gap-1.5 text-xs text-violet-600 font-medium">
+                        <span>🏪 کۆگا کۆیی دەگیرێت:</span>
+                        <strong>{i.qty} + {i.totalBonusQty} = {i.qty + i.totalBonusQty}</strong>
+                        <span className="text-muted-foreground">دانە</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-orange-600">
-                        <span>👤 نوێنەر خۆی دەگواستێنەوە:</span>
-                        <strong>+{i.agentPendingQty}</strong>
-                        <span className="text-muted-foreground">({Math.max(0, i.repAgreedPct - i.warehousePct)}%)</span>
+                      <div className="text-[10px] text-muted-foreground">
+                        {i.qty} دانە + {i.warehousePct}% بۆنەسی کۆگا ({i.totalBonusQty} دانە) = کۆیی {i.qty + i.totalBonusQty} دانە
                       </div>
+                    </>
+                  ) : isDirect ? (
+                    <>
+                      <div className="text-xs text-muted-foreground">دەبێیت: <strong>{i.qty} + {i.totalBonusQty} = {i.qty + i.totalBonusQty}</strong> دانە</div>
+                      <div className="flex items-center gap-1.5 text-xs text-amber-600">
+                        <span>📦</span>
+                        <span>بۆنەس: <strong>+{i.totalBonusQty}</strong> ({i.repAgreedPct}%)</span>
+                      </div>
+                    </>
+                  ) : (
+                    // STANDARD
+                    <>
+                      <div className="text-xs text-muted-foreground">دەبێیت: <strong>{i.qty} + {i.totalBonusQty} = {i.qty + i.totalBonusQty}</strong> دانە</div>
+                      {i.fullBonusToWarehouse ? (
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 rounded px-2 py-1">
+                          <CheckCircle size={11}/>
+                          <span>کۆگا هەمووی ئەگوێرێت: <strong>+{i.warehouseBonusQty}</strong> — نوێنەر: 0</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-1.5 text-xs text-violet-600">
+                            <span>🏪 کۆگا دەنێرێت:</span>
+                            <strong>+{i.warehouseBonusQty}</strong>
+                            <span className="text-muted-foreground">({i.warehousePct}%)</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-orange-600">
+                            <span>👤 نوێنەر خۆی دەگواستێنەوە:</span>
+                            <strong>+{i.agentPendingQty}</strong>
+                            <span className="text-muted-foreground">({Math.max(0, i.repAgreedPct - i.warehousePct)}%)</span>
+                          </div>
+                        </>
+                      )}
                       <div className="text-[10px] text-muted-foreground border-t pt-1">
                         کۆی بۆنەس: <strong>{i.totalBonusQty}</strong> دانە ({i.repAgreedPct}%)
                       </div>
