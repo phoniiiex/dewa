@@ -245,6 +245,10 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
   const [productSearch, setProductSearch] = useState("");
   const [productOpen, setProductOpen]     = useState(false);
 
+  // Step 3 — manual order picker (tracks which draft item is open)
+  const [manualPickerIdx, setManualPickerIdx]     = useState<number | null>(null);
+  const [manualOrderSearch, setManualOrderSearch] = useState("");
+
   // Step 4
   const [notes, setNotes] = useState(editReturn?.notes ?? "");
 
@@ -479,6 +483,15 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
   );
 
   // ── Step 3: Order matching ────────────────────────────────────────────────
+  // All orders eligible for a client (SENT/DELIVERED/PAID, containing that product)
+  const allEligibleOrders = (productId: string) =>
+    orders.filter(
+      (o) =>
+        o.clientId === clientId &&
+        ["SENT", "DELIVERED", "PAID"].includes(o.status) &&
+        o.items.some((i) => i.productId === productId),
+    );
+
   const renderStep3 = () => (
     <div className="flex flex-col gap-4 p-6">
       <InfoBox variant="info">
@@ -488,7 +501,8 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
       <ScrollArea className="max-h-[420px] pr-1">
         <div className="space-y-6">
           {draftItems.map((d, idx) => {
-            const matches = getMatches(clientId, d.productId, d.returnedQty, orders, returns);
+            const matches  = getMatches(clientId, d.productId, d.returnedQty, orders, returns);
+            const allOrds  = allEligibleOrders(d.productId);
 
             return (
               <div key={d.productId} className="space-y-2">
@@ -496,6 +510,11 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
                   <ShoppingBag size={14} className="text-primary"/>
                   <span className="font-semibold text-sm">{d.productName}</span>
                   <Badge variant="secondary" className="text-[10px]">{d.returnedQty} دانە</Badge>
+                  {d.selectedOrderId && (
+                    <Badge className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                      {d.selectedOrderNumber}
+                    </Badge>
+                  )}
                 </div>
 
                 {matches.length === 0 ? (
@@ -509,7 +528,6 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
                         d.selectedOrderId === m.orderId ||
                         (d.selectedOrderId === null && mi === 0);
 
-                      // Preview what the calculation would be with this order's rate
                       const previewPaid  = calcPaid(d.returnedQty, m.originalBonusRate);
                       const previewBonus = calcBonus(d.returnedQty, m.originalBonusRate);
                       const ratePct      = Math.round(m.originalBonusRate * 100);
@@ -522,13 +540,7 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
                             setDraftItems((prev) =>
                               prev.map((x, i) =>
                                 i === idx
-                                  ? {
-                                      ...x,
-                                      selectedOrderId: m.orderId,
-                                      selectedOrderNumber: m.orderNumber,
-                                      unitPrice: m.unitPrice,
-                                      originalBonusRate: m.originalBonusRate, // ← key update
-                                    }
+                                  ? { ...x, selectedOrderId: m.orderId, selectedOrderNumber: m.orderNumber, unitPrice: m.unitPrice, originalBonusRate: m.originalBonusRate }
                                   : x
                               )
                             )
@@ -554,7 +566,6 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
                                   ڕێژەی بۆنەس: {ratePct}٪
                                 </span>
                               </div>
-                              {/* Calculation preview for this order */}
                               <div className="flex gap-3 text-[11px] mt-1 bg-muted/40 rounded px-2 py-1">
                                 <span className="text-muted-foreground">پارەدار:</span>
                                 <span className="font-bold text-emerald-600">{previewPaid}</span>
@@ -573,6 +584,90 @@ export function ReturnWizard({ open, onClose, editReturn }: Props) {
                     })}
                   </div>
                 )}
+
+                {/* ── Manual order picker ─────────────────────────────── */}
+                <Popover
+                  open={manualPickerIdx === idx}
+                  onOpenChange={(o) => {
+                    setManualPickerIdx(o ? idx : null);
+                    if (!o) setManualOrderSearch("");
+                  }}
+                >
+                  <PopoverTrigger>
+                    <div className="inline-flex items-center gap-1.5 h-7 px-3 text-[11px] rounded-md border border-dashed border-muted-foreground/40 text-muted-foreground cursor-pointer hover:border-primary hover:text-primary transition-colors mt-1">
+                      <Search size={11}/>
+                      {d.selectedOrderId && !matches.some((m) => m.orderId === d.selectedOrderId)
+                        ? `هەڵبژێردراو: ${d.selectedOrderNumber}`
+                        : "داواکارییەکی دیکە هەڵبژێرە"}
+                    </div>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[380px] p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="گەڕان بەژمارەی داواکاری..."
+                        value={manualOrderSearch}
+                        onValueChange={setManualOrderSearch}
+                      />
+                      <CommandList className="max-h-[260px]">
+                        <CommandEmpty>هیچ داواکارییەک نەدۆزرایەوە</CommandEmpty>
+                        <CommandGroup heading="هەموو داواکارییەکان">
+                          {allOrds
+                            .filter((o) =>
+                              !manualOrderSearch ||
+                              o.orderNumber.toLowerCase().includes(manualOrderSearch.toLowerCase())
+                            )
+                            .map((o) => {
+                              const item = o.items.find((i) => i.productId === d.productId)!;
+                              const bonusRate = item.quantity > 0 ? item.bonusQty / item.quantity : 0;
+                              const prevPaid  = calcPaid(d.returnedQty, bonusRate);
+                              const prevBonus = calcBonus(d.returnedQty, bonusRate);
+                              const isChosen  = d.selectedOrderId === o.id;
+                              return (
+                                <CommandItem
+                                  key={o.id}
+                                  value={o.orderNumber}
+                                  onSelect={() => {
+                                    setDraftItems((prev) =>
+                                      prev.map((x, i) =>
+                                        i === idx
+                                          ? {
+                                              ...x,
+                                              selectedOrderId: o.id,
+                                              selectedOrderNumber: o.orderNumber,
+                                              unitPrice: item.unitPrice,
+                                              originalBonusRate: bonusRate,
+                                            }
+                                          : x
+                                      )
+                                    );
+                                    setManualPickerIdx(null);
+                                    setManualOrderSearch("");
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between w-full gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      {isChosen && <CheckCircle2 size={12} className="text-primary shrink-0"/>}
+                                      <div className="min-w-0">
+                                        <p className="font-semibold text-xs">{o.orderNumber}</p>
+                                        <p className="text-[10px] text-muted-foreground">
+                                          {item.quantity}+{item.bonusQty} دانە · {Math.round(bonusRate * 100)}٪ بۆنەس
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <p className="text-[10px] text-emerald-600 font-bold">{prevPaid} پارەدار</p>
+                                      <p className="text-[10px] text-amber-600 font-bold">{prevBonus} بۆنەس</p>
+                                    </div>
+                                  </div>
+                                </CommandItem>
+                              );
+                            })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
               </div>
             );
           })}
