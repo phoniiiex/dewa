@@ -82,7 +82,7 @@ export default function TemplatesPage() {
     orderNumber:       latestOrder.orderNumber,
     clientName:        latestOrder.clientName,
     repName:           latestOrder.repName,
-    warehouseName:     latestOrder.warehouseName || "دەرباز بێ کۆگا",
+    warehouseName:     latestOrder.pharmacyName || "ڕاستەوخۆ",
     status:            latestOrder.status,
     createdAt:         latestOrder.createdAt?.split("T")[0] ?? "",
     totalBonusPct:     latestOrder.items.reduce((s, i) => s + i.bonusPct, 0) / Math.max(latestOrder.items.length, 1),

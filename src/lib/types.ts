@@ -3,7 +3,8 @@
 // ============================================
 
 export type UserRole = 'ADMIN' | 'MANAGER' | 'REP';
-export type ClientType = 'PHARMACY' | 'HOSPITAL' | 'CLINIC';
+export type ClientType = 'PHARMACY' | 'HOSPITAL' | 'CLINIC' | 'WAREHOUSE';
+export type OrderFlow  = 'STANDARD' | 'DIRECT_WAREHOUSE' | 'DIRECT_PHARMACY';
 export type OrderStatus = 'WAITING' | 'IN_PROGRESS' | 'NOT_ACCEPTED' | 'READY' | 'SENT' | 'DELIVERED' | 'PAID';
 export type TransactionType = 'INCOME' | 'EXPENSE';
 export type PaymentMethod = 'CASH' | 'TRANSFER';
@@ -50,6 +51,7 @@ export interface Product {
   issueDate: string;
   expiryDate: string;
   batchNumber: string;
+  barcode?: string;
   isSample?: boolean;
   isActive: boolean;
   imageUrl?: string;
@@ -69,6 +71,11 @@ export interface Client {
   qrToken: string;
   isActive: boolean;
   createdAt: string;
+  // Warehouse-specific (only populated when type === 'WAREHOUSE')
+  bonusPct:   number;
+  bonusRules: BonusRule[];
+  address:    string;
+  contact:    string;
 }
 
 export interface Rep {
@@ -130,6 +137,8 @@ export interface OrderItem {
   quantity: number;
   bonusQty: number;                       // = totalBonusQty — what the pharmacy receives
   unitPrice: number;
+  priceTypeId:   string;                  // which price tier was selected at order time
+  priceTypeName: string;                  // denormalized
   bonusPct: number;                       // warehouse standard bonus % for this product
   repBonusPct: number;                    // total bonus % agreed with pharmacy by the rep
   warehouseBonusQty: number;              // units shipped by the warehouse inside the delivery
@@ -140,12 +149,16 @@ export interface OrderItem {
 export interface Order {
   id: string;
   orderNumber: string;
+  // clientId = billing party (Warehouse client for STANDARD/DIRECT_WAREHOUSE, Pharmacy client for DIRECT_PHARMACY)
   clientId: string;
   clientName: string;
   repId: string;
   repName: string;
-  warehouseId: string | null;
-  warehouseName: string | null;
+  // Order flow determines routing & billing logic
+  orderFlow: OrderFlow;
+  // Informational pharmacy — only set for STANDARD flow
+  pharmacyId:   string | null;
+  pharmacyName: string | null;
   items: OrderItem[];
   status: OrderStatus;
   totalAmount: number;

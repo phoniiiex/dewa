@@ -590,3 +590,27 @@ nav button:active {
 .modal-stagger > *:nth-child(4) { animation-delay: 120ms; }
 .modal-stagger > *:nth-child(5) { animation-delay: 160ms; }
 .modal-stagger > *:nth-child(n+6) { animation-delay: 200ms; }
+
+/* ============================================================
+   RTL DRAWER FIXES — swipeDirection="left" = right-side panel
+   ============================================================
+   In RTL, logical property `start-0` = right edge.
+   vaul's default --closed-transform and --translate-x assume LTR,
+   so we override them for the RTL right-side panel behavior.
+   ============================================================ */
+
+/* 1. Drawer enters/exits from the RIGHT (not left) */
+/* 2. Bleed = 0 so the inset gap and rounded corners are visible */
+[data-slot="drawer-popup"][data-swipe-direction="left"] {
+  --closed-transform: translate3d(calc(100% + var(--drawer-inset, 0px) + 2px), 0, 0) !important;
+  --bleed: 0px !important;
+}
+
+/* 3. Background (nested/stacked) drawers peek from the LEFT */
+[data-slot="drawer-popup"][data-swipe-direction="left"] {
+  --translate-x: calc(
+    var(--drawer-swipe-movement-x)
+    - var(--stack-peek-offset)
+    - (var(--stack-shrink) * 100%)
+  ) !important;
+}

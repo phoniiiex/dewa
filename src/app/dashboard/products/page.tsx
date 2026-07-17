@@ -173,7 +173,8 @@ export default function ProductsPage() {
   const handleWizardSubmit = (data: WizardFormData) => {
     const firstPrice = data.prices.find(p => p.amount);
     addProduct({
-      name: data.name, sku: data.sku, category: data.category, company: data.company,
+      name: data.name, sku: data.barcode || "", barcode: data.barcode,
+      category: data.category, company: data.company,
       price: firstPrice ? Number(firstPrice.amount) : 0,
       prices: data.prices.filter(p => p.amount).map(p => ({ typeId: p.typeId, typeName: p.typeName, amount: Number(p.amount) })),
       stock: Number(data.stock), lowStock: Number(data.lowStock) || 10,
@@ -187,7 +188,8 @@ export default function ProductsPage() {
     if (!editingProduct) return;
     const firstPrice = data.prices.find(p => p.amount);
     updateProduct(editingProduct.id, {
-      name: data.name, sku: data.sku, category: data.category, company: data.company,
+      name: data.name, sku: data.barcode || editingProduct.sku, barcode: data.barcode,
+      category: data.category, company: data.company,
       price: firstPrice ? Number(firstPrice.amount) : 0,
       prices: data.prices.filter(p => p.amount).map(p => ({ typeId: p.typeId, typeName: p.typeName, amount: Number(p.amount) })),
       stock: Number(data.stock), lowStock: Number(data.lowStock) || 10,
@@ -308,19 +310,20 @@ export default function ProductsPage() {
       ) : (
         /* ── TABLE VIEW ── */
         <Card>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>بەرهەم</TableHead>
-                <TableHead>کۆمپانیا</TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead>جۆر</TableHead>
-                <TableHead>نرخ</TableHead>
-                <TableHead>کۆگا</TableHead>
-                <TableHead>بارودۆخ</TableHead>
-                <TableHead>ولات</TableHead>
-                <TableHead>بەسەرچوون</TableHead>
-                <TableHead />
+                <TableHead className="min-w-[140px]">بەرهەم</TableHead>
+                <TableHead className="min-w-[100px]">کۆمپانیا</TableHead>
+                <TableHead className="min-w-[80px]">بارکۆد</TableHead>
+                <TableHead className="min-w-[80px]">جۆر</TableHead>
+                <TableHead className="min-w-[120px]">نرخ</TableHead>
+                <TableHead className="min-w-[80px]">کۆگا</TableHead>
+                <TableHead className="min-w-[70px]">بارودۆخ</TableHead>
+                <TableHead className="min-w-[70px]">ولات</TableHead>
+                <TableHead className="min-w-[90px]">بەسەرچوون</TableHead>
+                <TableHead className="min-w-[90px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -337,7 +340,7 @@ export default function ProductsPage() {
                   className={cn(p.expiryDate && isExpired(p.expiryDate) ? "bg-destructive/5" : p.expiryDate && isNearExpiry(p.expiryDate) ? "bg-orange-50/50 dark:bg-orange-950/10" : "")}>
                   <TableCell className="font-semibold">{p.name}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">{p.company || "—"}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{p.sku}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{p.barcode || p.sku || "—"}</TableCell>
                   <TableCell>
                     <Badge variant="secondary" className="text-[10px]">{p.category}</Badge>
                   </TableCell>
@@ -390,6 +393,7 @@ export default function ProductsPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
           <div className="px-4 py-2 border-t border-border">
             <p className="text-xs text-muted-foreground">{filtered.length} بەرهەم</p>
           </div>
@@ -397,15 +401,16 @@ export default function ProductsPage() {
       )}
 
       {/* ── Wizards ── */}
-      <AddProductWizard open={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleWizardSubmit} />
+      <AddProductWizard open={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleWizardSubmit} existingProducts={products} />
       <AddProductWizard
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         onSubmit={handleEditSubmit}
+        existingProducts={products}
         initialProduct={editingProduct ? {
           id:               editingProduct.id,
           name:             editingProduct.name,
-          sku:              editingProduct.sku,
+          barcode:          editingProduct.barcode ?? editingProduct.sku ?? "",
           category:         editingProduct.category,
           company:          editingProduct.company,
           stock:            String(editingProduct.stock),
@@ -417,7 +422,6 @@ export default function ProductsPage() {
           expiryDate:       editingProduct.expiryDate,
           batchNumber:      editingProduct.batchNumber,
           imageUrl:         editingProduct.imageUrl,
-          barcode:          ((editingProduct as unknown as Record<string, unknown>).barcode as string) ?? "",
           description:      ((editingProduct as unknown as Record<string, unknown>).description as string) ?? "",
           activeIngredients:((editingProduct as unknown as Record<string, unknown>).activeIngredients as string) ?? "",
           dosageForm:       ((editingProduct as unknown as Record<string, unknown>).dosageForm as string) ?? "",

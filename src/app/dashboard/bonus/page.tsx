@@ -13,7 +13,7 @@ export default function BonusPage() {
   const bonusOrders = orders.filter(o => o.items.some(i => i.bonusQty > 0));
 
   const warehouseStats = warehouses.map(w => {
-    const wo = orders.filter(o => o.warehouseId === w.id);
+    const wo = orders.filter(o => o.clientId === w.id);
     const totalBonusUnits = wo.reduce((s, o) => s + o.items.reduce((a, i) => a + i.bonusQty, 0), 0);
     const totalBonusValue = wo.reduce((s, o) => s + o.items.reduce((a, i) => a + i.bonusQty * i.unitPrice, 0), 0);
     return { ...w, orders: wo.length, totalBonusUnits, totalBonusValue };
@@ -33,7 +33,7 @@ export default function BonusPage() {
         orderNumber: o.orderNumber,
         clientName: o.clientName,
         repName: o.repName,
-        warehouseName: o.warehouseName,
+        warehouseName: o.pharmacyName ?? null,
         productName: i.productName,
         quantity: i.quantity,
         bonusPct: i.bonusPct ?? 0,

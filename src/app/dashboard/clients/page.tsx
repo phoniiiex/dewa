@@ -29,7 +29,7 @@ const clientExportCols = [
   { key: "type", label: "جۆر" }, { key: "balance", label: "باڵانس", format: (v: unknown) => String(v) },
 ];
 
-const typeLabels: Record<ClientType, string> = { PHARMACY: "دەرمانخانە", HOSPITAL: "نەخۆشخانە", CLINIC: "کلینیک" };
+const typeLabels: Record<ClientType, string> = { PHARMACY: "دەرمانخانە", HOSPITAL: "نەخۆشخانە", CLINIC: "کلینیک", WAREHOUSE: "کۆگا" };
 const typeColors: Record<string, { bg: string; color: string }> = {
   PHARMACY:  { bg: "#EDF2FF", color: "#4263EB" },
   HOSPITAL:  { bg: "#FEF3EB", color: "#F47B35" },
@@ -166,7 +166,7 @@ export default function ClientsPage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const data = { ...form, balance: Number(form.balance), qrToken: "" };
+    const data = { ...form, balance: Number(form.balance), qrToken: "", bonusPct: 0, bonusRules: [], address: "", contact: "" };
     if (editing) updateClient(editing.id, data);
     else addClient(data);
     setModalOpen(false);
@@ -176,8 +176,7 @@ export default function ClientsPage() {
   const getClientOrders   = (clientId: string) => orders.filter(o => o.clientId === clientId);
   const getDeliveredOrders = (clientId: string) => orders.filter(o => o.clientId === clientId && o.status === "DELIVERED");
 
-  // For warehouses, match orders by warehouseId
-  const getWarehouseOrders = (wId: string) => orders.filter(o => o.warehouseId === wId);
+  const getWarehouseOrders = (wId: string) => orders.filter(o => o.clientId === wId);
 
   const loadRequests = async () => {
     setReqLoading(true);

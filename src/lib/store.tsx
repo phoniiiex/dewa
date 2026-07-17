@@ -7,7 +7,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 import type {
-  Product, Client, Rep, Warehouse, Supplier, Driver, Order,
+  Product, Client, Rep, Supplier, Driver, Order,
   Transaction, CompanySettings, User, InvoiceTemplate, TemplateOptions,
   PriceType, ProductPrice, SampleRequest, ReturnRecord, ReturnStatus,
 } from "./types";
@@ -24,7 +24,7 @@ function toProduct(r: Record<string, unknown>): Product {
     unitType: (r.unit_type || "") as string,
     origin: (r.origin || "") as string, supplier: (r.supplier || "") as string,
     issueDate: (r.issue_date || "") as string, expiryDate: (r.expiry_date || "") as string,
-    batchNumber: (r.batch_number || "") as string, isSample: !!r.is_sample,
+    batchNumber: (r.batch_number || "") as string, barcode: (r.barcode || "") as string, isSample: !!r.is_sample,
     isActive: r.is_active !== false, imageUrl: (r.image_url || "") as string,
     createdAt: (r.created_at || "") as string,
   };
@@ -46,6 +46,7 @@ function fromProduct(p: Partial<Product>): Record<string, unknown> {
   if (p.issueDate !== undefined) m.issue_date = p.issueDate || null;
   if (p.expiryDate !== undefined) m.expiry_date = p.expiryDate;
   if (p.batchNumber !== undefined) m.batch_number = p.batchNumber;
+  if (p.barcode !== undefined) m.barcode = p.barcode;
   if (p.isSample !== undefined) m.is_sample = p.isSample;
   if (p.isActive !== undefined) m.is_active = p.isActive;
   if (p.imageUrl !== undefined) m.image_url = p.imageUrl;
@@ -54,22 +55,44 @@ function fromProduct(p: Partial<Product>): Record<string, unknown> {
 }
 
 function toClient(r: Record<string, unknown>): Client {
-  return { id: r.id as string, name: r.name as string, owner: (r.owner || "") as string, phone: (r.phone || "") as string, city: (r.city || "") as string, type: (r.type || "PHARMACY") as Client["type"], repId: (r.rep_id || "") as string, paymentTerms: (r.payment_terms || "IMMEDIATE") as Client["paymentTerms"], balance: Number(r.balance || 0), qrToken: (r.qr_token || "") as string, isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    owner: (r.owner || "") as string,
+    phone: (r.phone || "") as string,
+    city: (r.city || "") as string,
+    type: (r.type || "PHARMACY") as Client["type"],
+    repId: (r.rep_id || "") as string,
+    paymentTerms: (r.payment_terms || "IMMEDIATE") as Client["paymentTerms"],
+    balance: Number(r.balance || 0),
+    qrToken: (r.qr_token || "") as string,
+    isActive: r.is_active !== false,
+    createdAt: (r.created_at || "") as string,
+    // Warehouse-specific fields
+    bonusPct:   Number(r.bonus_pct || 0),
+    bonusRules: Array.isArray(r.bonus_rules) ? r.bonus_rules as import("./types").BonusRule[] : [],
+    address:    (r.address || "") as string,
+    contact:    (r.contact || "") as string,
+  };
 }
 function fromClient(c: Partial<Client>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
-  if (c.id !== undefined) m.id = c.id;
-  if (c.name !== undefined) m.name = c.name;
-  if (c.owner !== undefined) m.owner = c.owner;
-  if (c.phone !== undefined) m.phone = c.phone;
-  if (c.city !== undefined) m.city = c.city;
-  if (c.type !== undefined) m.type = c.type;
-  if (c.repId !== undefined) m.rep_id = c.repId;
-  if (c.paymentTerms !== undefined) m.payment_terms = c.paymentTerms;
-  if (c.balance !== undefined) m.balance = c.balance;
-  if (c.qrToken !== undefined) m.qr_token = c.qrToken;
-  if (c.isActive !== undefined) m.is_active = c.isActive;
-  if (c.createdAt !== undefined) m.created_at = c.createdAt;
+  if (c.id          !== undefined) m.id            = c.id;
+  if (c.name        !== undefined) m.name          = c.name;
+  if (c.owner       !== undefined) m.owner         = c.owner;
+  if (c.phone       !== undefined) m.phone         = c.phone;
+  if (c.city        !== undefined) m.city          = c.city;
+  if (c.type        !== undefined) m.type          = c.type;
+  if (c.repId       !== undefined) m.rep_id        = c.repId;
+  if (c.paymentTerms!== undefined) m.payment_terms = c.paymentTerms;
+  if (c.balance     !== undefined) m.balance       = c.balance;
+  if (c.qrToken     !== undefined) m.qr_token      = c.qrToken;
+  if (c.isActive    !== undefined) m.is_active     = c.isActive;
+  if (c.createdAt   !== undefined) m.created_at    = c.createdAt;
+  if (c.bonusPct    !== undefined) m.bonus_pct     = c.bonusPct;
+  if (c.bonusRules  !== undefined) m.bonus_rules   = c.bonusRules;
+  if (c.address     !== undefined) m.address       = c.address;
+  if (c.contact     !== undefined) m.contact       = c.contact;
   return m;
 }
 
@@ -100,23 +123,6 @@ function fromRep(r: Partial<Rep>): Record<string, unknown> {
   return m;
 }
 
-function toWarehouse(r: Record<string, unknown>): Warehouse {
-  return { id: r.id as string, name: r.name as string, city: (r.city || "") as string, address: (r.address || "") as string, contact: (r.contact || "") as string, phone: (r.phone || "") as string, bonusPct: Number(r.bonus_pct || 0), bonusRules: Array.isArray(r.bonus_rules) ? r.bonus_rules as import("./types").BonusRule[] : [], isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
-}
-function fromWarehouse(w: Partial<Warehouse>): Record<string, unknown> {
-  const m: Record<string, unknown> = {};
-  if (w.id !== undefined) m.id = w.id;
-  if (w.name !== undefined) m.name = w.name;
-  if (w.city !== undefined) m.city = w.city;
-  if (w.address !== undefined) m.address = w.address;
-  if (w.contact !== undefined) m.contact = w.contact;
-  if (w.phone !== undefined) m.phone = w.phone;
-  if (w.bonusPct !== undefined) m.bonus_pct = w.bonusPct;
-  if (w.bonusRules !== undefined) m.bonus_rules = w.bonusRules;
-  if (w.isActive !== undefined) m.is_active = w.isActive;
-  if (w.createdAt !== undefined) m.created_at = w.createdAt;
-  return m;
-}
 
 function toSupplier(r: Record<string, unknown>): Supplier {
   return { id: r.id as string, name: r.name as string, contact: (r.contact || "") as string, phone: (r.phone || "") as string, email: (r.email || "") as string, country: (r.country || "") as string, balance: Number(r.balance || 0), isActive: r.is_active !== false, createdAt: (r.created_at || "") as string };
@@ -143,8 +149,9 @@ function toOrder(r: Record<string, unknown>): Order {
     clientName: (r.client_name || "") as string,
     repId: (r.rep_id || "") as string,
     repName: (r.rep_name || "") as string,
-    warehouseId: (r.warehouse_id || null) as string | null,
-    warehouseName: (r.warehouse_name || null) as string | null,
+    orderFlow: (r.order_flow || "STANDARD") as Order["orderFlow"],
+    pharmacyId:   (r.pharmacy_id   || null) as string | null,
+    pharmacyName: (r.pharmacy_name || null) as string | null,
     items: (r.items || []) as Order["items"],
     status: (r.status || "WAITING") as Order["status"],
     totalAmount: Number(r.total_amount || 0),
@@ -162,27 +169,28 @@ function toOrder(r: Record<string, unknown>): Order {
 }
 function fromOrder(o: Partial<Order>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
-  if (o.id !== undefined) m.id = o.id;
-  if (o.orderNumber !== undefined) m.order_number = o.orderNumber;
-  if (o.clientId !== undefined) m.client_id = o.clientId;
-  if (o.clientName !== undefined) m.client_name = o.clientName;
-  if (o.repId !== undefined) m.rep_id = o.repId;
-  if (o.repName !== undefined) m.rep_name = o.repName;
-  if (o.warehouseId !== undefined) m.warehouse_id = o.warehouseId;
-  if (o.warehouseName !== undefined) m.warehouse_name = o.warehouseName;
-  if (o.items !== undefined) m.items = o.items;
-  if (o.status !== undefined) m.status = o.status;
-  if (o.totalAmount !== undefined) m.total_amount = o.totalAmount;
-  if (o.notes !== undefined) m.notes = o.notes;
-  if (o.driverId !== undefined) m.driver_id = o.driverId;
-  if (o.driverName !== undefined) m.driver_name = o.driverName;
-  if (o.driverPhone !== undefined) m.driver_phone = o.driverPhone;
-  if (o.signedInvoiceUrl !== undefined) m.signed_invoice_url = o.signedInvoiceUrl;
-  if (o.signedReceiptUrl !== undefined) m.signed_receipt_url = o.signedReceiptUrl;
-  if (o.deliveredAt !== undefined) m.delivered_at = o.deliveredAt || null;
-  if (o.paidAt !== undefined) m.paid_at = o.paidAt || null;
-  if (o.rejectionReason !== undefined) m.rejection_reason = o.rejectionReason;
-  if (o.createdAt !== undefined) m.created_at = o.createdAt;
+  if (o.id              !== undefined) m.id                  = o.id;
+  if (o.orderNumber     !== undefined) m.order_number        = o.orderNumber;
+  if (o.clientId        !== undefined) m.client_id           = o.clientId;
+  if (o.clientName      !== undefined) m.client_name         = o.clientName;
+  if (o.repId           !== undefined) m.rep_id              = o.repId;
+  if (o.repName         !== undefined) m.rep_name            = o.repName;
+  if (o.orderFlow       !== undefined) m.order_flow          = o.orderFlow;
+  if (o.pharmacyId      !== undefined) m.pharmacy_id         = o.pharmacyId;
+  if (o.pharmacyName    !== undefined) m.pharmacy_name       = o.pharmacyName;
+  if (o.items           !== undefined) m.items               = o.items;
+  if (o.status          !== undefined) m.status              = o.status;
+  if (o.totalAmount     !== undefined) m.total_amount        = o.totalAmount;
+  if (o.notes           !== undefined) m.notes               = o.notes;
+  if (o.driverId        !== undefined) m.driver_id           = o.driverId;
+  if (o.driverName      !== undefined) m.driver_name         = o.driverName;
+  if (o.driverPhone     !== undefined) m.driver_phone        = o.driverPhone;
+  if (o.signedInvoiceUrl!== undefined) m.signed_invoice_url  = o.signedInvoiceUrl;
+  if (o.signedReceiptUrl!== undefined) m.signed_receipt_url  = o.signedReceiptUrl;
+  if (o.deliveredAt     !== undefined) m.delivered_at        = o.deliveredAt || null;
+  if (o.paidAt          !== undefined) m.paid_at             = o.paidAt || null;
+  if (o.rejectionReason !== undefined) m.rejection_reason    = o.rejectionReason;
+  if (o.createdAt       !== undefined) m.created_at          = o.createdAt;
   return m;
 }
 
@@ -393,7 +401,7 @@ const defaultSettings: CompanySettings = {
 
 // ===== CONTEXT =====
 interface DataStore {
-  products: Product[]; clients: Client[]; reps: Rep[]; warehouses: Warehouse[];
+  products: Product[]; clients: Client[]; reps: Rep[]; warehouses: Client[];
   suppliers: Supplier[]; orders: Order[]; drivers: Driver[];
   transactions: Transaction[]; settings: CompanySettings; users: User[];
   invoiceTemplates: InvoiceTemplate[]; priceTypes: PriceType[];
@@ -410,8 +418,8 @@ interface DataStore {
   addRep: (r: Omit<Rep, "id" | "createdAt">) => Promise<Rep>;
   updateRep: (id: string, r: Partial<Rep>) => void;
   deleteRep: (id: string) => void;
-  addWarehouse: (w: Omit<Warehouse, "id" | "createdAt">) => Promise<Warehouse>;
-  updateWarehouse: (id: string, w: Partial<Warehouse>) => void;
+  addWarehouse: (w: Omit<Client, "id" | "createdAt">) => Promise<Client>;
+  updateWarehouse: (id: string, w: Partial<Client>) => void;
   deleteWarehouse: (id: string) => void;
   addSupplier: (s: Omit<Supplier, "id" | "createdAt">) => Promise<Supplier>;
   updateSupplier: (id: string, s: Partial<Supplier>) => void;
@@ -465,7 +473,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>((_c?.products as Product[]) ?? []);
   const [clients, setClients] = useState<Client[]>((_c?.clients as Client[]) ?? []);
   const [reps, setReps] = useState<Rep[]>((_c?.reps as Rep[]) ?? []);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>((_c?.warehouses as Warehouse[]) ?? []);
+  // warehouses is now a computed view: clients where type === 'WAREHOUSE'
+  const warehouses = clients.filter(c => c.type === 'WAREHOUSE');
+
   const [suppliers, setSuppliers] = useState<Supplier[]>((_c?.suppliers as Supplier[]) ?? []);
   const [orders, setOrders] = useState<Order[]>((_c?.orders as Order[]) ?? []);
   const [drivers, setDrivers] = useState<Driver[]>((_c?.drivers as Driver[]) ?? []);
@@ -488,11 +498,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Fetch all data from Supabase
   const refreshData = useCallback(async () => {
     try {
-      const [pRes, cRes, rRes, wRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes, retRes] = await Promise.all([
+      const [pRes, cRes, rRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes, retRes] = await Promise.all([
         supabase.from("products").select("*"),
         supabase.from("clients").select("*"),
         supabase.from("reps").select("*"),
-        supabase.from("warehouses").select("*"),
         supabase.from("suppliers").select("*"),
         supabase.from("orders").select("*").order("created_at", { ascending: false }),
         supabase.from("drivers").select("*"),
@@ -509,7 +518,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         products: pRes.data?.map(toProduct) ?? [],
         clients: cRes.data?.map(toClient) ?? [],
         reps: rRes.data?.map(toRep) ?? [],
-        warehouses: wRes.data?.map(toWarehouse) ?? [],
         suppliers: sRes.data?.map(toSupplier) ?? [],
         orders: oRes.data?.map(toOrder) ?? [],
         drivers: drRes.data?.map(toDriver) ?? [],
@@ -525,7 +533,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setProducts(fresh.products);
       setClients(fresh.clients);
       setReps(fresh.reps);
-      setWarehouses(fresh.warehouses);
       setSuppliers(fresh.suppliers);
       setOrders(fresh.orders);
       setDrivers(fresh.drivers);
@@ -558,13 +565,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (loading) return; // Don't overwrite cache with empty data during initial load
     try {
       localStorage.setItem("dewa_data_cache_v1", JSON.stringify({
-        products, clients, reps, warehouses, suppliers, orders,
+        products, clients, reps, suppliers, orders,
         drivers, transactions, settings, users, invoiceTemplates,
         priceTypes, sampleRequests, returns,
       }));
     } catch { /* ignore quota errors */ }
-  }, [products, clients, reps, warehouses, suppliers, orders, drivers,
+  }, [products, clients, reps, suppliers, orders, drivers,
       transactions, settings, users, invoiceTemplates, priceTypes, sampleRequests, returns, loading]);
+
 
   // ── Supabase Realtime — live updates across users/sessions ────────────
   useEffect(() => {
@@ -701,25 +709,31 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("نوێنەر سڕایەوە");
   }, [showToast]);
 
-  const addWarehouse = useCallback(async (w: Omit<Warehouse, "id" | "createdAt">) => {
-    const nw: Warehouse = { ...w, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
-    setWarehouses((prev) => [nw, ...prev]);
-    const { error } = await supabase.from("warehouses").insert(fromWarehouse(nw));
+  // Warehouse CRUD → delegates to clients table (type: 'WAREHOUSE')
+  const addWarehouse = useCallback(async (w: Omit<Client, "id" | "createdAt">) => {
+    const nc: Client = {
+      ...w,
+      id: genId(), createdAt: new Date().toISOString().split("T")[0],
+      type: 'WAREHOUSE',
+    };
+    setClients((prev) => [nc, ...prev]);
+    const { error } = await supabase.from("clients").insert(fromClient(nc));
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("کۆگا زیادکرا");
-    return nw;
+    return nc;
   }, [showToast]);
 
-  const updateWarehouse = useCallback(async (id: string, w: Partial<Warehouse>) => {
-    setWarehouses((prev) => prev.map((x) => (x.id === id ? { ...x, ...w } : x)));
-    const { error } = await supabase.from("warehouses").update(fromWarehouse(w)).eq("id", id);
+  const updateWarehouse = useCallback(async (id: string, w: Partial<Client>) => {
+    setClients((prev) => prev.map((x) => (x.id === id ? { ...x, ...w } : x)));
+    const { error } = await supabase.from("clients").update(fromClient(w)).eq("id", id);
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("کۆگا نوێکرایەوە");
   }, [showToast]);
 
   const deleteWarehouse = useCallback(async (id: string) => {
-    setWarehouses((prev) => prev.filter((x) => x.id !== id));
-    const { error } = await supabase.from("warehouses").delete().eq("id", id);
+    setClients((prev) => prev.filter((x) => x.id !== id));
+    const { error } = await supabase.from("clients").delete().eq("id", id);
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("کۆگا سڕایەوە");
   }, [showToast]);
+
 
   const addSupplier = useCallback(async (s: Omit<Supplier, "id" | "createdAt">) => {
     const ns: Supplier = { ...s, id: genId(), createdAt: new Date().toISOString().split("T")[0] };

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const GEMINI_KEY = (process.env.GEMINI_API_KEY ?? "").trim();
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+const GEMINI_MODEL = "gemini-3.1-flash-lite";
+const GEMINI_KEY   = (process.env.GEMINI_API_KEY ?? "").trim();
+const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -583,11 +583,10 @@ ${(reps || []).map(r => `ID:${r.id} | ${r.name}`).join("\n")}`;
     const toolResults: { name: string; result: unknown }[] = [];
 
     for (let iter = 0; iter < 8; iter++) {
-      const res = await fetch(GEMINI_URL, {
+      const res = await fetch(`${GEMINI_URL}?key=${GEMINI_KEY}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-goog-api-key": GEMINI_KEY,
         },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -596,7 +595,6 @@ ${(reps || []).map(r => `ID:${r.id} | ${r.name}`).join("\n")}`;
           toolConfig: { functionCallingConfig: { mode: "AUTO" } },
           generationConfig: {
             maxOutputTokens: 4096,
-            thinkingConfig: { thinkingBudget: 0 },
           },
         }),
       });

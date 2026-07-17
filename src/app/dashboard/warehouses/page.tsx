@@ -2,7 +2,7 @@
 import { useState, FormEvent } from "react";
 import { Plus, Warehouse as WarehouseIcon, Edit3, Trash2, MapPin, Phone, Percent, Tag, X } from "lucide-react";
 import { useData } from "@/lib/store";
-import type { Warehouse, BonusRule } from "@/lib/types";
+import type { Client, BonusRule } from "@/lib/types";
 import ExportButton from "@/components/custom/ExportButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,7 @@ const cities = ["سلێمانی", "هەولێر", "دهۆک", "کەرکوک", "�
 export default function WarehousesPage() {
   const { warehouses, orders, products, addWarehouse, updateWarehouse, deleteWarehouse, loading } = useData();
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<Warehouse | null>(null);
+  const [editing, setEditing] = useState<Client | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -44,7 +44,7 @@ export default function WarehousesPage() {
     setBonusRules([]);
   };
   const openAdd = () => { resetForm(); setEditing(null); setModalOpen(true); };
-  const openEdit = (w: Warehouse) => {
+  const openEdit = (w: Client) => {
     setEditing(w);
     setForm({ name: w.name, city: w.city, address: w.address, contact: w.contact, phone: w.phone, bonusPct: String(w.bonusPct), isActive: w.isActive });
     setBonusRules(w.bonusRules || []);
@@ -64,13 +64,20 @@ export default function WarehousesPage() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const validRules = bonusRules.filter(r => r.productId && r.percent > 0);
-    const data = { ...form, bonusPct: Number(form.bonusPct), bonusRules: validRules };
+    const data = {
+      ...form,
+      bonusPct: Number(form.bonusPct), bonusRules: validRules,
+      // Required Client fields — warehouses use these defaults
+      type: 'WAREHOUSE' as const,
+      owner: '', repId: '', qrToken: '', paymentTerms: 'NET_30' as const, balance: 0,
+    };
     if (editing) updateWarehouse(editing.id, data);
     else addWarehouse(data);
     setModalOpen(false);
   };
 
-  const getWarehouseOrders = (whId: string) => orders.filter(o => o.warehouseId === whId);
+
+  const getWarehouseOrders = (whId: string) => orders.filter(o => o.clientId === whId);
 
   return (
     <div className="page-stagger">
@@ -96,7 +103,7 @@ export default function WarehousesPage() {
         {[
           { title: "کۆی کۆگاکان", value: warehouses.length, cls: "text-primary" },
           { title: "چالاک", value: warehouses.filter(w => w.isActive).length, cls: "text-emerald-600" },
-          { title: "داواکاری لە ڕێگەی کۆگا", value: orders.filter(o => o.warehouseId).length, cls: "text-violet-600" },
+          { title: "داواکاری لە ڕێگەی کۆگا", value: orders.filter(o => o.orderFlow !== 'DIRECT_PHARMACY').length, cls: "text-violet-600" },
         ].map(k => (
           <Card key={k.title} className="card-interactive">
             <CardContent className="p-4">

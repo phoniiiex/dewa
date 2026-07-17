@@ -146,9 +146,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }}>
           <SidebarProvider dir="rtl">
             <AppSidebar />
-            <SidebarInset className="flex flex-col min-h-screen">
+            <SidebarInset className="flex flex-col min-h-screen overflow-x-hidden">
               <TopBar />
-              <main className="flex-1 p-4 md:p-6">
+              <main className="flex-1 p-4 md:p-6 min-w-0">
                 {children}
               </main>
               <Toaster position="top-center" richColors />

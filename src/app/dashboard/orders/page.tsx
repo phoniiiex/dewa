@@ -8,7 +8,7 @@ import {
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
-import type { Order, OrderStatus, OrderItem } from "@/lib/types";
+import type { Order, OrderStatus, OrderItem, OrderFlow } from "@/lib/types";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -134,26 +134,22 @@ export default function OrdersPage() {
 
 
   // ── New order form ────────────────────────────────────────────────────
-  const [form, setForm] = useState({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
-  // Each item: productId, quantity, repBonusPct = TOTAL agreed bonus %, overrideWarehouseFulfillment
-  type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean };
-  const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false }]);
-  // Edit mode
+  const [form, setForm] = useState<{
+    clientId: string; clientName: string; repId: string;
+    orderFlow: OrderFlow; pharmacyId: string; notes: string;
+  }>({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "" });
+  type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean; priceTypeId: string };
+  const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "" }]);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
-  // "To warehouse" toggle — warehouse is the customer, not transit
-  const [toWarehouse, setToWarehouse] = useState(false);
-  const [toWarehouseId, setToWarehouseId] = useState("");
 
   const resetForm = () => {
-    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", warehouseId: "", notes: "" });
-    setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false }]);
+    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "" });
+    setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "" }]);
     setEditOrder(null);
-    setToWarehouse(false);
-    setToWarehouseId("");
   };
 
-  const isDirect = !form.warehouseId && !toWarehouse;
-  const selectedWarehouse = toWarehouse ? warehouses.find(w => w.id === toWarehouseId) : warehouses.find(w => w.id === form.warehouseId);
+  const isDirect = form.orderFlow === "DIRECT_PHARMACY";
+  const selectedWarehouse = !isDirect ? clients.find(c => c.id === form.clientId && c.type === "WAREHOUSE") : undefined;
 
   // Returns the warehouse's standard bonus % for a product
   const getWarehousePct = (productId: string): number => {
@@ -178,7 +174,7 @@ export default function OrdersPage() {
       return { name: prod?.name || "", qty, warehousePct: 0, repAgreedPct: pct, totalBonusQty: totalBonus, warehouseBonusQty: 0, agentPendingQty: 0, override: false };
     }
     const warehousePct   = getWarehousePct(i.productId);
-    const repAgreedPct   = parseFloat(i.repBonusPct) || warehousePct; // default to warehouse% if blank
+    const repAgreedPct   = parseFloat(i.repBonusPct) || warehousePct;
     const totalBonusQty  = Math.round(qty * repAgreedPct / 100);
     const warehouseBonusQty = i.overrideWarehouseFulfillment
       ? totalBonusQty
@@ -190,36 +186,27 @@ export default function OrdersPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    // Resolve client — normal or toWarehouse
-    let clientId = form.clientId;
-    let clientName = form.clientName;
-    if (toWarehouse) {
-      const twh = warehouses.find(w => w.id === toWarehouseId);
-      if (!twh) { showToast("تکایە کۆگایەک هەڵبژێرە", "error"); return; }
-      clientId = twh.id;
-      clientName = twh.name;
-    } else {
-      const client = clients.find(c => c.id === form.clientId);
-      if (!client) { showToast("تکایە کڕیارێک هەڵبژێرە", "error"); return; }
-      clientId = client.id;
-      clientName = client.name;
-    }
+    const billingClient = clients.find(c => c.id === form.clientId);
+    if (!billingClient) { showToast("تکایە کڕیارێک هەڵبژێرە", "error"); return; }
 
     const repRecord = isRep ? myRep : reps.find(r => r.id === form.repId);
     if (!repRecord) { showToast("تکایە نوێنەرێک هەڵبژێرە", "error"); return; }
 
-    const wh = toWarehouse ? warehouses.find(w => w.id === toWarehouseId) : warehouses.find(w => w.id === form.warehouseId);
+    const pharmacyClient = form.orderFlow === "STANDARD" ? clients.find(c => c.id === form.pharmacyId) : null;
+
     const items: OrderItem[] = orderItems.filter(i => i.productId && i.quantity).map((i) => {
       const prod = products.find(p => p.id === i.productId);
       const qty  = Number(i.quantity);
+      const priceEntry = prod?.prices.find(p => p.typeId === i.priceTypeId);
+      const unitPrice = priceEntry?.amount ?? prod?.price ?? 0;
+      const priceTypeName = priceEntry?.typeName ?? "";
       if (isDirect) {
         const pct        = parseFloat(i.repBonusPct) || 0;
         const totalBonus = Math.round(qty * pct / 100);
-        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonus, unitPrice: prod?.price || 0, bonusPct: 0, repBonusPct: pct, warehouseBonusQty: 0, repBonusQty: 0, overrideWarehouseFulfillment: false };
+        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonus, unitPrice, priceTypeId: i.priceTypeId, priceTypeName, bonusPct: 0, repBonusPct: pct, warehouseBonusQty: 0, repBonusQty: 0, overrideWarehouseFulfillment: false };
       }
-      // Warehouse order — split fulfillment logic
       const warehousePct    = getWarehousePct(i.productId);
-      const repAgreedPct    = toWarehouse ? 0 : (parseFloat(i.repBonusPct) || warehousePct);
+      const repAgreedPct    = form.orderFlow === "DIRECT_WAREHOUSE" ? 0 : (parseFloat(i.repBonusPct) || warehousePct);
       const totalBonusQty   = Math.round(qty * repAgreedPct / 100);
       const warehouseBonusQty = i.overrideWarehouseFulfillment
         ? totalBonusQty
@@ -227,7 +214,7 @@ export default function OrdersPage() {
       const agentPendingQty = totalBonusQty - warehouseBonusQty;
       return {
         productId: i.productId, productName: prod?.name || "", quantity: qty,
-        bonusQty: totalBonusQty, unitPrice: prod?.price || 0,
+        bonusQty: totalBonusQty, unitPrice, priceTypeId: i.priceTypeId, priceTypeName,
         bonusPct: warehousePct, repBonusPct: repAgreedPct,
         warehouseBonusQty, repBonusQty: agentPendingQty,
         overrideWarehouseFulfillment: i.overrideWarehouseFulfillment,
@@ -236,38 +223,30 @@ export default function OrdersPage() {
     if (items.length === 0) { showToast("تکایە بەرهەمێک زیادبکە", "error"); return; }
 
     const totalAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+    const orderPayload = {
+      clientId: billingClient.id, clientName: billingClient.name,
+      repId: repRecord.id, repName: repRecord.name,
+      orderFlow: form.orderFlow,
+      pharmacyId: pharmacyClient?.id || null,
+      pharmacyName: pharmacyClient?.name || null,
+      items, totalAmount, notes: form.notes,
+    };
 
-    // ── EDIT MODE ──
     if (editOrder) {
       if (isManager) {
-        await updateOrder(editOrder.id, {
-          clientId, clientName,
-          repId: repRecord.id, repName: repRecord.name,
-          warehouseId: wh?.id || null, warehouseName: wh?.name || null,
-          items, totalAmount, notes: form.notes,
-        });
+        await updateOrder(editOrder.id, orderPayload);
         showToast("داواکاری نوێکرایەوە");
       } else {
-        const editPayload = JSON.stringify({
-          clientId, clientName,
-          repId: repRecord.id, repName: repRecord.name,
-          warehouseId: wh?.id || null, warehouseName: wh?.name || null,
-          items, totalAmount, notes: form.notes,
-        });
-        await updateOrder(editOrder.id, { notes: `[EDIT_REQUEST]:${editPayload}` });
+        await updateOrder(editOrder.id, { notes: `[EDIT_REQUEST]:${JSON.stringify(orderPayload)}` });
         showToast("داوای گۆڕانکاری نێردرا — چاوەڕوانی ڕەزامەندی بەڕێوەبەر");
       }
-      setNewOrderOpen(false);
-      resetForm();
-      return;
+      setNewOrderOpen(false); resetForm(); return;
     }
 
     // ── NEW ORDER ──
     await addOrder({
-      clientId, clientName,
-      repId: repRecord.id, repName: repRecord.name,
-      warehouseId: wh?.id || null, warehouseName: wh?.name || null,
-      items, status: "WAITING", totalAmount, notes: toWarehouse ? `[TO_WAREHOUSE]${form.notes}` : form.notes,
+      ...orderPayload,
+      status: "WAITING",
       driverId: "", driverName: "", driverPhone: "",
       signedInvoiceUrl: "", signedReceiptUrl: "",
       deliveredAt: "", paidAt: "", rejectionReason: "",
@@ -276,18 +255,22 @@ export default function OrdersPage() {
     resetForm();
   };
 
+
   // ── Open edit modal (pre-fill form from existing order) ──
   const openEditModal = (o: Order) => {
     setEditOrder(o);
     setForm({
       clientId: o.clientId, clientName: o.clientName,
-      repId: o.repId, warehouseId: o.warehouseId || "",
+      repId: o.repId,
+      orderFlow: o.orderFlow || "STANDARD",
+      pharmacyId: o.pharmacyId || "",
       notes: o.notes.startsWith("[EDIT_REQUEST]:") ? "" : o.notes,
     });
     setOrderItems(o.items.map(i => ({
       productId: i.productId, quantity: String(i.quantity),
       repBonusPct: String(i.repBonusPct || i.bonusPct || ""),
       overrideWarehouseFulfillment: i.overrideWarehouseFulfillment ?? false,
+      priceTypeId: i.priceTypeId || "",
     })));
     setNewOrderOpen(true);
   };
@@ -600,11 +583,11 @@ export default function OrdersPage() {
       <Drawer
         open={newOrderOpen}
         onOpenChange={open => { if (!open) { setNewOrderOpen(false); resetForm(); } }}
-        swipeDirection="right"
+        swipeDirection="left"
       >
         <DrawerContent
-          style={{ "--drawer-content-width": "min(92vw, 620px)" } as React.CSSProperties}
-          className="flex flex-col h-full"
+          style={{ "--drawer-content-width": "min(92vw, 620px)", "--drawer-inset": "8px" } as React.CSSProperties}
+          className="flex flex-col rounded-xl"
         >
           <DrawerHeader className="border-b shrink-0 px-6 py-4" dir="rtl">
             <DrawerTitle className="flex items-center gap-2">
@@ -618,47 +601,51 @@ export default function OrdersPage() {
           <form id="order-form" onSubmit={handleSubmit} dir="rtl">
             <div className="px-6 py-5 space-y-5">
 
-          {/* To-warehouse toggle */}
+          {/* ── Order Flow Picker ── */}
           {!editOrder && (
-            <div className="flex items-center gap-2.5">
-              <Button type="button" variant={toWarehouse ? "outline" : "ghost"}
-                onClick={() => { setToWarehouse(!toWarehouse); setToWarehouseId(""); setForm({ ...form, warehouseId: "" }); }}
-                className={cn("gap-1.5 font-bold text-[13px] rounded-[10px] border-[1.5px]",
-                  toWarehouse ? 'border-violet-600 bg-violet-50 dark:bg-violet-950/30 text-violet-600' : 'border-border text-muted-foreground')}>
-                🏪 {toWarehouse ? "داواکاری بۆ کۆگا ✓" : "داواکاری بۆ کۆگا"}
-              </Button>
-              {toWarehouse && <span className="text-xs text-violet-600">کۆگا وەکو وەرگر — بۆنەسی کۆگا بەکاردەهێنرێت</span>}
+            <div className="space-y-2">
+              <Label>جۆری داواکاری *</Label>
+              <div className="flex gap-2 flex-wrap">
+                {([
+                  { value: 'STANDARD'        , label: '🏪 ئەرکی — کۆگا → فارمۆخانە' , clr: 'violet' },
+                  { value: 'DIRECT_WAREHOUSE', label: '📦 کۆگا بۆ خۆی'               , clr: 'blue'   },
+                  { value: 'DIRECT_PHARMACY' , label: '⚡ ڕاستەوخۆ'                   , clr: 'amber'  },
+                ] as { value: OrderFlow; label: string; clr: string }[]).map(f => (
+                  <button type="button" key={f.value}
+                    onClick={() => setForm({ ...form, orderFlow: f.value, clientId: '', clientName: '', pharmacyId: '' })}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-xs font-bold border-[1.5px] transition-all',
+                      form.orderFlow === f.value
+                        ? f.clr === 'violet' ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/30 text-violet-700'
+                          : f.clr === 'blue'   ? 'border-blue-500   bg-blue-50   dark:bg-blue-950/30   text-blue-700'
+                          :                     'border-amber-500  bg-amber-50  dark:bg-amber-950/30  text-amber-700'
+                        : 'border-border text-muted-foreground hover:border-primary/50'
+                    )}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Client or Warehouse selector */}
-            {toWarehouse ? (
-              <div className="space-y-2">
-                <Label>🏪 کۆگا (وەرگر) *</Label>
-                <Select value={toWarehouseId || null} onValueChange={(v: string | null) => v && setToWarehouseId(v)}>
-                  <SelectTrigger><SelectValue placeholder="کۆگا هەڵبژێرە..." /></SelectTrigger>
-                  <SelectContent>
-                    {warehouses.filter(w => w.isActive).map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label>کڕیار *</Label>
-                <ClientCombobox clients={clients} value={form.clientId} clientName={form.clientName}
-                  onChange={(id, name) => setForm({ ...form, clientId: id, clientName: name })}
-                  onRequestNew={(name) => setForm({ ...form, clientName: name })} />
-              </div>
-            )}
+            {/* Billing client — filters by flow */}
+            <div className="space-y-2">
+              <Label>{form.orderFlow === 'DIRECT_PHARMACY' ? 'فارمۆخانە (کڕیار) *' : 'کۆگا (کڕیار) *'}</Label>
+              <ClientCombobox
+                clients={form.orderFlow === 'DIRECT_PHARMACY'
+                  ? clients.filter(c => c.type !== 'WAREHOUSE')
+                  : clients.filter(c => c.type === 'WAREHOUSE')}
+                value={form.clientId} clientName={form.clientName}
+                onChange={(id, name) => setForm({ ...form, clientId: id, clientName: name })}
+                onRequestNew={(name) => setForm({ ...form, clientName: name })} />
+            </div>
             {!isRep ? (
               <div className="space-y-2">
                 <Label>نوێنەر *</Label>
                 <Select value={form.repId || null} onValueChange={(v: string | null) => v && setForm({ ...form, repId: v })}>
                   <SelectTrigger><SelectValue placeholder="هەڵبژاردن..." /></SelectTrigger>
-                  <SelectContent>
-                    {reps.filter(r => r.isActive).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                  </SelectContent>
+                  <SelectContent>{reps.filter(r => r.isActive).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             ) : (
@@ -668,18 +655,18 @@ export default function OrdersPage() {
               </div>
             )}
           </div>
-          {/* Warehouse transit selector — hidden when toWarehouse */}
-          {!toWarehouse && (
+
+          {/* Pharmacy info picker — STANDARD only */}
+          {form.orderFlow === 'STANDARD' && (
             <div className="grid grid-cols-2 gap-4 mt-4">
               <div className="space-y-2">
-                <Label>کۆگا</Label>
-                <Select value={form.warehouseId || null} onValueChange={(v: string | null) => setForm({ ...form, warehouseId: v || "" })}>
-                  <SelectTrigger><SelectValue placeholder="— ڕاستەوخۆ (بێ کۆگا) —" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— ڕاستەوخۆ (بێ کۆگا) —</SelectItem>
-                    {warehouses.filter(w => w.isActive).map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label>فارمۆخانە (زانیاری — لازم نییە) *</Label>
+                <ClientCombobox
+                  clients={clients.filter(c => c.type !== 'WAREHOUSE')}
+                  value={form.pharmacyId}
+                  clientName={clients.find(c => c.id === form.pharmacyId)?.name || ''}
+                  onChange={(id) => setForm({ ...form, pharmacyId: id })}
+                  onRequestNew={() => {}} />
               </div>
               <div className="space-y-2">
                 <Label>تێبینی</Label>
@@ -687,7 +674,7 @@ export default function OrdersPage() {
               </div>
             </div>
           )}
-          {toWarehouse && (
+          {form.orderFlow !== 'STANDARD' && (
             <div className="mt-4 space-y-2">
               <Label>تێبینی</Label>
               <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
@@ -716,29 +703,29 @@ export default function OrdersPage() {
               </div>
               <Button type="button" variant="ghost" size="sm"
                 className="bg-primary/10 text-primary hover:bg-primary/20 text-[13px] font-semibold"
-                onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false }])}>
+              onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "" }])}>
                 + زیادکردن
               </Button>
             </div>
             {/* Column headers */}
-            <div className="mb-1 grid gap-2" style={{ gridTemplateColumns: toWarehouse ? "1fr 100px auto" : "1fr 90px 90px 100px auto" }}>
+            <div className="mb-1 grid gap-2" style={{ gridTemplateColumns: form.orderFlow === 'DIRECT_WAREHOUSE' ? '1fr 100px auto' : '1fr 90px 90px 100px auto' }}>
               <div className="text-xs font-semibold text-muted-foreground">بەرهەم</div>
               <div className="text-xs font-semibold text-muted-foreground">ژمارە</div>
-              {!toWarehouse && <div className={`text-xs font-semibold ${isDirect ? 'text-amber-600' : 'text-violet-600'}`}>{isDirect ? "بۆنەس %" : "کۆی بۆنەس %"}</div>}
-              {!toWarehouse && !isDirect && <div className="text-xs font-semibold text-emerald-600">ئەگوێرێت</div>}
+              {form.orderFlow !== 'DIRECT_WAREHOUSE' && <div className={`text-xs font-semibold ${isDirect ? 'text-amber-600' : 'text-violet-600'}`}>{isDirect ? 'بۆنەس %' : 'کۆی بۆنەس %'}</div>}
+              {form.orderFlow === 'STANDARD' && <div className="text-xs font-semibold text-emerald-600">ئەگوێرێت</div>}
               <div />
             </div>
             {orderItems.map((item, idx) => (
               <div key={idx} className="mb-2.5 grid gap-2 items-start"
-                style={{ gridTemplateColumns: toWarehouse ? "1fr 100px auto" : "1fr 90px 90px 100px auto" }}>
+                style={{ gridTemplateColumns: form.orderFlow === 'DIRECT_WAREHOUSE' ? '1fr 100px auto' : '1fr 90px 90px 100px auto' }}>
                 <Select value={item.productId || null} onValueChange={(v: string | null) => v && setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v } : x))}>
                   <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
                   <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                 </Select>
                 <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
                   onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
-                {/* Total agreed bonus % input */}
-                {!toWarehouse && (
+                {/* Bonus % input — hidden for DIRECT_WAREHOUSE */}
+                {form.orderFlow !== 'DIRECT_WAREHOUSE' && (
                   <div className="relative">
                     <Input type="number" min={0} max={200} className="ps-7" placeholder="0"
                       value={item.repBonusPct}
@@ -746,8 +733,8 @@ export default function OrdersPage() {
                     <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
                   </div>
                 )}
-                {/* Override checkbox (warehouse orders only) */}
-                {!toWarehouse && !isDirect && (
+                {/* Override checkbox — STANDARD only */}
+                {form.orderFlow === 'STANDARD' && (
                   <div className="flex flex-col items-center gap-1 pt-1">
                     <Checkbox
                       id={`override-${idx}`}
@@ -850,7 +837,7 @@ export default function OrdersPage() {
                 {[
                   { label: "کڕیار", value: o.clientName },
                   { label: "نوێنەر", value: o.repName },
-                  { label: "کۆگا", value: o.warehouseName || "ڕاستەوخۆ" },
+                  { label: "فارمۆخانە", value: o.pharmacyName || "ڕاستەوخۆ" },
                   { label: "کۆی گشتی", value: formatIQD(o.totalAmount) },
                   { label: "بەروار", value: new Date(o.createdAt).toLocaleDateString("ku") },
                   ...(o.rejectionReason ? [{ label: "هۆی ڕەتکردن", value: o.rejectionReason }] : []),
