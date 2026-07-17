@@ -181,7 +181,8 @@ export default function OrdersPage() {
     const repAgreedPct    = form.orderFlow === 'DIRECT_WAREHOUSE' ? 0 : (parseFloat(i.repBonusPct) || warehousePct);
     const belowMinimum    = form.orderFlow !== 'DIRECT_WAREHOUSE' && repAgreedPct < warehousePct;
     const rawTotal        = qty * repAgreedPct / 100;
-    const isFraction      = !Number.isInteger(rawTotal);
+    // Rule 1 has priority — only evaluate fraction (Rule 2) if Rule 1 passes
+    const isFraction      = !belowMinimum && !Number.isInteger(rawTotal);
     const pendingRounding = isFraction && i.bonusRounding === null;
     const totalBonusQty   = isFraction
       ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal))
