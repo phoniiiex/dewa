@@ -137,15 +137,15 @@ export default function OrdersPage() {
   // ── New order form ────────────────────────────────────────────────────
   const [form, setForm] = useState<{
     clientId: string; clientName: string; repId: string;
-    orderFlow: OrderFlow; pharmacyId: string; notes: string;
-  }>({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "" });
-  type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean; priceTypeId: string; bonusRounding: 'floor' | 'ceil' | null; fullBonusToWarehouse: boolean };
-  const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null, fullBonusToWarehouse: false }]);
+    orderFlow: OrderFlow; pharmacyId: string; notes: string; priceTypeId: string;
+  }>({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "" });
+  type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean; bonusRounding: 'floor' | 'ceil' | null; fullBonusToWarehouse: boolean };
+  const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, bonusRounding: null, fullBonusToWarehouse: false }]);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
 
   const resetForm = () => {
-    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "" });
-    setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null, fullBonusToWarehouse: false }]);
+    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "" });
+    setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, bonusRounding: null, fullBonusToWarehouse: false }]);
     setEditOrder(null);
   };
 
@@ -158,6 +158,13 @@ export default function OrdersPage() {
     const rule = (selectedWarehouse.bonusRules || []).find(r => r.productId === productId);
     return rule ? rule.percent : selectedWarehouse.bonusPct;
   };
+
+  // Derived list of all unique price types across all active products
+  const allPriceTypes = useMemo(() => {
+    const map = new Map<string, string>();
+    products.forEach(p => (p.prices || []).forEach(pt => map.set(pt.typeId, pt.typeName)));
+    return Array.from(map.entries()).map(([typeId, typeName]) => ({ typeId, typeName }));
+  }, [products]);
 
   // ── Split Bonus Fulfillment Calculation ──────────────────────────────────
   // Rule 1: Total Bonus% >= Warehouse Base%  → belowMinimum    (STANDARD only)
@@ -227,7 +234,7 @@ export default function OrdersPage() {
     const items: OrderItem[] = orderItems.filter(i => i.productId && i.quantity).map((i) => {
       const prod = products.find(p => p.id === i.productId);
       const qty  = Number(i.quantity);
-      const priceEntry = prod?.prices.find(p => p.typeId === i.priceTypeId);
+      const priceEntry = prod?.prices.find(p => p.typeId === form.priceTypeId);
       const unitPrice = priceEntry?.amount ?? prod?.price ?? 0;
       const priceTypeName = priceEntry?.typeName ?? "";
       if (isDirect) {
@@ -235,14 +242,14 @@ export default function OrdersPage() {
         const rawTotal   = qty * pct / 100;
         const isFraction = !Number.isInteger(rawTotal);
         const totalBonus = isFraction ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal)) : rawTotal;
-        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonus, unitPrice, priceTypeId: i.priceTypeId, priceTypeName, bonusPct: 0, repBonusPct: pct, warehouseBonusQty: 0, repBonusQty: totalBonus, overrideWarehouseFulfillment: false };
+        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonus, unitPrice, priceTypeId: form.priceTypeId, priceTypeName, bonusPct: 0, repBonusPct: pct, warehouseBonusQty: 0, repBonusQty: totalBonus, overrideWarehouseFulfillment: false };
       }
       if (form.orderFlow === 'DIRECT_WAREHOUSE') {
         // Rule 4: auto bonus = warehousePct, all goes to warehouse
         const warehousePct  = getWarehousePct(i.productId);
         const rawTotal      = qty * warehousePct / 100;
         const totalBonusQty = Number.isInteger(rawTotal) ? rawTotal : Math.floor(rawTotal);
-        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonusQty, unitPrice, priceTypeId: i.priceTypeId, priceTypeName, bonusPct: warehousePct, repBonusPct: 0, warehouseBonusQty: totalBonusQty, repBonusQty: 0, overrideWarehouseFulfillment: false };
+        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonusQty, unitPrice, priceTypeId: form.priceTypeId, priceTypeName, bonusPct: warehousePct, repBonusPct: 0, warehouseBonusQty: totalBonusQty, repBonusQty: 0, overrideWarehouseFulfillment: false };
       }
       // STANDARD flow
       const warehousePct      = getWarehousePct(i.productId);
@@ -255,7 +262,7 @@ export default function OrdersPage() {
       const agentPendingQty   = totalBonusQty - warehouseBonusQty;
       return {
         productId: i.productId, productName: prod?.name || "", quantity: qty,
-        bonusQty: totalBonusQty, unitPrice, priceTypeId: i.priceTypeId, priceTypeName,
+        bonusQty: totalBonusQty, unitPrice, priceTypeId: form.priceTypeId, priceTypeName,
         bonusPct: warehousePct, repBonusPct: repAgreedPct,
         warehouseBonusQty, repBonusQty: agentPendingQty,
         overrideWarehouseFulfillment: i.fullBonusToWarehouse,
@@ -307,12 +314,12 @@ export default function OrdersPage() {
       orderFlow: o.orderFlow || "STANDARD",
       pharmacyId: o.pharmacyId || "",
       notes: o.notes.startsWith("[EDIT_REQUEST]:") ? "" : o.notes,
+      priceTypeId: o.items[0]?.priceTypeId || "",
     });
     setOrderItems(o.items.map(i => ({
       productId: i.productId, quantity: String(i.quantity),
       repBonusPct: String(i.repBonusPct || i.bonusPct || ""),
       overrideWarehouseFulfillment: i.overrideWarehouseFulfillment ?? false,
-      priceTypeId: i.priceTypeId || "",
       bonusRounding: null,
       fullBonusToWarehouse: i.overrideWarehouseFulfillment ?? false,
     })));
@@ -725,6 +732,23 @@ export default function OrdersPage() {
             </div>
           )}
 
+          {/* Order-level price type selector */}
+          {allPriceTypes.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <Label className="flex items-center gap-1.5"><Tag size={13}/>جۆری نرخ</Label>
+              <Select value={form.priceTypeId || null} onValueChange={(v: string | null) => v && setForm({ ...form, priceTypeId: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="جۆری نرخ هەڵبژێرە (ئارەزووی)..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {allPriceTypes.map(pt => (
+                    <SelectItem key={pt.typeId} value={pt.typeId}>{pt.typeName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Warehouse bonus info banner (no global rep input anymore) */}
           {selectedWarehouse && (
             <div className="mb-3 px-3.5 py-2.5 bg-violet-100 dark:bg-violet-950/30 rounded-[10px] text-[13px] text-violet-600">
@@ -747,7 +771,7 @@ export default function OrdersPage() {
               </div>
               <Button type="button" variant="ghost" size="sm"
                 className="bg-primary/10 text-primary hover:bg-primary/20 text-[13px] font-semibold"
-              onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, priceTypeId: "", bonusRounding: null, fullBonusToWarehouse: false }])}>
+              onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, bonusRounding: null, fullBonusToWarehouse: false }])}>
                 + زیادکردن
               </Button>
             </div>
@@ -766,10 +790,7 @@ export default function OrdersPage() {
                   style={{ gridTemplateColumns: form.orderFlow === 'DIRECT_WAREHOUSE' ? '1fr 100px auto' : '1fr 100px 100px auto' }}>
                   <Select value={item.productId || null} onValueChange={(v: string | null) => {
                     if (!v) return;
-                    const prod = products.find(p => p.id === v);
-                    // Auto-select price type if only one exists
-                    const autoPriceTypeId = prod?.prices.length === 1 ? prod.prices[0].typeId : "";
-                    setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v, priceTypeId: autoPriceTypeId } : x));
+                    setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v } : x));
                   }}>
                     <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
                     <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
@@ -794,32 +815,20 @@ export default function OrdersPage() {
                     </Button>
                   )}
                 </div>
-                {/* Price type selector — shown when product has price types defined */}
-                {(() => {
-                  const prod = item.productId ? products.find(p => p.id === item.productId) : null;
-                  if (!prod || prod.prices.length === 0) return null;
-                  if (prod.prices.length === 1) return (
+                {/* Per-item price badge — shows price for the order-level selected type */}
+                {item.productId && (() => {
+                  const prod = products.find(p => p.id === item.productId);
+                  if (!prod) return null;
+                  const priceEntry = form.priceTypeId
+                    ? prod.prices.find(p => p.typeId === form.priceTypeId)
+                    : null;
+                  const price = priceEntry?.amount ?? prod.price ?? 0;
+                  const label = priceEntry?.typeName || (form.priceTypeId ? 'نرخی تایبەت نییە' : 'نرخی بنچینە');
+                  return (
                     <div className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground" dir="rtl">
                       <Tag size={11}/>
-                      <span>{prod.prices[0].typeName}</span>
-                      <span className="font-mono">{prod.prices[0].amount.toLocaleString()} دینار</span>
-                    </div>
-                  );
-                  return (
-                    <div className="flex items-center gap-2" dir="rtl">
-                      <Tag size={12} className="shrink-0 text-muted-foreground"/>
-                      <Select value={item.priceTypeId || null} onValueChange={(v: string | null) => v && setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, priceTypeId: v } : x))}>
-                        <SelectTrigger className="h-8 text-[12px]">
-                          <SelectValue placeholder="جۆری نرخ هەڵبژێرە..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {prod.prices.map(p => (
-                            <SelectItem key={p.typeId} value={p.typeId}>
-                              {p.typeName} — {p.amount.toLocaleString()} دینار
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <span>{label}:</span>
+                      <span className="font-mono font-medium">{price.toLocaleString()} دینار</span>
                     </div>
                   );
                 })()}
