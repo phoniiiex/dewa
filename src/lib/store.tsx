@@ -69,57 +69,57 @@ function toClient(r: Record<string, unknown>): Client {
     isActive: r.is_active !== false,
     createdAt: (r.created_at || "") as string,
     // Warehouse-specific fields
-    bonusPct:   Number(r.bonus_pct || 0),
+    bonusPct: Number(r.bonus_pct || 0),
     bonusRules: Array.isArray(r.bonus_rules) ? r.bonus_rules as import("./types").BonusRule[] : [],
-    address:    (r.address || "") as string,
-    contact:    (r.contact || "") as string,
+    address: (r.address || "") as string,
+    contact: (r.contact || "") as string,
   };
 }
 function fromClient(c: Partial<Client>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
-  if (c.id          !== undefined) m.id            = c.id;
-  if (c.name        !== undefined) m.name          = c.name;
-  if (c.owner       !== undefined) m.owner         = c.owner;
-  if (c.phone       !== undefined) m.phone         = c.phone;
-  if (c.city        !== undefined) m.city          = c.city;
-  if (c.type        !== undefined) m.type          = c.type;
-  if (c.repId       !== undefined) m.rep_id        = c.repId;
-  if (c.paymentTerms!== undefined) m.payment_terms = c.paymentTerms;
-  if (c.balance     !== undefined) m.balance       = c.balance;
-  if (c.qrToken     !== undefined) m.qr_token      = c.qrToken;
-  if (c.isActive    !== undefined) m.is_active     = c.isActive;
-  if (c.createdAt   !== undefined) m.created_at    = c.createdAt;
-  if (c.bonusPct    !== undefined) m.bonus_pct     = c.bonusPct;
-  if (c.bonusRules  !== undefined) m.bonus_rules   = c.bonusRules;
-  if (c.address     !== undefined) m.address       = c.address;
-  if (c.contact     !== undefined) m.contact       = c.contact;
+  if (c.id !== undefined) m.id = c.id;
+  if (c.name !== undefined) m.name = c.name;
+  if (c.owner !== undefined) m.owner = c.owner;
+  if (c.phone !== undefined) m.phone = c.phone;
+  if (c.city !== undefined) m.city = c.city;
+  if (c.type !== undefined) m.type = c.type;
+  if (c.repId !== undefined) m.rep_id = c.repId;
+  if (c.paymentTerms !== undefined) m.payment_terms = c.paymentTerms;
+  if (c.balance !== undefined) m.balance = c.balance;
+  if (c.qrToken !== undefined) m.qr_token = c.qrToken;
+  if (c.isActive !== undefined) m.is_active = c.isActive;
+  if (c.createdAt !== undefined) m.created_at = c.createdAt;
+  if (c.bonusPct !== undefined) m.bonus_pct = c.bonusPct;
+  if (c.bonusRules !== undefined) m.bonus_rules = c.bonusRules;
+  if (c.address !== undefined) m.address = c.address;
+  if (c.contact !== undefined) m.contact = c.contact;
   return m;
 }
 
 function toRep(r: Record<string, unknown>): Rep {
   return {
-    id:             r.id as string,
-    name:           r.name as string,
-    phone:          (r.phone || "") as string,
-    email:          (r.email || "") as string,
-    city:           (r.city || "") as string,
-    profilePic:     (r.profile_pic || "") as string,
+    id: r.id as string,
+    name: r.name as string,
+    phone: (r.phone || "") as string,
+    email: (r.email || "") as string,
+    city: (r.city || "") as string,
+    profilePic: (r.profile_pic || "") as string,
     telegramChatId: (r.telegram_chat_id || "") as string,
-    isActive:       r.is_active !== false,
-    createdAt:      (r.created_at || "") as string,
+    isActive: r.is_active !== false,
+    createdAt: (r.created_at || "") as string,
   };
 }
 function fromRep(r: Partial<Rep>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
-  if (r.id             !== undefined) m.id               = r.id;
-  if (r.name           !== undefined) m.name             = r.name;
-  if (r.phone          !== undefined) m.phone            = r.phone;
-  if (r.email          !== undefined) m.email            = r.email;
-  if (r.city           !== undefined) m.city             = r.city;
-  if (r.profilePic     !== undefined) m.profile_pic      = r.profilePic;
+  if (r.id !== undefined) m.id = r.id;
+  if (r.name !== undefined) m.name = r.name;
+  if (r.phone !== undefined) m.phone = r.phone;
+  if (r.email !== undefined) m.email = r.email;
+  if (r.city !== undefined) m.city = r.city;
+  if (r.profilePic !== undefined) m.profile_pic = r.profilePic;
   if (r.telegramChatId !== undefined) m.telegram_chat_id = r.telegramChatId;
-  if (r.isActive       !== undefined) m.is_active        = r.isActive;
-  if (r.createdAt      !== undefined) m.created_at       = r.createdAt;
+  if (r.isActive !== undefined) m.is_active = r.isActive;
+  if (r.createdAt !== undefined) m.created_at = r.createdAt;
   return m;
 }
 
@@ -150,7 +150,7 @@ function toOrder(r: Record<string, unknown>): Order {
     repId: (r.rep_id || "") as string,
     repName: (r.rep_name || "") as string,
     orderFlow: (r.order_flow || "STANDARD") as Order["orderFlow"],
-    pharmacyId:   (r.pharmacy_id   || null) as string | null,
+    pharmacyId: (r.pharmacy_id || null) as string | null,
     pharmacyName: (r.pharmacy_name || null) as string | null,
     items: (r.items || []) as Order["items"],
     status: (r.status || "WAITING") as Order["status"],
@@ -169,28 +169,28 @@ function toOrder(r: Record<string, unknown>): Order {
 }
 function fromOrder(o: Partial<Order>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
-  if (o.id              !== undefined) m.id                  = o.id;
-  if (o.orderNumber     !== undefined) m.order_number        = o.orderNumber;
-  if (o.clientId        !== undefined) m.client_id           = o.clientId;
-  if (o.clientName      !== undefined) m.client_name         = o.clientName;
-  if (o.repId           !== undefined) m.rep_id              = o.repId;
-  if (o.repName         !== undefined) m.rep_name            = o.repName;
-  if (o.orderFlow       !== undefined) m.order_flow          = o.orderFlow;
-  if (o.pharmacyId      !== undefined) m.pharmacy_id         = o.pharmacyId;
-  if (o.pharmacyName    !== undefined) m.pharmacy_name       = o.pharmacyName;
-  if (o.items           !== undefined) m.items               = o.items;
-  if (o.status          !== undefined) m.status              = o.status;
-  if (o.totalAmount     !== undefined) m.total_amount        = o.totalAmount;
-  if (o.notes           !== undefined) m.notes               = o.notes;
-  if (o.driverId        !== undefined) m.driver_id           = o.driverId;
-  if (o.driverName      !== undefined) m.driver_name         = o.driverName;
-  if (o.driverPhone     !== undefined) m.driver_phone        = o.driverPhone;
-  if (o.signedInvoiceUrl!== undefined) m.signed_invoice_url  = o.signedInvoiceUrl;
-  if (o.signedReceiptUrl!== undefined) m.signed_receipt_url  = o.signedReceiptUrl;
-  if (o.deliveredAt     !== undefined) m.delivered_at        = o.deliveredAt || null;
-  if (o.paidAt          !== undefined) m.paid_at             = o.paidAt || null;
-  if (o.rejectionReason !== undefined) m.rejection_reason    = o.rejectionReason;
-  if (o.createdAt       !== undefined) m.created_at          = o.createdAt;
+  if (o.id !== undefined) m.id = o.id;
+  if (o.orderNumber !== undefined) m.order_number = o.orderNumber;
+  if (o.clientId !== undefined) m.client_id = o.clientId;
+  if (o.clientName !== undefined) m.client_name = o.clientName;
+  if (o.repId !== undefined) m.rep_id = o.repId;
+  if (o.repName !== undefined) m.rep_name = o.repName;
+  if (o.orderFlow !== undefined) m.order_flow = o.orderFlow;
+  if (o.pharmacyId !== undefined) m.pharmacy_id = o.pharmacyId;
+  if (o.pharmacyName !== undefined) m.pharmacy_name = o.pharmacyName;
+  if (o.items !== undefined) m.items = o.items;
+  if (o.status !== undefined) m.status = o.status;
+  if (o.totalAmount !== undefined) m.total_amount = o.totalAmount;
+  if (o.notes !== undefined) m.notes = o.notes;
+  if (o.driverId !== undefined) m.driver_id = o.driverId;
+  if (o.driverName !== undefined) m.driver_name = o.driverName;
+  if (o.driverPhone !== undefined) m.driver_phone = o.driverPhone;
+  if (o.signedInvoiceUrl !== undefined) m.signed_invoice_url = o.signedInvoiceUrl;
+  if (o.signedReceiptUrl !== undefined) m.signed_receipt_url = o.signedReceiptUrl;
+  if (o.deliveredAt !== undefined) m.delivered_at = o.deliveredAt || null;
+  if (o.paidAt !== undefined) m.paid_at = o.paidAt || null;
+  if (o.rejectionReason !== undefined) m.rejection_reason = o.rejectionReason;
+  if (o.createdAt !== undefined) m.created_at = o.createdAt;
   return m;
 }
 
@@ -234,34 +234,34 @@ function fromTransaction(t: Partial<Transaction>): Record<string, unknown> {
 
 function toReturn(r: Record<string, unknown>): ReturnRecord {
   return {
-    id:                  r.id as string,
-    returnNumber:        (r.return_number   || "") as string,
-    clientId:            (r.client_id       || "") as string,
-    clientName:          (r.client_name     || "") as string,
-    status:              (r.status          || "PENDING") as ReturnStatus,
-    items:               (Array.isArray(r.items) ? r.items : []) as ReturnRecord["items"],
-    notes:               (r.notes           || "") as string,
-    totalReturnedUnits:  Number(r.total_returned_units || 0),
-    totalBonusUnits:     Number(r.total_bonus_units    || 0),
-    totalPaidUnits:      Number(r.total_paid_units     || 0),
-    totalDebtCredit:     Number(r.total_debt_credit    || 0),
-    createdAt:           (r.created_at      || "") as string,
+    id: r.id as string,
+    returnNumber: (r.return_number || "") as string,
+    clientId: (r.client_id || "") as string,
+    clientName: (r.client_name || "") as string,
+    status: (r.status || "PENDING") as ReturnStatus,
+    items: (Array.isArray(r.items) ? r.items : []) as ReturnRecord["items"],
+    notes: (r.notes || "") as string,
+    totalReturnedUnits: Number(r.total_returned_units || 0),
+    totalBonusUnits: Number(r.total_bonus_units || 0),
+    totalPaidUnits: Number(r.total_paid_units || 0),
+    totalDebtCredit: Number(r.total_debt_credit || 0),
+    createdAt: (r.created_at || "") as string,
   };
 }
 function fromReturn(r: Partial<ReturnRecord>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
-  if (r.id                  !== undefined) m.id                    = r.id;
-  if (r.returnNumber        !== undefined) m.return_number         = r.returnNumber;
-  if (r.clientId            !== undefined) m.client_id             = r.clientId;
-  if (r.clientName          !== undefined) m.client_name           = r.clientName;
-  if (r.status              !== undefined) m.status                = r.status;
-  if (r.items               !== undefined) m.items                 = r.items;
-  if (r.notes               !== undefined) m.notes                 = r.notes;
-  if (r.totalReturnedUnits  !== undefined) m.total_returned_units  = r.totalReturnedUnits;
-  if (r.totalBonusUnits     !== undefined) m.total_bonus_units     = r.totalBonusUnits;
-  if (r.totalPaidUnits      !== undefined) m.total_paid_units      = r.totalPaidUnits;
-  if (r.totalDebtCredit     !== undefined) m.total_debt_credit     = r.totalDebtCredit;
-  if (r.createdAt           !== undefined) m.created_at            = r.createdAt;
+  if (r.id !== undefined) m.id = r.id;
+  if (r.returnNumber !== undefined) m.return_number = r.returnNumber;
+  if (r.clientId !== undefined) m.client_id = r.clientId;
+  if (r.clientName !== undefined) m.client_name = r.clientName;
+  if (r.status !== undefined) m.status = r.status;
+  if (r.items !== undefined) m.items = r.items;
+  if (r.notes !== undefined) m.notes = r.notes;
+  if (r.totalReturnedUnits !== undefined) m.total_returned_units = r.totalReturnedUnits;
+  if (r.totalBonusUnits !== undefined) m.total_bonus_units = r.totalBonusUnits;
+  if (r.totalPaidUnits !== undefined) m.total_paid_units = r.totalPaidUnits;
+  if (r.totalDebtCredit !== undefined) m.total_debt_credit = r.totalDebtCredit;
+  if (r.createdAt !== undefined) m.created_at = r.createdAt;
   return m;
 }
 
@@ -571,7 +571,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }));
     } catch { /* ignore quota errors */ }
   }, [products, clients, reps, suppliers, orders, drivers,
-      transactions, settings, users, invoiceTemplates, priceTypes, sampleRequests, returns, loading]);
+    transactions, settings, users, invoiceTemplates, priceTypes, sampleRequests, returns, loading]);
 
 
   // ── Supabase Realtime — live updates across users/sessions ────────────
@@ -818,7 +818,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setOrders((prev) => {
       const paidOrders = prev.filter((o) => orderIds.includes(o.id));
       const total = paidOrders.reduce((s, o) => s + o.totalAmount, 0);
-      const desc = `پارەدانی ${paidOrders.map(o => o.clientName).filter((v,i,a) => a.indexOf(v)===i).join(", ")} — ${paidOrders.map(o => o.orderNumber).join(", ")}`;
+      const desc = `پارەدانی ${paidOrders.map(o => o.clientName).filter((v, i, a) => a.indexOf(v) === i).join(", ")} — ${paidOrders.map(o => o.orderNumber).join(", ")}`;
       supabase.from("transactions").insert(fromTransaction({ id: genId(), type: "INCOME", description: desc, amount: total, method: "CASH", relatedOrderId: orderIds[0], createdAt: paidAt }));
       return prev;
     });
@@ -973,7 +973,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         // 1. Reduce client debt (balance -= totalDebtCredit)
         if (updated.totalDebtCredit > 0) {
           supabase.from("clients").select("balance").eq("id", updated.clientId).single().then(({ data }) => {
-            const oldBal = Number((data as Record<string,unknown>)?.balance ?? 0);
+            const oldBal = Number((data as Record<string, unknown>)?.balance ?? 0);
             const newBal = Math.max(0, oldBal - updated.totalDebtCredit);
             supabase.from("clients").update({ balance: newBal }).eq("id", updated.clientId);
             setClients((cp) => cp.map((c) => c.id === updated.clientId ? { ...c, balance: newBal } : c));
@@ -987,7 +987,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         // 3. Restore stock for each returned item (all returned qty goes back to stock)
         for (const item of updated.items) {
           supabase.from("products").select("stock").eq("id", item.productId).single().then(({ data }) => {
-            const oldStock = Number((data as Record<string,unknown>)?.stock ?? 0);
+            const oldStock = Number((data as Record<string, unknown>)?.stock ?? 0);
             const newStock = oldStock + item.returnedQty;
             supabase.from("products").update({ stock: newStock }).eq("id", item.productId);
             setProducts((pp) => pp.map((p) => p.id === item.productId ? { ...p, stock: newStock } : p));

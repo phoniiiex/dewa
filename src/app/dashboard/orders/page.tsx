@@ -688,7 +688,7 @@ export default function OrdersPage() {
                     : "bg-muted border border-border text-muted-foreground"
                 )}
               >
-                {editOrder ? editOrder.orderNumber : draftOrderNumber}
+              {editOrder ? editOrder.orderNumber : (pendingConfirm ? draftOrderNumber : "")}
               </span>
             </div>
             <DrawerDescription>زانیاری داواکاری پڕبکەوە</DrawerDescription>
@@ -696,6 +696,7 @@ export default function OrdersPage() {
 
           <ScrollArea className="flex-1 overflow-auto">
           <form id="order-form" onSubmit={handleSubmit} dir="rtl">
+          <fieldset disabled={pendingConfirm && !editOrder} className="block border-0 p-0 m-0">
             <div className="px-6 py-5 space-y-5">
 
           {/* ── Order Flow Picker ── */}
@@ -734,7 +735,16 @@ export default function OrdersPage() {
                   ? clients.filter(c => c.type !== 'WAREHOUSE')
                   : clients.filter(c => c.type === 'WAREHOUSE')}
                 value={form.clientId} clientName={form.clientName}
-                onChange={(id, name) => setForm({ ...form, clientId: id, clientName: name })}
+                onChange={(id, name) => {
+                  // In STANDARD flow: auto-set all items' bonus% to warehouse base bonus
+                  if (form.orderFlow === 'STANDARD') {
+                    const wh = clients.find(c => c.id === id);
+                    if (wh?.bonusPct) {
+                      setOrderItems(prev => prev.map(x => ({ ...x, repBonusPct: String(wh.bonusPct), bonusRounding: null })));
+                    }
+                  }
+                  setForm({ ...form, clientId: id, clientName: name });
+                }}
                 onRequestNew={(name) => setForm({ ...form, clientName: name })} />
             </div>
             {!isRep ? (
@@ -987,6 +997,7 @@ export default function OrdersPage() {
           )}
 
             </div>{/* end px-6 py-5 space-y-5 */}
+          </fieldset>
           </form>
           </ScrollArea>
 
