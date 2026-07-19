@@ -135,8 +135,10 @@ export default function OrdersPage() {
 
   // Draft order number shown in the drawer header while creating
   const [draftOrderNumber, setDraftOrderNumber] = useState("");
+  const [pendingConfirm, setPendingConfirm] = useState(false);
   useEffect(() => {
     if (newOrderOpen && !editOrder) setDraftOrderNumber("ORD-" + String(Date.now()).slice(-6));
+    if (!newOrderOpen) setPendingConfirm(false);
   }, [newOrderOpen]);
 
   // ── New order form ────────────────────────────────────────────────────
@@ -152,6 +154,7 @@ export default function OrdersPage() {
     setForm({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "" });
     setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, bonusRounding: null, fullBonusToWarehouse: false }]);
     setEditOrder(null);
+    setPendingConfirm(false);
   };
 
   const isDirect = form.orderFlow === "DIRECT_PHARMACY";
@@ -297,7 +300,14 @@ export default function OrdersPage() {
       setNewOrderOpen(false); resetForm(); return;
     }
 
-    // ── NEW ORDER ──
+    // ── NEW ORDER — two-step: preview → confirm ──
+    if (!pendingConfirm) {
+      // Step 1: validation passed — lock in order number, flip button
+      setDraftOrderNumber("ORD-" + String(Date.now()).slice(-6));
+      setPendingConfirm(true);
+      return;
+    }
+    // Step 2: user confirmed — create the order
     await addOrder({
       ...orderPayload,
       status: "WAITING",
@@ -636,6 +646,24 @@ export default function OrdersPage() {
       {/* ════════════════════════════════════════════════════════════════
           NEW / EDIT ORDER — DRAWER (right-side panel)
       ════════════════════════════════════════════════════════════════ */}
+      <style>{`
+        @keyframes orderNumberPop {
+          0%   { transform: scale(0.4) translateY(-6px); opacity: 0; }
+          65%  { transform: scale(1.18) translateY(0);  opacity: 1; }
+          82%  { transform: scale(0.94); }
+          100% { transform: scale(1);   opacity: 1; }
+        }
+        @keyframes orderNumberGlow {
+          0%, 100% { box-shadow: 0 0 0 0   rgba(249,115,22,0.6); }
+          50%       { box-shadow: 0 0 0 8px rgba(249,115,22,0);   }
+        }
+        .order-badge-pop {
+          animation:
+            orderNumberPop 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards,
+            orderNumberGlow 1.1s ease 0.55s 3;
+        }
+      `}</style>
+
       <Drawer
         open={newOrderOpen}
         onOpenChange={open => { if (!open) { setNewOrderOpen(false); resetForm(); } }}
@@ -651,7 +679,15 @@ export default function OrdersPage() {
                 <ShoppingCart size={18} className="text-orange-500" />
                 {editOrder ? `گۆڕینی داواکاری` : "داواکاری نوێ"}
               </DrawerTitle>
-              <span className="text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-0.5 text-muted-foreground tracking-wide">
+              <span
+                key={pendingConfirm ? "confirmed" : "draft"}
+                className={cn(
+                  "text-[11px] font-mono rounded-md px-2.5 py-1 tracking-wide transition-colors duration-300",
+                  pendingConfirm && !editOrder
+                    ? "bg-orange-500 border border-orange-400 text-white font-bold order-badge-pop"
+                    : "bg-muted border border-border text-muted-foreground"
+                )}
+              >
                 {editOrder ? editOrder.orderNumber : draftOrderNumber}
               </span>
             </div>
@@ -956,9 +992,31 @@ export default function OrdersPage() {
 
           <DrawerFooter className="border-t shrink-0 px-6 py-4" dir="rtl">
             <div className="flex gap-2 justify-between">
-              <Button type="button" variant="outline" onClick={() => { setNewOrderOpen(false); resetForm(); }}>پاشگەزبوونەوە</Button>
-              <Button type="submit" form="order-form" disabled={hasAnyViolation}>
-                {editOrder ? (isManager ? "پاشەکەوتکردنی گۆڕانکاری" : "ناردنی داوای گۆڕانکاری") : "تۆمارکردنی داواکاری"}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (pendingConfirm && !editOrder) { setPendingConfirm(false); return; }
+                  setNewOrderOpen(false); resetForm();
+                }}
+              >
+                {pendingConfirm && !editOrder ? "گۆڕین / دەستکاری" : "پاشگەزبوونەوە"}
+              </Button>
+              <Button
+                type="submit"
+                form="order-form"
+                disabled={hasAnyViolation}
+                className={cn(
+                  "transition-all duration-300",
+                  pendingConfirm && !editOrder && "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/30 scale-105"
+                )}
+              >
+                {editOrder
+                  ? (isManager ? "پاشەکەوتکردنی گۆڕانکاری" : "ناردنی داوای گۆڕانکاری")
+                  : pendingConfirm
+                    ? "✓ پەسەندکردن"
+                    : "تۆمارکردنی داواکاری"
+                }
               </Button>
             </div>
           </DrawerFooter>
