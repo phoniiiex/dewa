@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import {
   Search, Plus, Package, Edit3, Trash2, Eye, X,
-  Grid3X3, List, AlertTriangle, ImageIcon, MoreVertical, ChevronDown, ChevronUp,
+  Grid3X3, List, AlertTriangle, ImageIcon, MoreVertical, ChevronDown, ChevronUp, Tag,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
@@ -14,6 +14,7 @@ import {
 import ExportButton from "@/components/custom/ExportButton";
 import type { ExportColumn } from "@/lib/export";
 import AddProductWizard, { type WizardFormData } from "@/components/custom/AddProductWizard";
+import PriceTypesDialog from "@/components/custom/PriceTypesDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -164,6 +165,7 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [deleteId, setDeleteId]         = useState<string | null>(null);
+  const [priceTypesOpen, setPriceTypesOpen] = useState(false);
 
   const allCategories = useMemo(() =>
     Array.from(new Set(products.map(p => p.category).filter(Boolean))), [products]);
@@ -228,6 +230,9 @@ export default function ProductsPage() {
         </div>
         <div className="flex items-center gap-2">
           <ExportButton data={filtered as unknown as Record<string, unknown>[]} columns={productExportCols} filename="products" title="بەرهەمەکان" />
+          <Button variant="outline" onClick={() => setPriceTypesOpen(true)}>
+            <Tag className="size-3.5 me-1" /> جۆرەکانی نرخ
+          </Button>
           <Button onClick={() => setModalOpen(true)}>
             <Plus className="size-4 me-1" /> بەرهەمی نوێ
           </Button>
@@ -401,7 +406,7 @@ export default function ProductsPage() {
       )}
 
       {/* ── Wizards ── */}
-      <AddProductWizard open={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleWizardSubmit} existingProducts={products} />
+      <AddProductWizard open={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleWizardSubmit} existingProducts={products} onManagePriceTypes={() => setPriceTypesOpen(true)} />
       <AddProductWizard
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
@@ -427,6 +432,7 @@ export default function ProductsPage() {
           dosageForm:       ((editingProduct as unknown as Record<string, unknown>).dosageForm as string) ?? "",
           prices:           (editingProduct.prices ?? []).map(p => ({ ...p, amount: String(p.amount) })),
         } : undefined}
+        onManagePriceTypes={() => setPriceTypesOpen(true)}
       />
 
       {/* ── Detail Sheet ── */}
@@ -484,6 +490,8 @@ export default function ProductsPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      <PriceTypesDialog open={priceTypesOpen} onClose={() => setPriceTypesOpen(false)} />
 
       <AlertDialog open={!!deleteId} onOpenChange={open => !open && setDeleteId(null)}>
         <AlertDialogContent dir="rtl">
