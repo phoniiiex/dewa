@@ -133,6 +133,11 @@ export default function OrdersPage() {
   const [payMethod, setPayMethod]         = useState<"CASH" | "TRANSFER">("CASH");
   const [paying, setPaying]               = useState(false);
 
+  // Draft order number shown in the drawer header while creating
+  const [draftOrderNumber, setDraftOrderNumber] = useState("");
+  useEffect(() => {
+    if (newOrderOpen && !editOrder) setDraftOrderNumber("ORD-" + String(Date.now()).slice(-6));
+  }, [newOrderOpen]);
 
   // ── New order form ────────────────────────────────────────────────────
   const [form, setForm] = useState<{
@@ -641,10 +646,15 @@ export default function OrdersPage() {
           className="flex flex-col rounded-xl"
         >
           <DrawerHeader className="border-b shrink-0 px-6 py-4" dir="rtl">
-            <DrawerTitle className="flex items-center gap-2">
-              <ShoppingCart size={18} className="text-orange-500" />
-              {editOrder ? `گۆڕینی داواکاری — ${editOrder.orderNumber}` : "داواکاری نوێ"}
-            </DrawerTitle>
+            <div className="flex items-center justify-between">
+              <DrawerTitle className="flex items-center gap-2">
+                <ShoppingCart size={18} className="text-orange-500" />
+                {editOrder ? `گۆڕینی داواکاری` : "داواکاری نوێ"}
+              </DrawerTitle>
+              <span className="text-[11px] font-mono bg-muted border border-border rounded-md px-2 py-0.5 text-muted-foreground tracking-wide">
+                {editOrder ? editOrder.orderNumber : draftOrderNumber}
+              </span>
+            </div>
             <DrawerDescription>زانیاری داواکاری پڕبکەوە</DrawerDescription>
           </DrawerHeader>
 
@@ -707,7 +717,7 @@ export default function OrdersPage() {
             )}
           </div>
 
-          {/* Pharmacy info picker — STANDARD only */}
+          {/* Pharmacy + Price type — STANDARD only */}
           {form.orderFlow === 'STANDARD' && (
             <div className="grid grid-cols-2 gap-4 mt-4">
               <div className="space-y-2">
@@ -719,35 +729,32 @@ export default function OrdersPage() {
                   onChange={(id) => setForm({ ...form, pharmacyId: id })}
                   onRequestNew={() => {}} />
               </div>
-              <div className="space-y-2">
-                <Label>تێبینی</Label>
-                <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
-              </div>
+              {allPriceTypes.length > 0 ? (
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5"><Tag size={13}/>جۆری نرخ</Label>
+                  <Select value={form.priceTypeId || null} onValueChange={(v: string | null) => v && setForm({ ...form, priceTypeId: v })}>
+                    <SelectTrigger><SelectValue placeholder="جۆری نرخ هەڵبژێرە..." /></SelectTrigger>
+                    <SelectContent>{allPriceTypes.map(pt => <SelectItem key={pt.typeId} value={pt.typeId}>{pt.typeName}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              ) : <div />}
             </div>
           )}
-          {form.orderFlow !== 'STANDARD' && (
-            <div className="mt-4 space-y-2">
-              <Label>تێبینی</Label>
-              <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
-            </div>
-          )}
-
-          {/* Order-level price type selector */}
-          {allPriceTypes.length > 0 && (
+          {/* Price type — non-STANDARD (before notes) */}
+          {form.orderFlow !== 'STANDARD' && allPriceTypes.length > 0 && (
             <div className="mt-4 space-y-2">
               <Label className="flex items-center gap-1.5"><Tag size={13}/>جۆری نرخ</Label>
               <Select value={form.priceTypeId || null} onValueChange={(v: string | null) => v && setForm({ ...form, priceTypeId: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="جۆری نرخ هەڵبژێرە (ئارەزووی)..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {allPriceTypes.map(pt => (
-                    <SelectItem key={pt.typeId} value={pt.typeId}>{pt.typeName}</SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger><SelectValue placeholder="جۆری نرخ هەڵبژێرە (ئارەزووی)..." /></SelectTrigger>
+                <SelectContent>{allPriceTypes.map(pt => <SelectItem key={pt.typeId} value={pt.typeId}>{pt.typeName}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           )}
+          {/* Notes — always below price type */}
+          <div className="mt-4 space-y-2">
+            <Label>تێبینی</Label>
+            <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
+          </div>
 
           {/* Warehouse bonus info banner (no global rep input anymore) */}
           {selectedWarehouse && (
