@@ -9,6 +9,7 @@ import {  Search, ShoppingCart, Users, Package, Truck,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import {
+  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -183,6 +184,7 @@ export default function CommandMenu({ open, onClose, onNewOrder }: Props) {
 
   return (
     <CommandDialog open={open} onOpenChange={v => !v && onClose()} title="گەڕانی خێرا" description="بگەڕێ بۆ لاپەڕە، بەرهەم، کڕیار، داواکاری، و زۆرتر...">
+      <Command>
       <CommandInput placeholder="بگەڕێ... (Ctrl+K)" />
       <CommandList className="max-h-80">
         <CommandEmpty>
@@ -345,6 +347,7 @@ export default function CommandMenu({ open, onClose, onNewOrder }: Props) {
           </CommandGroup>
         )}
       </CommandList>
+      </Command>
     </CommandDialog>
   );
 }
