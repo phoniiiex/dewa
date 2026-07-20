@@ -648,10 +648,10 @@ export default function OrdersPage() {
       ════════════════════════════════════════════════════════════════ */}
       <style>{`
         @keyframes orderNumberPop {
-          0%   { transform: scale(0.4) translateY(-6px); opacity: 0; }
-          65%  { transform: scale(1.18) translateY(0);  opacity: 1; }
-          82%  { transform: scale(0.94); }
-          100% { transform: scale(1);   opacity: 1; }
+          0%   { transform: scale(0.85) translateY(-4px); opacity: 0; }
+          60%  { transform: scale(1.05) translateY(0);   opacity: 1; }
+          80%  { transform: scale(0.97); }
+          100% { transform: scale(1);    opacity: 1; }
         }
         @keyframes orderNumberGlow {
           0%, 100% { box-shadow: 0 0 0 0   rgba(249,115,22,0.6); }
@@ -1245,7 +1245,6 @@ export default function OrdersPage() {
           )}
 
           <style>{`
-            @keyframes spin { to { transform: rotate(360deg); } }
             @keyframes progress-pulse {
               0%   { width: 10%; } 50% { width: 70%; } 100% { width: 90%; }
             }

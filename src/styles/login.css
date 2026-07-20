@@ -55,7 +55,10 @@
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--color-action);
   border-radius: var(--border-radius-md);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
 }
 
 .login-register-link a:hover {
@@ -144,7 +147,10 @@
   border-radius: var(--border-radius-md);
   font-size: var(--text-base);
   color: var(--color-text-primary);
-  transition: all var(--transition-fast);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
 
 .input-wrapper input:focus {
@@ -214,7 +220,10 @@
   border-radius: var(--border-radius-md);
   font-weight: 600;
   font-size: var(--text-md);
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
   margin-top: var(--space-2);
 }
 
@@ -327,7 +336,9 @@
   height: 4px;
   border-radius: var(--border-radius-full);
   background: rgba(255,255,255,0.4);
-  transition: all var(--transition-base);
+  transition:
+    width var(--duration-base) var(--ease-out),
+    background-color var(--duration-base) var(--ease-out);
 }
 
 .branding-dots .dot.active {
