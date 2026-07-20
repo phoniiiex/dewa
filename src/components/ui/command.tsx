@@ -2,15 +2,9 @@
 
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
+import { Dialog as BaseDialog } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import {
   InputGroup,
   InputGroupAddon,
@@ -38,31 +32,34 @@ function CommandDialog({
   description = "Search for a command to run...",
   children,
   className,
-  showCloseButton = false,
-  ...props
-}: Omit<React.ComponentProps<typeof Dialog>, "children"> & {
+  open,
+  onOpenChange,
+}: {
   title?: string
   description?: string
   className?: string
-  showCloseButton?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   children: React.ReactNode
 }) {
   return (
-    <Dialog {...props}>
-      <DialogContent
-        className={cn(
-          "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
-          className
-        )}
-        showCloseButton={showCloseButton}
-      >
-        <DialogHeader className="sr-only">
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        {children}
-      </DialogContent>
-    </Dialog>
+    <BaseDialog.Root open={open} onOpenChange={onOpenChange}>
+      <BaseDialog.Portal>
+        <BaseDialog.Backdrop
+          className="fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
+        />
+        <BaseDialog.Popup
+          className={cn(
+            "fixed top-1/3 start-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2 rounded-xl bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 overflow-hidden p-0",
+            className
+          )}
+        >
+          <BaseDialog.Title className="sr-only">{title}</BaseDialog.Title>
+          <BaseDialog.Description className="sr-only">{description}</BaseDialog.Description>
+          {children}
+        </BaseDialog.Popup>
+      </BaseDialog.Portal>
+    </BaseDialog.Root>
   )
 }
 
