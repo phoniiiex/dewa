@@ -24,6 +24,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 
 const DoctorMap = dynamic(() => import("./DoctorMap"), {
   ssr: false,
@@ -335,10 +336,13 @@ export default function DoctorsPage() {
               {[0,1,2,3,4,5].map(i => <Skeleton key={i} className="h-36 rounded-xl" />)}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 bg-muted/30 rounded-2xl">
-              <Stethoscope className="size-10 opacity-20 mb-3" />
-              <p className="text-sm text-muted-foreground">{search ? "هیچ پزیشکێک نەدۆزرایەوە" : "هێشتا هیچ پزیشکێک زیاد نەکراوە"}</p>
-            </div>
+            <Empty className="py-16 border rounded-xl">
+              <EmptyHeader>
+                <EmptyMedia variant="icon"><Stethoscope className="size-4" /></EmptyMedia>
+                <EmptyTitle>{search ? "هیچ پزیشکێک نەدۆزرایەوە" : "هێشتا هیچ پزیشکێک زیاد نەکراوە"}</EmptyTitle>
+                <EmptyDescription>{search ? "وشەی گەڕان بگۆڕە" : "پزیشکی نوێ زیاد بکە"}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <div className="grid gap-3.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
               {filtered.map(d => (

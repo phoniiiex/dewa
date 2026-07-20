@@ -20,6 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 
 const CITIES = ["هەولێر", "سلێمانی", "کەرکووک", "دهۆک", "زاخۆ", "ڕانیە", "کۆیە", "چەمچەماڵ", "شاری دیگر"];
 
@@ -146,7 +147,13 @@ export default function DriversPage() {
           {[0, 1, 2].map(i => <Skeleton key={i} className="h-36 rounded-xl" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <Card><CardContent className="p-12 text-center text-muted-foreground">هیچ شوفێرێک نەدۆزرایەوە</CardContent></Card>
+        <Empty className="py-16 border rounded-xl">
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><Truck className="size-4" /></EmptyMedia>
+            <EmptyTitle>هیچ شوفێرێک نەدۆزرایەوە</EmptyTitle>
+            <EmptyDescription>شوفێری نوێ زیاد بکە</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
           {filtered.map(d => (

@@ -38,6 +38,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 
 
 const exportCols: ExportColumn[] = [
@@ -579,7 +580,20 @@ export default function OrdersPage() {
                 <TableRow key={i}>{Array.from({ length: 7 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}</TableRow>
               ))
             ) : paged.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-12">هیچ داواکارییەک نەدۆزرایەوە</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={7} className="p-0">
+                  <Empty className="py-16 border-0">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon"><ShoppingCart className="size-4" /></EmptyMedia>
+                      <EmptyTitle>هیچ داواکارییەک نەدۆزرایەوە</EmptyTitle>
+                      <EmptyDescription>داواکاری نوێ زیاد بکە یان فلتەرەکان بگۆڕە</EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent>
+                      <Button size="sm" onClick={() => { setOpenNewOrder(true); }}><Plus className="size-4 me-1" />داواکاری نوێ</Button>
+                    </EmptyContent>
+                  </Empty>
+                </TableCell>
+              </TableRow>
             ) : paged.map(o => (
               <TableRow key={o.id}>
                 <TableCell className="font-bold text-primary">{o.orderNumber}</TableCell>

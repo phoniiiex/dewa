@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 
 const clientExportCols = [
   { key: "name", label: "ناو" }, { key: "owner", label: "خاوەن" },
@@ -389,12 +390,13 @@ export default function ClientsPage() {
           {reqLoading ? (
             <div className="p-10 text-center text-muted-foreground text-sm">بارکردن...</div>
           ) : requests.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="size-14 rounded-full bg-muted flex items-center justify-center mx-auto mb-4 text-muted-foreground">
-                <CheckCircle className="size-6" />
-              </div>
-              <p className="text-sm font-semibold text-muted-foreground">هیچ داواکارییەک نییە</p>
-            </div>
+            <Empty className="py-16 border-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon"><CheckCircle className="size-4" /></EmptyMedia>
+                <EmptyTitle>هیچ داواکارییەک نییە</EmptyTitle>
+                <EmptyDescription>هەموو داواکارییەکان جێبەجێ کراون</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <div className="overflow-x-auto">
             <Table>

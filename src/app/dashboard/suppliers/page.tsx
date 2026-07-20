@@ -1,6 +1,6 @@
 "use client";
 import { useState, FormEvent } from "react";
-import { Plus, Globe, Edit3, Trash2, Search } from "lucide-react";
+import { Plus, Globe, Edit3, Trash2, Search, Building2 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Supplier } from "@/lib/types";
@@ -22,6 +22,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 
 const supplierExportCols = [
   { key: "name", label: "ناو" }, { key: "contact", label: "پەیوەند" },
@@ -119,7 +120,15 @@ export default function SuppliersPage() {
                 ))
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">هیچ دابینکەرێک نەدۆزرایەوە</TableCell>
+                  <TableCell colSpan={8} className="p-0">
+                    <Empty className="py-16 border-0">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon"><Building2 className="size-4" /></EmptyMedia>
+                        <EmptyTitle>هیچ دابینکەرێک نەدۆزرایەوە</EmptyTitle>
+                        <EmptyDescription>دابینکەری نوێ زیاد بکە یان وشەی گەڕان بگۆڕە</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  </TableCell>
                 </TableRow>
               ) : filtered.map(s => (
                 <TableRow key={s.id} className="hover:bg-muted/20 transition-colors">

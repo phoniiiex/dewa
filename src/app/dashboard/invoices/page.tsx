@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 
 // ── Doc types ──
 type DocType = InvoiceTemplate["docType"];
@@ -244,13 +245,16 @@ export default function TemplatesPage() {
 
           <div className={cn("overflow-y-auto", isEditorOpen ? "max-h-[calc(100vh-260px)]" : "")}>
             {filteredTemplates.length === 0 ? (
-              <div className="p-10 text-center text-muted-foreground">
-                <LayoutTemplate className="size-8 mx-auto mb-2 opacity-30" />
-                <p className="text-xs">هیچ داڕێژەیەک نییە</p>
-                <Button size="sm" className="mt-3 text-xs" onClick={() => openNew(filterType === "all" ? "invoice" : filterType)}>
-                  <Plus className="size-3 me-1" /> داڕێژەی نوێ
-                </Button>
-              </div>
+              <Empty className="py-16 border-0">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon"><LayoutTemplate className="size-4" /></EmptyMedia>
+                  <EmptyTitle>هیچ داڕێژەیەک نییە</EmptyTitle>
+                  <EmptyDescription>داڕێژەی نوێ دروست بکە</EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button size="sm" onClick={() => openNew(filterType === "all" ? "invoice" : filterType)}><Plus className="size-4 me-1" />داڕێژەی نوێ</Button>
+                </EmptyContent>
+              </Empty>
             ) : (
               <>
                 {(filterType === "all" ? DOC_TYPES : DOC_TYPES.filter(d => d.id === filterType)).map(dt => {

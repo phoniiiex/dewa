@@ -18,6 +18,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { Wallet } from "lucide-react";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 
 const transactionExportCols = [
   { key: "type", label: "جۆر", format: (v: unknown) => v === "INCOME" ? "داهات" : "خەرجی" },
@@ -140,7 +142,15 @@ export default function FinancePage() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">هیچ مامەڵەیەک نەدۆزرایەوە</TableCell>
+                  <TableCell colSpan={5} className="p-0">
+                    <Empty className="py-16 border-0">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon"><Wallet className="size-4" /></EmptyMedia>
+                        <EmptyTitle>هیچ مامەڵەیەک نەدۆزرایەوە</EmptyTitle>
+                        <EmptyDescription>مامەڵەی نوێ زیاد بکە یان فلتەرەکان بگۆڕە</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  </TableCell>
                 </TableRow>
               ) : filtered.map(t => (
                 <TableRow key={t.id}

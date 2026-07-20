@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ReturnWizard } from "@/components/custom/ReturnWizard";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<ReturnStatus, {
@@ -315,12 +316,17 @@ export default function ReturnsPage() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-16 text-muted-foreground">
-                    <RotateCcw size={32} className="mx-auto mb-2 opacity-20"/>
-                    <p className="text-sm">هیچ گەڕاوەیەک نەدۆزرایەوە</p>
-                    <Button variant="link" className="text-xs mt-1" onClick={() => { setEditTarget(null); setWizardOpen(true); }}>
-                      گەڕاوەی نوێ تۆمار بکە
-                    </Button>
+                  <TableCell colSpan={9} className="p-0">
+                    <Empty className="py-16 border-0">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon"><RotateCcw className="size-4" /></EmptyMedia>
+                        <EmptyTitle>هیچ گەڕاوەیەک نەدۆزرایەوە</EmptyTitle>
+                        <EmptyDescription>گەڕاوەی نوێ تۆمار بکە</EmptyDescription>
+                      </EmptyHeader>
+                      <EmptyContent>
+                        <Button size="sm" onClick={() => { setEditTarget(null); setWizardOpen(true); }}><Plus className="size-4 me-1" />گەڕاوەی نوێ</Button>
+                      </EmptyContent>
+                    </Empty>
                   </TableCell>
                 </TableRow>
               ) : (

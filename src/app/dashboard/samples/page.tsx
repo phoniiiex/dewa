@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 
 const statusConfig: Record<SampleStatus, { label: string; cls: string; icon: React.ReactNode }> = {
   PENDING:  { label: "چاوەڕوان",   cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",   icon: <Clock className="size-3" /> },
@@ -230,7 +231,17 @@ export default function SamplesPage() {
                   <TableRow key={i}>{Array.from({ length: isRep ? 6 : 7 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}</TableRow>
                 ))
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={isRep ? 6 : 7} className="py-12 text-center text-muted-foreground">هیچ داواکارییەک نەدۆزرایەوە</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={isRep ? 6 : 7} className="p-0">
+                    <Empty className="py-16 border-0">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon"><FlaskConical className="size-4" /></EmptyMedia>
+                        <EmptyTitle>هیچ داواکارییەک نەدۆزرایەوە</EmptyTitle>
+                        <EmptyDescription>داواکاریی نموونە زیاد بکە یان فلتەرەکان بگۆڕە</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  </TableCell>
+                </TableRow>
               ) : filtered.map(sr => {
                 const cfg = statusConfig[sr.status];
                 const nextIdx = statusFlow.indexOf(sr.status);

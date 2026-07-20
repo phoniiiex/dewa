@@ -24,6 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
 
 const productExportCols: ExportColumn[] = [
   { key: "name", label: "ناوی بەرهەم" },
@@ -300,9 +301,17 @@ export default function ProductsPage() {
           {loading ? (
             Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-60 rounded-xl" />)
           ) : filtered.length === 0 ? (
-            <div className="col-span-full text-center py-16 text-muted-foreground">
-              <Package className="size-10 mx-auto mb-3 opacity-20" />
-              <p className="text-sm font-semibold">هیچ بەرهەمێک نەدۆزرایەوە</p>
+            <div className="col-span-full">
+              <Empty className="py-16">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon"><Package className="size-4" /></EmptyMedia>
+                  <EmptyTitle>هیچ بەرهەمێک نەدۆزرایەوە</EmptyTitle>
+                  <EmptyDescription>بەرهەمی نوێ زیاد بکە یان وشەی گەڕان بگۆڕە</EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button size="sm" onClick={() => setModalOpen(true)}><Plus className="size-4 me-1" />بەرهەمی نوێ</Button>
+                </EmptyContent>
+              </Empty>
             </div>
           ) : filtered.map(p => (
             <ProductGridCard key={p.id} p={p}

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 
 interface ActivityLog {
   id: string;
@@ -161,12 +162,13 @@ export default function ActivitiesPage() {
           <p className="text-sm">چاوەڕوان بکە...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center py-16">
-            <p className="text-4xl mb-3">📋</p>
-            <p className="text-muted-foreground text-sm">هیچ چالاکییەک نەدۆزرایەوە</p>
-          </CardContent>
-        </Card>
+        <Empty className="py-16 border rounded-xl">
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><Activity className="size-4" /></EmptyMedia>
+            <EmptyTitle>هیچ چالاکییەک نەدۆزرایەوە</EmptyTitle>
+            <EmptyDescription>فلتەرەکان بگۆڕە یان ماوەیەکی دیکە هەڵبژێرە</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <Card>
           <CardContent className="p-0 divide-y divide-border">
