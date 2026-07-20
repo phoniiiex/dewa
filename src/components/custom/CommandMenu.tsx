@@ -8,7 +8,6 @@ import {  Search, ShoppingCart, Users, Package, Truck,
   Map, Bot, Wallet, Plus,
 } from "lucide-react";
 import { useData } from "@/lib/store";
-import { useLayout } from "@/app/dashboard/layout";
 import {
   CommandDialog,
   CommandEmpty,

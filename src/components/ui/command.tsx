@@ -2,14 +2,13 @@
 
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
-import { Dialog as BaseDialog } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
 import {
   InputGroup,
   InputGroupAddon,
 } from "@/components/ui/input-group"
-import { SearchIcon, CheckIcon } from "lucide-react"
+import { SearchIcon, CheckIcon, XIcon } from "lucide-react"
 
 function Command({
   className,
@@ -27,6 +26,10 @@ function Command({
   )
 }
 
+/**
+ * A standalone command dialog that doesn't depend on the Dialog component.
+ * Uses a plain portal + overlay pattern to avoid base-ui Dialog issues.
+ */
 function CommandDialog({
   title = "Command Palette",
   description = "Search for a command to run...",
@@ -42,24 +45,51 @@ function CommandDialog({
   onOpenChange?: (open: boolean) => void
   children: React.ReactNode
 }) {
+  // Close on Escape
+  React.useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        onOpenChange?.(false)
+      }
+    }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [open, onOpenChange])
+
+  // Prevent body scroll when open
+  React.useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = ""
+    }
+    return () => { document.body.style.overflow = "" }
+  }, [open])
+
+  if (!open) return null
+
   return (
-    <BaseDialog.Root open={open} onOpenChange={onOpenChange}>
-      <BaseDialog.Portal>
-        <BaseDialog.Backdrop
-          className="fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
-        />
-        <BaseDialog.Popup
-          className={cn(
-            "fixed top-1/3 start-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2 rounded-xl bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 overflow-hidden p-0",
-            className
-          )}
-        >
-          <BaseDialog.Title className="sr-only">{title}</BaseDialog.Title>
-          <BaseDialog.Description className="sr-only">{description}</BaseDialog.Description>
-          {children}
-        </BaseDialog.Popup>
-      </BaseDialog.Portal>
-    </BaseDialog.Root>
+    <div className="fixed inset-0 z-50" role="dialog" aria-label={title} aria-describedby="cmd-desc">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/20 backdrop-blur-xs animate-in fade-in-0 duration-100"
+        onClick={() => onOpenChange?.(false)}
+      />
+      {/* Panel */}
+      <div
+        data-slot="dialog-content"
+        className={cn(
+          "fixed top-[30%] left-1/2 z-50 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-popover text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/10 sm:max-w-sm overflow-hidden p-0 animate-in fade-in-0 zoom-in-95 duration-100",
+          className
+        )}
+      >
+        <span className="sr-only">{title}</span>
+        <span id="cmd-desc" className="sr-only">{description}</span>
+        {children}
+      </div>
+    </div>
   )
 }
 
