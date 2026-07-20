@@ -243,13 +243,14 @@ export default function TopBar() {
             <PopoverContent align="end" className="w-52 p-2" dir="rtl">
               <p className="font-bold text-xs text-muted-foreground px-2 mb-1">ماوەی کات</p>
               {DATE_PERIODS.map(period => (
-                <button key={period} onClick={() => { setDateRange(buildDateRange(period)); setDatePopOpen(false); }}
+                <Button key={period} variant="ghost" size="sm"
+                  onClick={() => { setDateRange(buildDateRange(period)); setDatePopOpen(false); }}
                   className={cn(
-                    "w-full text-right px-3 py-2 rounded-md text-sm transition-colors hover:bg-accent",
+                    "w-full justify-start px-3 py-2 rounded-md text-sm",
                     dateRange.label === period && "bg-primary/10 text-primary font-semibold"
                   )}>
                   {period}
-                </button>
+                </Button>
               ))}
             </PopoverContent>
           </Popover>
@@ -266,14 +267,14 @@ export default function TopBar() {
             <PopoverContent align="end" className="w-48 p-2" dir="rtl">
               <p className="font-bold text-xs text-muted-foreground px-2 mb-1">بارودۆخ</p>
               {STATUS_FILTERS.map(f => (
-                <button key={f.key}
+                <Button key={f.key} variant="ghost" size="sm"
                   onClick={() => { setGlobalStatusFilter(f.key === "all" ? "هەموو" : f.label); setFilterPopOpen(false); router.push("/dashboard/orders"); }}
                   className={cn(
-                    "w-full text-right px-3 py-2 rounded-md text-sm transition-colors hover:bg-accent",
+                    "w-full justify-start px-3 py-2 rounded-md text-sm",
                     globalStatusFilter === f.label && "bg-primary/10 text-primary font-semibold"
                   )}>
                   {f.label}
-                </button>
+                </Button>
               ))}
             </PopoverContent>
           </Popover>

@@ -26,6 +26,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ALL_PERMISSIONS = [
   { key: "dashboard", label: "پێشانگا", group: "سەرەکی" },
@@ -300,23 +301,19 @@ export default function UsersPage() {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex bg-muted p-1 rounded-xl gap-1 w-fit mb-5">
-        <Button variant={tab === "auth" ? "secondary" : "ghost"} size="sm"
-          onClick={() => setTab("auth")}
-          className={cn("gap-1.5 px-4 rounded-lg text-sm font-bold",
-            tab === "auth" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
-          <Shield className="size-3.5" /> بەکارهێنەرانی سیستەم ({users.length})
-        </Button>
-        <Button variant={tab === "reps" ? "secondary" : "ghost"} size="sm"
-          onClick={() => setTab("reps")}
-          className={cn("gap-1.5 px-4 rounded-lg text-sm font-bold",
-            tab === "reps" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
-          <UserCheck className="size-3.5" /> نوێنەرانی پزیشکی ({reps.length})
-          {repsWithoutAccount.length > 0 && (
-            <span className="bg-amber-500 text-white rounded-full px-1.5 text-[10px] font-bold">{repsWithoutAccount.length}</span>
-          )}
-        </Button>
-      </div>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mb-5 w-fit">
+        <TabsList>
+          <TabsTrigger value="auth" className="gap-1.5 px-4">
+            <Shield className="size-3.5" /> بەکارهێنەرانی سیستەم ({users.length})
+          </TabsTrigger>
+          <TabsTrigger value="reps" className="gap-1.5 px-4">
+            <UserCheck className="size-3.5" /> نوێنەرانی پزیشکی ({reps.length})
+            {repsWithoutAccount.length > 0 && (
+              <span className="bg-amber-500 text-white rounded-full px-1.5 text-[10px] font-bold">{repsWithoutAccount.length}</span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {error && (
         <div className="flex items-center gap-2 px-4 py-3 bg-destructive/10 text-destructive rounded-xl mb-4 text-sm">
@@ -512,16 +509,16 @@ export default function UsersPage() {
           </DialogHeader>
           {!inviteUrl ? (
             <>
-              <div className="flex bg-muted p-1 rounded-xl gap-1 mb-4">
-                {(["direct", "invite"] as const).map(m => (
-                  <Button key={m} type="button" variant={addMode === m ? "secondary" : "ghost"} size="sm"
-                    onClick={() => setAddMode(m)}
-                    className={cn("flex-1 gap-2 px-4 rounded-lg text-sm font-bold",
-                      addMode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
-                    {m === "direct" ? <><Lock className="size-3.5" /> وشەی نهێنی دابنێ</> : <><Link2 className="size-3.5" /> بانگهێشت بە لینک</>}
-                  </Button>
-                ))}
-              </div>
+              <Tabs value={addMode} onValueChange={(v) => setAddMode(v as typeof addMode)} className="mb-4">
+                <TabsList className="w-full">
+                  <TabsTrigger value="direct" className="flex-1 gap-2 px-4">
+                    <Lock className="size-3.5" /> وشەی نهێنی دابنێ
+                  </TabsTrigger>
+                  <TabsTrigger value="invite" className="flex-1 gap-2 px-4">
+                    <Link2 className="size-3.5" /> بانگهێشت بە لینک
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
               <div className={cn("px-4 py-3 rounded-xl border-s-4 text-sm text-foreground/80 mb-4",
                 addMode === "direct" ? "bg-primary/5 border-primary" : "bg-violet-50 dark:bg-violet-950/20 border-violet-500")}>
                 {addMode === "direct" ? "بەکارهێنەر دروست دەکرێت و تۆ خۆت وشەی نهێنی دادەنێی." : "لینکێکی تایبەت دروست دەکرێت. بەکارهێنەرەکە کلیک لە لینکەکە دەکات و خۆی زانیاری و وشەی نهێنی دادەنێت."}

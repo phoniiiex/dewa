@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 
 const statusConfig: Record<SampleStatus, { label: string; cls: string; icon: React.ReactNode }> = {
@@ -199,16 +200,15 @@ export default function SamplesPage() {
       </div>
 
       {/* ── Status Filter ── */}
-      <div className="flex bg-muted p-1 rounded-xl gap-1 mb-5 w-fit flex-wrap">
-        {(["ALL", ...statusFlow, "DECLINED"] as ("ALL" | SampleStatus)[]).map(s => (
-          <Button key={s} variant={statusFilter === s ? "secondary" : "ghost"} size="sm"
-            onClick={() => setStatusFilter(s)}
-            className={cn("px-3.5 rounded-lg text-xs font-bold",
-              statusFilter === s ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
-            {s === "ALL" ? "هەموو" : statusConfig[s as SampleStatus].label}
-          </Button>
-        ))}
-      </div>
+      <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)} className="mb-5 w-fit">
+        <TabsList className="flex-wrap h-auto">
+          {(["ALL", ...statusFlow, "DECLINED"] as ("ALL" | SampleStatus)[]).map(s => (
+            <TabsTrigger key={s} value={s} className="px-3.5">
+              {s === "ALL" ? "هەموو" : statusConfig[s as SampleStatus].label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* ── Data Table ── */}
       <Card>

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 type ActiveStatus = "SENT" | "DELIVERED";
@@ -107,16 +108,15 @@ export default function LogisticsPage() {
       {/* Tabs + Search */}
       <Card className="mb-5">
         <CardContent className="p-3 flex gap-3 items-center flex-wrap">
-          <div className="flex bg-muted p-1 rounded-xl gap-1">
-            {TABS.map(t => (
-              <Button key={t.key} variant={tab === t.key ? "secondary" : "ghost"} size="sm"
-                onClick={() => setTab(t.key)}
-                className={cn("px-3.5 rounded-lg text-xs font-bold",
-                  tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
-                {t.label}
-              </Button>
-            ))}
-          </div>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+            <TabsList>
+              {TABS.map(t => (
+                <TabsTrigger key={t.key} value={t.key} className="px-3.5">
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
           <div className="relative flex-1 min-w-48">
             <Search className="size-3.5 absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)}

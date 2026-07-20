@@ -723,7 +723,7 @@ export default function OrdersPage() {
                   { value: 'DIRECT_WAREHOUSE', label: '📦 کۆگا بۆ خۆی'               , clr: 'blue'   },
                   { value: 'DIRECT_PHARMACY' , label: '⚡ ڕاستەوخۆ'                   , clr: 'amber'  },
                 ] as { value: OrderFlow; label: string; clr: string }[]).map(f => (
-                  <button type="button" key={f.value}
+                  <Button type="button" key={f.value} variant="outline"
                     onClick={() => setForm({ ...form, orderFlow: f.value, clientId: '', clientName: '', pharmacyId: '' })}
                     className={cn(
                       'px-3 py-1.5 rounded-lg text-xs font-bold border-[1.5px] transition-all',
@@ -734,7 +734,7 @@ export default function OrdersPage() {
                         : 'border-border text-muted-foreground hover:border-primary/50'
                     )}>
                     {f.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -911,16 +911,16 @@ export default function OrdersPage() {
                   <div className="flex items-center gap-2 text-[12px] bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
                     <span>🔢</span>
                     <span className="flex-1 text-blue-700 dark:text-blue-300">ژمارەی بۆنەس <strong>{live.rawTotal.toFixed(2)}</strong> دانەیە — ژمارەی تەواو نییە</span>
-                    <button type="button"
+                    <Button type="button" variant="outline" size="sm"
                       onClick={() => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, bonusRounding: 'floor' } : x))}
-                      className={`px-2 py-0.5 rounded border text-[11px] font-semibold transition-colors ${
+                      className={cn('px-2 py-0.5 rounded text-[11px] font-semibold',
                         item.bonusRounding === 'floor' ? 'bg-blue-600 text-white border-blue-600' : 'border-blue-300 text-blue-600 hover:bg-blue-100'
-                      }`}>↓ {Math.floor(live.rawTotal)}</button>
-                    <button type="button"
+                      )}>↓ {Math.floor(live.rawTotal)}</Button>
+                    <Button type="button" variant="outline" size="sm"
                       onClick={() => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, bonusRounding: 'ceil' } : x))}
-                      className={`px-2 py-0.5 rounded border text-[11px] font-semibold transition-colors ${
+                      className={cn('px-2 py-0.5 rounded text-[11px] font-semibold',
                         item.bonusRounding === 'ceil' ? 'bg-blue-600 text-white border-blue-600' : 'border-blue-300 text-blue-600 hover:bg-blue-100'
-                      }`}>↑ {Math.ceil(live.rawTotal)}</button>
+                      )}>↑ {Math.ceil(live.rawTotal)}</Button>
                   </div>
                 )}
                 {/* Rule 4B: DW fraction alert — user must adjust qty, no floor/ceil choice */}

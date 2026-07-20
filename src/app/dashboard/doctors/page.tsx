@@ -24,6 +24,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 
 const DoctorMap = dynamic(() => import("./DoctorMap"), {
@@ -302,16 +303,16 @@ export default function DoctorsPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex bg-muted p-1 rounded-xl gap-1">
-            {(["list", "map"] as const).map(v => (
-              <Button key={v} variant={view === v ? "secondary" : "ghost"} size="sm"
-                onClick={() => setView(v)}
-                className={cn("px-3.5 rounded-lg text-xs font-bold gap-1.5",
-                  view === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
-                {v === "list" ? <><List className="size-3" />لیست</> : <><Map className="size-3" />نەخشە</>}
-              </Button>
-            ))}
-          </div>
+          <Tabs value={view} onValueChange={(v) => setView(v as typeof view)}>
+            <TabsList>
+              <TabsTrigger value="list" className="px-3.5 gap-1.5">
+                <List className="size-3" />لیست
+              </TabsTrigger>
+              <TabsTrigger value="map" className="px-3.5 gap-1.5">
+                <Map className="size-3" />نەخشە
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
           <Button variant="outline" size="icon" onClick={fetchDoctors} className="size-9">
             <RefreshCw className="size-3.5" />
           </Button>

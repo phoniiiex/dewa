@@ -25,6 +25,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import {
   ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig,
@@ -188,16 +189,15 @@ export default function FinancePage() {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="flex bg-muted p-1 rounded-xl gap-1 mb-6 overflow-x-auto">
-        {TABS.map(tab => (
-          <Button key={tab.key} variant={activeTab === tab.key ? "secondary" : "ghost"} size="sm"
-            onClick={() => setActiveTab(tab.key)}
-            className={cn("px-4 rounded-lg text-xs font-bold whitespace-nowrap",
-              activeTab === tab.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
-            {tab.label}
-          </Button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)} className="mb-6">
+        <TabsList className="overflow-x-auto">
+          {TABS.map(tab => (
+            <TabsTrigger key={tab.key} value={tab.key} className="px-4 whitespace-nowrap">
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* ═══════════════════════════════════════════════════════════════════
           OVERVIEW TAB
@@ -517,16 +517,15 @@ export default function FinancePage() {
               <Search className="size-3.5 absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input type="text" placeholder="گەڕان..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-64 pe-9" />
             </div>
-            <div className="flex bg-muted p-1 rounded-xl gap-1">
-              {["هەموو", "داهات", "خەرجی"].map(s => (
-                <Button key={s} variant={typeFilter === s ? "secondary" : "ghost"} size="sm"
-                  onClick={() => setTypeFilter(s)}
-                  className={cn("px-3.5 rounded-lg text-xs font-bold",
-                    typeFilter === s ? "bg-background text-foreground shadow-sm" : "text-muted-foreground")}>
-                  {s}
-                </Button>
-              ))}
-            </div>
+            <Tabs value={typeFilter} onValueChange={setTypeFilter}>
+              <TabsList>
+                {["هەموو", "داهات", "خەرجی"].map(s => (
+                  <TabsTrigger key={s} value={s} className="px-3.5">
+                    {s}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           </div>
 
           {/* Data Table */}
