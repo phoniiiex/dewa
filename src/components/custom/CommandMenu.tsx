@@ -1,8 +1,7 @@
 "use client";
 import { useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Search, ShoppingCart, Users, Package, Truck,
+import {  Search, ShoppingCart, Users, Package, Truck,
   LayoutDashboard, FileText, Warehouse, UserCog,
   BarChart2, Building2, User, RotateCcw, Sparkles,
   Settings, Gift, FlaskConical, BadgeCheck, Stethoscope,
@@ -71,12 +70,12 @@ const quickActions = [
 interface Props {
   open: boolean;
   onClose: () => void;
+  onNewOrder?: () => void;
 }
 
-export default function CommandMenu({ open, onClose }: Props) {
+export default function CommandMenu({ open, onClose, onNewOrder }: Props) {
   const router = useRouter();
   const { products, clients, orders, reps, users, warehouses, suppliers, drivers } = useData();
-  const { setOpenNewOrder } = useLayout();
 
   const go = useCallback((href: string) => {
     router.push(href);
@@ -86,12 +85,12 @@ export default function CommandMenu({ open, onClose }: Props) {
   const handleAction = useCallback((action: string) => {
     switch (action) {
       case "new-order":
-        setOpenNewOrder(true);
+        onNewOrder?.();
         router.push("/dashboard/orders");
         break;
     }
     onClose();
-  }, [router, onClose, setOpenNewOrder]);
+  }, [router, onClose, onNewOrder]);
 
   // Format price with IQD
   const fmtPrice = (n: number) =>

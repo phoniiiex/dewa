@@ -294,7 +294,7 @@ export default function TopBar() {
         </div>
       </header>
 
-      <CommandMenu open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <CommandMenu open={searchOpen} onClose={() => setSearchOpen(false)} onNewOrder={() => setOpenNewOrder(true)} />
     </>
   );
 }
