@@ -91,9 +91,10 @@ export default async function PrintPage({
   searchParams,
 }: {
   params: { orderId: string };
-  searchParams: { t?: string; preview?: string; doc?: string };
+  searchParams: { t?: string; preview?: string; doc?: string; silent?: string };
 }) {
   const isPreview = searchParams.preview === "true";
+  const isSilent = searchParams.silent === "true";
   const db = createAdminClient();
 
   // ── Fetch order ──────────────────────────────────────────
@@ -161,6 +162,19 @@ export default async function PrintPage({
 
   const docLabel = DOC_LABELS[template.docType] ?? template.docType;
   const pageLabel = `${order.orderNumber} — ${docLabel}`;
+
+  // Silent mode: render only the document (for iframe printing)
+  if (isSilent) {
+    return (
+      <PrintDocument
+        order={order}
+        client={client}
+        settings={settings}
+        template={template}
+        qrDataUrl={qrDataUrl}
+      />
+    );
+  }
 
   return (
     <PrintShell label={pageLabel} autoPrint={!isPreview}>

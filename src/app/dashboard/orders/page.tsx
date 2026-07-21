@@ -1,7 +1,7 @@
 "use client";
 import { useState, FormEvent, useRef, useMemo, useEffect } from "react";
 import {
-  Search, Plus, ShoppingCart, Eye, Trash2, X, Printer,
+  Search, Plus, ShoppingCart, Eye, Trash2, X,
   CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign, Pencil,
   PackageCheck, TriangleAlert, Tag,
 } from "lucide-react";
@@ -27,7 +27,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ExportButton from "@/components/custom/ExportButton";
-import PrintModal from "@/components/custom/PrintModal";
+import { PrintButton } from "@/components/custom/PrintButton";
 import ClientCombobox from "@/components/custom/ClientCombobox";
 import type { ExportColumn } from "@/lib/export";
 import { notifyDriverOfOrder, sendTelegramMessage } from "@/lib/telegram";
@@ -112,7 +112,7 @@ export default function OrdersPage() {
   const [newOrderOpen, setNewOrderOpen]       = useState(false);
   const [detailOrder, setDetailOrder]         = useState<Order | null>(null);
   const [deleteId, setDeleteId]               = useState<string | null>(null);
-  const [printOrder, setPrintOrder]           = useState<Order | null>(null);
+
 
   // Combined "Mark Ready + Assign Driver" modal
   const [sendModalOrder, setSendModalOrder]   = useState<Order | null>(null);
@@ -631,7 +631,7 @@ export default function OrdersPage() {
                       <Button size="icon" variant="ghost" className="size-7" onClick={() => openEditModal(o)}><Pencil className="size-3.5" /></Button>
                     )}
                     <Button size="icon" variant="ghost" className="size-7" onClick={() => setDetailOrder(o)}><Eye className="size-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="size-7" onClick={() => setPrintOrder(o)}><Printer className="size-3.5" /></Button>
+                    <PrintButton order={o} />
                     {isManager && <Button size="icon" variant="ghost" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(o.id)}><Trash2 className="size-3.5" /></Button>}
                   </div>
                 </TableCell>
@@ -1366,8 +1366,7 @@ export default function OrdersPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Print ── */}
-      {printOrder && <PrintModal open={true} order={printOrder} onClose={() => setPrintOrder(null)} />}
+
     </>
   );
 }

@@ -1,0 +1,294 @@
+/* ────────────────────────────────────────────────────────────
+   PrintDocument.module.css
+   Styles for the printed invoice/receipt document.
+   Uses CSS custom properties for theming:
+     --print-accent   : primary color (header bar, table header)
+     --print-font     : font family
+   ──────────────────────────────────────────────────────────── */
+
+/* ── Page container ── */
+.page {
+  margin: 0 auto;
+  font-family: var(--print-font, 'Segoe UI', Tahoma, Arial, sans-serif);
+  direction: rtl;
+  color: #1A1A2E;
+  background: white;
+  position: relative;
+}
+
+.pageA4 { width: 794px; padding: 40px 48px; min-height: 1123px; }
+.pageA5 { width: 559px; padding: 32px 36px; min-height: 790px; }
+.pageThermal { width: 302px; padding: 20px 16px; }
+
+/* ── Watermark ── */
+.watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.watermarkText {
+  font-size: 80px;
+  font-weight: 900;
+  color: rgba(0,0,0,0.04);
+  transform: rotate(-35deg);
+  white-space: nowrap;
+  user-select: none;
+  letter-spacing: 8px;
+}
+
+.content { position: relative; z-index: 1; }
+
+/* ── Block: Header ── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 3px solid var(--print-accent, #4263EB);
+}
+.headerLogo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.logoImg {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  object-fit: cover;
+  outline: 1px solid rgba(0,0,0,0.08);
+}
+.logoFallback {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #F47B35, #FF9A5C);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  font-weight: 900;
+}
+.companyName { font-size: 20px; font-weight: 800; }
+.companyNameEn { font-size: 11px; color: #6C757D; margin-top: 2px; }
+.companyContact { font-size: 11px; color: #868E96; margin-top: 3px; }
+.headerRight { text-align: left; }
+.docTitle { font-size: 30px; font-weight: 900; color: var(--print-accent, #4263EB); margin-bottom: 8px; }
+.headerMeta { font-size: 12px; color: #495057; margin-bottom: 2px; }
+.statusBadge {
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-block;
+}
+.statusPaid { background: #D3F9D8; color: #2B8A3E; }
+.statusOther { background: #FFF3BF; color: #E67700; }
+
+/* ── Block: Parties ── */
+.parties { display: flex; gap: 16px; margin-bottom: 20px; }
+.partyCard {
+  flex: 1;
+  background: #F8F9FA;
+  border-radius: 10px;
+  padding: 14px;
+  border: 1px solid #E9ECEF;
+}
+.partyLabel {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #ADB5BD;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.partyName { font-size: 14px; font-weight: 700; }
+.partyDetail { font-size: 11px; color: #6C757D; margin-top: 3px; }
+
+/* ── Block: Items Table ── */
+.itemsTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.itemsTable thead tr { background: var(--print-accent, #4263EB); }
+.itemsTable th {
+  padding: 11px 14px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+}
+.itemsTable td {
+  padding: 10px 14px;
+  font-size: 12px;
+}
+.rowEven { background: white; }
+.rowOdd { background: #FAFBFC; }
+.cellIndex { color: #ADB5BD; }
+.cellProduct { font-weight: 600; }
+.cellBonus { color: #40C057; font-weight: 700; }
+.cellTotal { font-weight: 800; }
+
+/* ── Block: Summary ── */
+.summary { display: flex; justify-content: flex-start; margin-bottom: 20px; }
+.summaryBox {
+  width: 300px;
+  border: 1px solid #E9ECEF;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid #F1F3F5;
+}
+.summaryDiscount { color: #FA5252; }
+.summaryTotal {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--print-accent, #4263EB);
+}
+.summaryTotalLabel {
+  color: white;
+  font-size: 15px;
+  font-weight: 800;
+}
+.summaryTotalValue {
+  color: white;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+/* ── Block: Bonus ── */
+.bonus {
+  padding: 14px;
+  background: #F3F0FF;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  border: 1px solid #E8E0FF;
+}
+.bonusTitle { font-size: 11px; font-weight: 700; color: #7C5CFC; margin-bottom: 4px; }
+.bonusText { font-size: 12px; color: #6C757D; }
+
+/* ── Block: Note ── */
+.note {
+  padding: 14px;
+  background: #FFF8DB;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  border: 1px solid #FFE066;
+}
+.noteTitle { font-size: 11px; font-weight: 700; color: #E67700; margin-bottom: 4px; }
+.noteText { font-size: 12px; }
+
+/* ── Block: Terms ── */
+.terms {
+  padding: 14px;
+  background: #E8F5E9;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  border: 1px solid #A5D6A7;
+}
+.termsTitle { font-size: 11px; font-weight: 700; color: #2E7D32; margin-bottom: 4px; }
+.termsText { font-size: 12px; white-space: pre-line; }
+
+/* ── Block: Signature ── */
+.signature {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-top: 8px;
+}
+.signatureSlot { text-align: center; flex: 1; }
+.signatureLine {
+  width: 140px;
+  border-bottom: 1px solid #ADB5BD;
+  margin: 30px auto 8px;
+}
+.signatureLabel { font-size: 11px; color: #6C757D; }
+.signatureImage {
+  width: 120px;
+  height: 60px;
+  object-fit: contain;
+  margin: 8px auto;
+  display: block;
+}
+
+/* ── Block: QR ── */
+.qr {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #F8F9FA;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  border: 1px solid #E9ECEF;
+}
+.qrImage {
+  display: block;
+  border-radius: 8px;
+  flex-shrink: 0;
+  outline: 1px solid rgba(0,0,0,0.06);
+}
+.qrTitle { font-size: 12px; font-weight: 700; color: #495057; margin-bottom: 4px; }
+.qrDescription { font-size: 11px; color: #868E96; }
+
+/* ── Block: Footer ── */
+.footer {
+  border-top: 2px solid #E9ECEF;
+  padding-top: 14px;
+  margin-top: 20px;
+  text-align: center;
+}
+.footerCompany { font-size: 13px; color: #868E96; font-weight: 600; }
+.footerContact { font-size: 11px; color: #CED4DA; margin-top: 4px; }
+
+/* ── Block: Divider ── */
+.divider {
+  border: none;
+  border-top: 1px solid #E9ECEF;
+  margin: 12px 0;
+}
+
+/* ── Block: Custom Text ── */
+.customText {
+  padding: 14px;
+  background: #F1F3F5;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.customTextLabel { font-size: 11px; font-weight: 700; color: #495057; margin-bottom: 4px; }
+.customTextBody { font-size: 12px; color: #495057; white-space: pre-line; }
+
+/* ── Print media ── */
+@media print {
+  .page { min-height: auto !important; }
+  thead tr {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .statusBadge,
+  .summaryTotal,
+  .bonus,
+  .note,
+  .terms,
+  .qr,
+  .customText {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

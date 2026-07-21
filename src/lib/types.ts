@@ -248,11 +248,26 @@ export interface InvoiceBlockConfig {
   required?: boolean;
   type: "builtin" | "custom" | "divider";
   customText?: string; // for custom text blocks
-  // Per-block style overrides (all optional, builder sets them)
-  fontSize?: number;         // 10–18, default 13
+
+  // ── Per-block style overrides (all optional, builder sets them) ──
+  fontSize?: number;         // 10–24, default 13
+  fontFamily?: string;       // override template font for this block
+  fontWeight?: number;       // 400–900
+  textAlign?: "right" | "center" | "left";
   bgColor?: string;          // block background (default transparent)
   accentColor?: string;      // override template primaryColor for this block
   showBorder?: boolean;      // draw a visible border around the block
+  borderRadius?: number;     // 0–20
+  padding?: number;          // 0–32
+  marginBottom?: number;     // 0–32
+  opacity?: number;          // 0.3–1.0
+
+  // ── Signature block ──
+  signatureUrl?: string;       // uploaded/drawn signature data URL
+  signatureLabels?: string[];  // e.g. ["واژووی فرۆشیار","واژووی کڕیار"]
+
+  // ── QR block ──
+  qrSize?: number;             // 80–200px
 }
 
 export interface TemplateOptions {
@@ -260,7 +275,7 @@ export interface TemplateOptions {
   primaryColor: string;               // accent/heading color, default "#4263EB"
   logoUrl?: string;                   // uploaded company logo
   watermark?: string;                 // faint diagonal background text e.g. "COPY"
-  fontFamily?: string;                // "system" | "serif" | "mono"
+  fontFamily?: string;                // "system" | "serif" | "mono" | "naskh"
 }
 
 const DEFAULT_TEMPLATE_OPTIONS: TemplateOptions = {
@@ -280,8 +295,10 @@ export interface InvoiceTemplate {
   defaultTerms: string;
   defaultDiscount: number;
   options: TemplateOptions; // paper, color, logo, watermark
+  isDefault?: boolean;     // user's default template for printing
   createdAt: string;
 }
+
 
 export type SampleStatus = 'PENDING' | 'ACCEPTED' | 'SENT' | 'ARRIVED' | 'DECLINED';
 
