@@ -46,6 +46,7 @@ const DOC_LABELS: Record<string, string> = {
 
 const FONTS: Record<string, string> = {
   system: "'Segoe UI', Tahoma, Arial, sans-serif",
+  zavi:   "'Zavi Gifts', 'Segoe UI', Tahoma, sans-serif",
   serif:  "Georgia, 'Times New Roman', serif",
   mono:   "'Courier New', Courier, monospace",
   naskh:  "'Noto Naskh Arabic', 'Segoe UI', Arial, sans-serif",

@@ -645,6 +645,7 @@ export default function TemplateBuilderPage() {
                   <SelectTrigger className="h-8 text-xs"><SelectValue/></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="system" className="text-xs">سیستەم (پێشبینی)</SelectItem>
+                    <SelectItem value="zavi" className="text-xs">Zavi Gifts</SelectItem>
                     <SelectItem value="serif" className="text-xs">Serif</SelectItem>
                     <SelectItem value="mono" className="text-xs">Monospace</SelectItem>
                     <SelectItem value="naskh" className="text-xs">Noto Naskh Arabic</SelectItem>
@@ -817,6 +818,7 @@ export default function TemplateBuilderPage() {
                         <SelectContent>
                           <SelectItem value="" className="text-xs">وەک داڕێژە</SelectItem>
                           <SelectItem value="system" className="text-xs">سیستەم</SelectItem>
+                          <SelectItem value="zavi" className="text-xs">Zavi Gifts</SelectItem>
                           <SelectItem value="serif" className="text-xs">Serif</SelectItem>
                           <SelectItem value="mono" className="text-xs">Monospace</SelectItem>
                           <SelectItem value="naskh" className="text-xs">Naskh Arabic</SelectItem>
