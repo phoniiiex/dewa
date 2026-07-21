@@ -277,7 +277,7 @@
 /* ── Print media ── */
 @media print {
   .page { min-height: auto !important; }
-  thead tr {
+  .itemsTable thead tr {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
