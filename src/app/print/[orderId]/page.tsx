@@ -86,13 +86,12 @@ const DOC_LABELS: Record<string, string> = {
 };
 
 // ── Page ────────────────────────────────────────────────────
-export default async function PrintPage({
-  params,
-  searchParams,
-}: {
-  params: { orderId: string };
-  searchParams: { t?: string; preview?: string; doc?: string; silent?: string };
+export default async function PrintPage(props: {
+  params: Promise<{ orderId: string }>;
+  searchParams: Promise<{ t?: string; preview?: string; doc?: string; silent?: string }>;
 }) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
   const isPreview = searchParams.preview === "true";
   const isSilent = searchParams.silent === "true";
   const db = createAdminClient();
