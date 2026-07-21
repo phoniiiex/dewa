@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { OreoAvatar } from "@/components/custom/OreoAvatar";
-import { AiAura } from "@/components/custom/AiAura";
+import { ThinkingOrb } from "thinking-orbs";
 import {
   AIInput,
   type AIInputMenuItem,
@@ -581,7 +581,7 @@ function ChatRow({ msg, user, onPreviewAction }: {
     return (
       <Message align="start">
         <MessageAvatar className="size-8 rounded-full overflow-hidden shrink-0 p-0 border-0 bg-transparent">
-          <AiAura state="thinking" className="size-8" />
+          <ThinkingOrb state="working" size={20} />
         </MessageAvatar>
         <MessageContent>
           <Bubble variant="ghost" align="start">
@@ -600,7 +600,7 @@ function ChatRow({ msg, user, onPreviewAction }: {
     <Message align={isUser ? "end" : "start"}>
       {!isUser && (
         <MessageAvatar className="size-8 rounded-full overflow-hidden shrink-0 p-0 border-0 bg-transparent">
-          <AiAura state="idle" className="size-8" />
+          <ThinkingOrb state="composing" size={20} />
         </MessageAvatar>
       )}
       <MessageContent>
