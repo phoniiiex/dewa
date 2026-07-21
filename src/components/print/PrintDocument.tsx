@@ -1,49 +1,21 @@
-// ============================================================
-// DEWA — Print Block Renderers (CSS Module version)
-// Shared by /print/[orderId] (server page) and the builder preview.
-// All blocks are pure functions — no hooks, no state.
-// ============================================================
-import type { InvoiceBlockConfig, InvoiceTemplate } from "@/lib/types";
+// ═══════════════════════════════════════════════════════════
+// PrintDocument – renders the printable invoice/receipt/delivery/quote
+// Each block has layout variants driven by InvoiceBlockConfig
+// ═══════════════════════════════════════════════════════════
 import styles from "./PrintDocument.module.css";
+import type { InvoiceTemplate, InvoiceBlockConfig } from "@/lib/types";
 
+// ── Public prop types ──────────────────────────────────────
 export type PrintOrder = {
-  id: string;
-  orderNumber: string;
-  clientId: string;
-  clientName: string;
-  repName: string;
-  warehouseName: string | null;
-  items: { productName: string; quantity: number; bonusQty: number; unitPrice: number; bonusPct: number }[];
-  status: string;
-  totalAmount: number;
-  notes: string;
-  createdAt: string;
+  id: string; orderNumber: string; clientId: string;
+  clientName: string; repName: string; warehouseName?: string | null;
+  items: { productName: string; quantity: number; bonusQty?: number; unitPrice: number; bonusPct?: number }[];
+  status: string; totalAmount: number; notes: string; createdAt: string;
 };
+export type PrintClient = { name: string; phone: string; city: string; type: string };
+export type PrintSettings = { name: string; nameEn: string; phone: string; email: string; address: string };
 
-export type PrintClient = {
-  name: string;
-  phone: string;
-  city: string;
-  type: string;
-};
-
-export type PrintSettings = {
-  name: string;
-  nameEn: string;
-  phone: string;
-  email: string;
-  address: string;
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  WAITING: "چاوەڕوان", IN_PROGRESS: "لە پڕۆسەدا", READY: "ئامادەیە",
-  SENT: "نێردراوە", DELIVERED: "گەیشتووە", PAID: "پارەدراوە", NOT_ACCEPTED: "ڕەتکراوە",
-};
-
-const DOC_LABELS: Record<string, string> = {
-  invoice: "پسووڵە", receipt: "وەسڵ", delivery: "وەرقەی گەیاندن", quote: "نرخنامە",
-};
-
+// ── Font map ───────────────────────────────────────────────
 const FONTS: Record<string, string> = {
   system: "'Segoe UI', Tahoma, Arial, sans-serif",
   zavi:   "'Zavi Gifts', 'Segoe UI', Tahoma, sans-serif",
@@ -52,110 +24,207 @@ const FONTS: Record<string, string> = {
   naskh:  "'Noto Naskh Arabic', 'Segoe UI', Arial, sans-serif",
 };
 
-function iqd(n: number) {
-  return new Intl.NumberFormat("en-US").format(n) + " د.ع";
-}
+const DOC_LABELS: Record<string, string> = {
+  invoice:"پسووڵە", receipt:"وەسڵ", delivery:"وەرقەی گەیاندن", quote:"نرخنامە",
+};
 
-// ── Per-block inline style from config overrides ──────────────
-function blockStyle(block: InvoiceBlockConfig): React.CSSProperties {
+// ── Block style helper ─────────────────────────────────────
+function blockStyle(b: InvoiceBlockConfig): React.CSSProperties {
   const s: React.CSSProperties = {};
-  if (block.fontSize) s.fontSize = block.fontSize;
-  if (block.fontFamily) s.fontFamily = FONTS[block.fontFamily] ?? block.fontFamily;
-  if (block.fontWeight) s.fontWeight = block.fontWeight;
-  if (block.textAlign) s.textAlign = block.textAlign;
-  if (block.bgColor) s.background = block.bgColor;
-  if (block.borderRadius != null) s.borderRadius = block.borderRadius;
-  if (block.padding != null) s.padding = block.padding;
-  if (block.marginBottom != null) s.marginBottom = block.marginBottom;
-  if (block.opacity != null) s.opacity = block.opacity;
-  if (block.showBorder && block.accentColor) s.border = `1px solid ${block.accentColor}`;
+  if (b.fontSize) s.fontSize = b.fontSize;
+  if (b.fontFamily && FONTS[b.fontFamily]) s.fontFamily = FONTS[b.fontFamily];
+  if (b.fontWeight) s.fontWeight = b.fontWeight;
+  if (b.textAlign) s.textAlign = b.textAlign;
+  if (b.bgColor) s.background = b.bgColor;
+  if (b.showBorder) s.border = `1px solid ${b.accentColor || '#DEE2E6'}`;
+  if (b.borderRadius != null) s.borderRadius = b.borderRadius;
+  if (b.padding != null) s.padding = b.padding;
+  if (b.marginBottom != null) s.marginBottom = b.marginBottom;
+  if (b.opacity != null) s.opacity = b.opacity;
   return s;
 }
 
-// ── Individual block renderers ─────────────────────────────
+function fmtNumber(n: number) { return n.toLocaleString("en-US"); }
 
-function BlockHeader({ order, settings, template, block, qrDataUrl }: {
-  order: PrintOrder; settings: PrintSettings; template: InvoiceTemplate; block: InvoiceBlockConfig; qrDataUrl?: string;
+// ════════════════════════════════════════════════════════════
+// BLOCK: Header
+// ════════════════════════════════════════════════════════════
+function BlockHeader({ order, settings, template, block }: {
+  order: PrintOrder; settings: PrintSettings; template: InvoiceTemplate; block: InvoiceBlockConfig;
 }) {
   const color = block.accentColor || template.options.primaryColor;
   const docLabel = DOC_LABELS[template.docType] || template.docType;
   const isPaid = order.status === "PAID";
-  return (
-    <div className={styles.header} style={{ ...blockStyle(block), borderBottomColor: color }}>
-      <div className={styles.headerLogo}>
-        {template.options.logoUrl
-          ? <img src={template.options.logoUrl} alt="logo" className={styles.logoImg} />
-          : <div className={styles.logoFallback}>
-              {settings.name.charAt(0) || "د"}
-            </div>
-        }
+  const layout = block.headerLayout ?? "classic";
+  const showLogo = block.showLogo !== false;
+  const showNameEn = block.showNameEn !== false;
+  const showContact = block.showContact !== false;
+  const showStatus = block.showStatus !== false;
+  const logoLeft = block.logoPosition === "left";
+
+  const logo = showLogo && (
+    template.options.logoUrl
+      ? <img src={template.options.logoUrl} alt="logo" className={styles.logoImg} />
+      : <div className={styles.logoFallback}>{settings.name.charAt(0) || "د"}</div>
+  );
+
+  const meta = (
+    <>
+      <div className={styles.headerMeta}><strong>ژمارە:</strong> {order.orderNumber}</div>
+      <div className={styles.headerMeta}>
+        <strong>بەروار:</strong> {new Date(order.createdAt).toLocaleDateString("ku", { year:"numeric", month:"long", day:"numeric" })}
+      </div>
+      {showStatus && (
+        <div className={`${styles.statusBadge} ${isPaid ? styles.statusPaid : styles.statusUnpaid}`}>
+          {isPaid ? "پارەدراو" : "پارەنەدراو"}
+        </div>
+      )}
+    </>
+  );
+
+  // ── Centered ──
+  if (layout === "centered") {
+    return (
+      <div className={styles.headerCentered} style={blockStyle(block)}>
+        {logo}
+        <div className={styles.companyName}>{settings.name}</div>
+        {showNameEn && settings.nameEn && <div className={styles.companyNameEn}>{settings.nameEn}</div>}
+        {showContact && <div className={styles.companyContact}>{settings.phone} | {settings.email}</div>}
+        <div className={styles.docTitle} style={{ color }}>{docLabel}</div>
+        {meta}
+      </div>
+    );
+  }
+
+  // ── Minimal ──
+  if (layout === "minimal") {
+    return (
+      <div className={styles.headerMinimal} style={blockStyle(block)}>
+        <div className={styles.companyName}>{settings.name}</div>
         <div>
-          <div className={styles.companyName}>{settings.name}</div>
-          {settings.nameEn && <div className={styles.companyNameEn}>{settings.nameEn}</div>}
-          <div className={styles.companyContact}>{settings.phone} | {settings.email}</div>
+          <div className={styles.docTitle} style={{ color }}>{docLabel}</div>
+          {meta}
         </div>
       </div>
-      <div className={styles.headerRight}>
-        <div className={styles.docTitle} style={{ color }}>{docLabel}</div>
-        <div className={styles.headerMeta}><strong>ژمارە:</strong> {order.orderNumber}</div>
-        <div className={styles.headerMeta}><strong>بەروار:</strong> {order.createdAt.split("T")[0]}</div>
-        <div className={styles.headerMeta}>
-          <strong>بارودۆخ:</strong>{" "}
-          <span className={`${styles.statusBadge} ${isPaid ? styles.statusPaid : styles.statusOther}`}>
-            {STATUS_LABELS[order.status] ?? order.status}
-          </span>
+    );
+  }
+
+  // ── Banner ──
+  if (layout === "banner") {
+    return (
+      <div className={styles.headerBanner} style={{ ...blockStyle(block), background: color }}>
+        <div className={styles.headerLogo} style={logoLeft ? { order: 2 } : {}}>
+          {logo}
+          <div>
+            <div className={styles.companyName}>{settings.name}</div>
+            {showNameEn && settings.nameEn && <div className={styles.companyNameEn}>{settings.nameEn}</div>}
+            {showContact && <div className={styles.companyContact}>{settings.phone} | {settings.email}</div>}
+          </div>
         </div>
+        <div className={styles.headerRight} style={logoLeft ? { order: 1, textAlign: "right" } : {}}>
+          <div className={styles.docTitle}>{docLabel}</div>
+          {meta}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Classic (default) ──
+  return (
+    <div className={styles.header} style={{ ...blockStyle(block), borderBottomColor: color }}>
+      <div className={styles.headerLogo} style={logoLeft ? { order: 2 } : {}}>
+        {logo}
+        <div>
+          <div className={styles.companyName}>{settings.name}</div>
+          {showNameEn && settings.nameEn && <div className={styles.companyNameEn}>{settings.nameEn}</div>}
+          {showContact && <div className={styles.companyContact}>{settings.phone} | {settings.email}</div>}
+        </div>
+      </div>
+      <div className={styles.headerRight} style={logoLeft ? { order: 1, textAlign: "right" } : {}}>
+        <div className={styles.docTitle} style={{ color }}>{docLabel}</div>
+        {meta}
       </div>
     </div>
   );
 }
 
-function BlockParties({ order, client, block }: { order: PrintOrder; client?: PrintClient; block: InvoiceBlockConfig }) {
+// ════════════════════════════════════════════════════════════
+// BLOCK: Parties
+// ════════════════════════════════════════════════════════════
+function BlockParties({ order, client, block }: {
+  order: PrintOrder; client?: PrintClient; block: InvoiceBlockConfig;
+}) {
+  const showPhone = block.showPhone !== false;
+  const showCity = block.showCity !== false;
+  const showRep = block.showRep !== false;
+  const showWarehouse = block.showWarehouse !== false;
+  const stacked = block.partiesLayout === "stacked";
+
   return (
-    <div className={styles.parties} style={blockStyle(block)}>
+    <div className={`${styles.parties} ${stacked ? styles.partiesStacked : ""}`} style={blockStyle(block)}>
       <div className={styles.partyCard}>
         <div className={styles.partyLabel}>کڕیار</div>
-        <div className={styles.partyName}>{order.clientName}</div>
-        {client && <div className={styles.partyDetail}>{client.phone} — {client.city}</div>}
+        <div className={styles.partyName}>{client?.name || order.clientName}</div>
+        {showPhone && client?.phone && <div className={styles.partyDetail}>📞 {client.phone}</div>}
+        {showCity && client?.city && <div className={styles.partyDetail}>📍 {client.city}</div>}
       </div>
-      <div className={styles.partyCard}>
-        <div className={styles.partyLabel}>نوێنەر</div>
-        <div className={styles.partyName}>{order.repName}</div>
-      </div>
-      {order.warehouseName && (
+      {(showRep || showWarehouse) && (
         <div className={styles.partyCard}>
-          <div className={styles.partyLabel}>کۆگا</div>
-          <div className={styles.partyName}>{order.warehouseName}</div>
+          {showRep && (
+            <>
+              <div className={styles.partyLabel}>نوێنەر</div>
+              <div className={styles.partyName}>{order.repName}</div>
+            </>
+          )}
+          {showWarehouse && order.warehouseName && (
+            <div className={styles.partyDetail}>🏭 {order.warehouseName}</div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════════
+// BLOCK: Items Table
+// ════════════════════════════════════════════════════════════
 function BlockItemsTable({ order, showBonusCol, template, block }: {
   order: PrintOrder; showBonusCol: boolean; template: InvoiceTemplate; block: InvoiceBlockConfig;
 }) {
-  const color = block.accentColor || template.options.primaryColor;
+  const showRowNums = block.showRowNumbers !== false;
+  const showUnitPrice = block.showUnitPrice !== false;
+  const variant = block.tableStyle ?? "standard";
+  const striped = block.stripedRows !== false;
+
+  const tableClasses = [
+    styles.itemsTable,
+    variant === "bordered" ? styles.tableBordered : "",
+    variant === "minimal" ? styles.tableMinimal : "",
+    variant === "compact" ? styles.tableCompact : "",
+    striped ? styles.tableStriped : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <table className={styles.itemsTable} style={blockStyle(block)}>
+    <table className={tableClasses} style={blockStyle(block)}>
       <thead>
-        <tr style={{ background: color }}>
-          {["#","بەرهەم","بڕ", ...(showBonusCol?["بۆنەس"]:[]),"نرخی یەکە","کۆ"].map(h => (
-            <th key={h}>{h}</th>
-          ))}
+        <tr>
+          {showRowNums && <th className={styles.rowNum}>#</th>}
+          <th>بەرهەم</th>
+          <th>عەدەد</th>
+          {showBonusCol && <th>بۆنەس</th>}
+          {showUnitPrice && <th>نرخی یەکە</th>}
+          <th>کۆ</th>
         </tr>
       </thead>
       <tbody>
-        {order.items.map((it, i) => (
-          <tr key={i} className={i % 2 === 0 ? styles.rowEven : styles.rowOdd}>
-            <td className={styles.cellIndex}>{i+1}</td>
-            <td className={styles.cellProduct}>{it.productName}</td>
-            <td>{it.quantity}</td>
-            {showBonusCol && (
-              <td className={styles.cellBonus}>+{it.bonusQty}</td>
-            )}
-            <td>{iqd(it.unitPrice)}</td>
-            <td className={styles.cellTotal}>{iqd(it.quantity * it.unitPrice)}</td>
+        {order.items.map((item, i) => (
+          <tr key={i}>
+            {showRowNums && <td className={styles.rowNum}>{i + 1}</td>}
+            <td>{item.productName}</td>
+            <td>{item.quantity}</td>
+            {showBonusCol && <td>{item.bonusQty || 0}</td>}
+            {showUnitPrice && <td>{fmtNumber(item.unitPrice)}</td>}
+            <td style={{ fontWeight: 600 }}>{fmtNumber(item.quantity * item.unitPrice)}</td>
           </tr>
         ))}
       </tbody>
@@ -163,77 +232,98 @@ function BlockItemsTable({ order, showBonusCol, template, block }: {
   );
 }
 
+// ════════════════════════════════════════════════════════════
+// BLOCK: Summary
+// ════════════════════════════════════════════════════════════
 function BlockSummary({ order, template, discount, block }: {
   order: PrintOrder; template: InvoiceTemplate; discount: number; block: InvoiceBlockConfig;
 }) {
-  const color = block.accentColor || template.options.primaryColor;
-  const subtotal = order.items.reduce((s,i) => s + i.quantity * i.unitPrice, 0);
-  const disc = subtotal * (discount / 100);
-  const total = subtotal - disc;
+  const subtotal = order.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  const discountAmt = discount > 0 ? subtotal * (discount / 100) : 0;
+  const total = subtotal - discountAmt;
+  const variant = block.summaryStyle ?? "card";
+  const pos = block.summaryPosition ?? "right";
+
+  const posClass = pos === "left" ? styles.summaryLeft : styles.summaryRight;
+  const variantClass =
+    variant === "inline" ? styles.summaryInline :
+    variant === "large" ? styles.summaryLarge : "";
+
   return (
-    <div className={styles.summary} style={blockStyle(block)}>
-      <div className={styles.summaryBox}>
-        <div className={styles.summaryRow}>
-          <span>کۆی نرخ</span><span>{iqd(subtotal)}</span>
-        </div>
-        {discount > 0 && (
-          <div className={`${styles.summaryRow} ${styles.summaryDiscount}`}>
-            <span>داشکاندن ({discount}٪)</span><span>-{iqd(disc)}</span>
-          </div>
-        )}
-        <div className={styles.summaryTotal} style={{ background: color }}>
-          <span className={styles.summaryTotalLabel}>کۆی گشتی</span>
-          <span className={styles.summaryTotalValue}>{iqd(total)}</span>
-        </div>
-      </div>
+    <div className={`${styles.summary} ${posClass} ${variantClass}`} style={blockStyle(block)}>
+      <div className={styles.summaryRow}><span>کۆی بەرهەمەکان</span><span>{fmtNumber(subtotal)}</span></div>
+      {discount > 0 && (
+        <div className={styles.summaryRow}><span>داشکاندن ({discount}%)</span><span>-{fmtNumber(discountAmt)}</span></div>
+      )}
+      <div className={styles.summaryTotal}><span>کۆی گشتی</span><span>{fmtNumber(total)} د.ع</span></div>
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════════
+// BLOCK: Bonus
+// ════════════════════════════════════════════════════════════
 function BlockBonus({ order, block }: { order: PrintOrder; block: InvoiceBlockConfig }) {
-  const total = order.items.reduce((s,i) => s + i.bonusQty, 0);
-  if (total === 0) return null;
+  const bonusItems = order.items.filter(i => (i.bonusQty ?? 0) > 0);
+  if (!bonusItems.length) return null;
   return (
     <div className={styles.bonus} style={blockStyle(block)}>
       <div className={styles.bonusTitle}>شیکاری بۆنەس</div>
-      <div className={styles.bonusText}>کۆی دانەی بۆنەس: {total} دانە</div>
+      <ul className={styles.bonusList}>
+        {bonusItems.map((item, i) => (
+          <li key={i}>{item.productName}: {item.bonusQty} دانە ({item.bonusPct ?? 0}%)</li>
+        ))}
+      </ul>
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════════
+// BLOCK: Note
+// ════════════════════════════════════════════════════════════
 function BlockNote({ text, block }: { text: string; block: InvoiceBlockConfig }) {
   if (!text) return null;
   return (
     <div className={styles.note} style={blockStyle(block)}>
-      <div className={styles.noteTitle}>تێبینی</div>
-      <div className={styles.noteText}>{text}</div>
+      <div className={styles.noteTitle}>📝 تێبینی</div>
+      <div className={styles.noteBody}>{text}</div>
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════════
+// BLOCK: Terms
+// ════════════════════════════════════════════════════════════
 function BlockTerms({ text, block }: { text: string; block: InvoiceBlockConfig }) {
   if (!text) return null;
   return (
     <div className={styles.terms} style={blockStyle(block)}>
-      <div className={styles.termsTitle}>مەرجەکان</div>
-      <div className={styles.termsText}>{text}</div>
+      <div className={styles.termsTitle}>📋 مەرجەکان</div>
+      <div className={styles.termsBody}>{text}</div>
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════════
+// BLOCK: Signature
+// ════════════════════════════════════════════════════════════
 function BlockSignature({ block }: { block: InvoiceBlockConfig }) {
+  const count = block.signatureCount ?? 2;
+  const showLine = block.showSignatureLine !== false;
   const labels = block.signatureLabels?.length
-    ? block.signatureLabels
-    : ["واژووی فرۆشیار", "واژووی کڕیار"];
+    ? block.signatureLabels.slice(0, count)
+    : Array.from({ length: count }, (_, i) => i === 0 ? "واژووی فرۆشیار" : `واژووی ${i + 1}`);
 
   return (
     <div className={styles.signature} style={blockStyle(block)}>
-      {labels.map(label => (
-        <div key={label} className={styles.signatureSlot}>
-          {block.signatureUrl ? (
+      {labels.map((label, i) => (
+        <div key={i} className={styles.signatureSlot}>
+          {block.signatureUrl && i === 0 ? (
             <img src={block.signatureUrl} alt={label} className={styles.signatureImage} />
-          ) : (
+          ) : showLine ? (
             <div className={styles.signatureLine} />
+          ) : (
+            <div style={{ height: 40 }} />
           )}
           <div className={styles.signatureLabel}>{label}</div>
         </div>
@@ -242,74 +332,103 @@ function BlockSignature({ block }: { block: InvoiceBlockConfig }) {
   );
 }
 
+// ════════════════════════════════════════════════════════════
+// BLOCK: QR Code
+// ════════════════════════════════════════════════════════════
 function BlockQr({ qrDataUrl, block }: { qrDataUrl?: string; block: InvoiceBlockConfig }) {
-  if (!qrDataUrl) return null;
   const size = block.qrSize ?? 120;
+  const reverse = block.qrPosition === "left";
+  const label = block.qrLabel ?? "ئەم QR کۆدە سکان بکە بۆ بینینی قەرزەکانت";
+
   return (
-    <div className={styles.qr} style={blockStyle(block)}>
-      <img src={qrDataUrl} width={size} height={size} alt="QR" className={styles.qrImage} />
+    <div className={`${styles.qr} ${reverse ? styles.qrReverse : ""}`} style={blockStyle(block)}>
+      {qrDataUrl ? (
+        <img src={qrDataUrl} width={size} height={size} alt="QR" className={styles.qrImage} />
+      ) : (
+        <div className={styles.qrPlaceholder} style={{ width: size, height: size }}>QR</div>
+      )}
       <div>
         <div className={styles.qrTitle}>QR کۆد</div>
-        <div className={styles.qrDescription}>
-          ئەم QR کۆدە سکان بکە بۆ بینینی داواکارییەکانت و باڵانسەکەت
-        </div>
+        <div className={styles.qrDescription}>{label}</div>
       </div>
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════════
+// BLOCK: Footer
+// ════════════════════════════════════════════════════════════
 function BlockFooter({ settings, block }: { settings: PrintSettings; block: InvoiceBlockConfig }) {
+  const variant = block.footerStyle ?? "centered";
+  const customText = block.footerText;
+
+  if (variant === "minimal") {
+    return (
+      <div className={styles.footerMinimal} style={blockStyle(block)}>
+        <div className={styles.footerCompany}>سوپاس — {settings.name}</div>
+        {customText && <div className={styles.footerContact}>{customText}</div>}
+      </div>
+    );
+  }
+
+  if (variant === "full") {
+    return (
+      <div className={styles.footerFull} style={blockStyle(block)}>
+        <div className={styles.footerCompany}>{settings.name}</div>
+        <div className={styles.footerContact}>
+          {settings.phone} | {settings.email}
+          {settings.address && ` | ${settings.address}`}
+        </div>
+        {customText && <div className={styles.footerContact}>{customText}</div>}
+      </div>
+    );
+  }
+
+  // Centered (default)
   return (
     <div className={styles.footer} style={blockStyle(block)}>
-      <div className={styles.footerCompany}>سوپاس — {settings.name}</div>
+      <div className={styles.footerCompany}>{settings.name}</div>
       <div className={styles.footerContact}>
-        {settings.phone} | {settings.email} | {settings.address}
+        {settings.phone} | {settings.email}
       </div>
+      {customText && <div className={styles.footerContact} style={{ marginTop: 4 }}>{customText}</div>}
     </div>
   );
 }
 
+// ════════════════════════════════════════════════════════════
+// BLOCK: Divider
+// ════════════════════════════════════════════════════════════
 function BlockDivider({ block }: { block: InvoiceBlockConfig }) {
-  return (
-    <hr className={styles.divider} style={{
-      borderTopColor: block.accentColor || "#E9ECEF",
-    }} />
-  );
+  return <hr className={styles.divider} style={blockStyle(block)} />;
 }
 
+// ════════════════════════════════════════════════════════════
+// BLOCK: Custom Text
+// ════════════════════════════════════════════════════════════
 function BlockCustomText({ block }: { block: InvoiceBlockConfig }) {
   if (!block.customText) return null;
   return (
-    <div className={styles.customText} style={{
-      ...blockStyle(block),
-      background: block.bgColor || "#F1F3F5",
-      border: block.showBorder ? `1px solid ${block.accentColor || "#DEE2E6"}` : "none",
-    }}>
-      {block.label && (
-        <div className={styles.customTextLabel}>{block.label}</div>
-      )}
-      <div className={styles.customTextBody} style={{ fontSize: block.fontSize || 12 }}>
-        {block.customText}
-      </div>
+    <div className={styles.customText} style={blockStyle(block)}>
+      <div className={styles.customTextBody}>{block.customText}</div>
     </div>
   );
 }
 
-// ── Main print renderer ──────────────────────────────────────
-
+// ════════════════════════════════════════════════════════════
+// MAIN EXPORT
+// ════════════════════════════════════════════════════════════
 export function PrintDocument({
   order, client, settings, template, qrDataUrl,
 }: {
-  order: PrintOrder;
-  client?: PrintClient;
-  settings: PrintSettings;
-  template: InvoiceTemplate;
-  qrDataUrl?: string;
+  order: PrintOrder; client?: PrintClient; settings: PrintSettings;
+  template: InvoiceTemplate; qrDataUrl?: string;
 }) {
-  const font = FONTS[template.options.fontFamily || "system"];
-  const sizeClass = template.options.paperSize === "A5" ? styles.pageA5
-    : template.options.paperSize === "thermal" ? styles.pageThermal
-    : styles.pageA4;
+  const font = FONTS[template.options.fontFamily || "system"] || FONTS.system;
+  const sizeClass =
+    template.options.paperSize === "A5" ? styles.pageA5 :
+    template.options.paperSize === "thermal" ? styles.pageThermal :
+    styles.pageA4;
 
   return (
     <div
@@ -319,12 +438,9 @@ export function PrintDocument({
         "--print-font": font,
       } as React.CSSProperties}
     >
-      {/* Watermark overlay */}
       {template.options.watermark && (
         <div className={styles.watermark}>
-          <div className={styles.watermarkText}>
-            {template.options.watermark}
-          </div>
+          <div className={styles.watermarkText}>{template.options.watermark}</div>
         </div>
       )}
 
@@ -333,7 +449,7 @@ export function PrintDocument({
           switch (block.id) {
             case "header":
               return <BlockHeader key="header" order={order} settings={settings}
-                        template={template} block={block} qrDataUrl={qrDataUrl} />;
+                        template={template} block={block} />;
             case "parties":
               return <BlockParties key="parties" order={order} client={client} block={block} />;
             case "items":

@@ -1,158 +1,123 @@
 /**
  * Pre-designed invoice templates that ship with the app.
- * These appear as "Start from preset..." options when creating a new template.
- * They are NOT stored in Supabase — they live in code.
+ * Each uses the new variant system for headers, tables, summaries, and footers.
  */
 import type { InvoiceTemplate, InvoiceBlockConfig } from "@/lib/types";
 
-// ── Helper to create a full block list ──────────────────────
 function blocks(overrides: Partial<Record<string, Partial<InvoiceBlockConfig>>>): InvoiceBlockConfig[] {
   const base: InvoiceBlockConfig[] = [
-    { id: "header",    label: "سەرپەڕە",           visible: true,  type: "builtin" },
-    { id: "parties",   label: "کڕیار و نوێنەر",    visible: true,  type: "builtin" },
-    { id: "items",     label: "خشتەی بەرهەمەکان",  visible: true,  type: "builtin" },
-    { id: "summary",   label: "کۆی گشتی",           visible: true,  type: "builtin" },
+    { id: "header",    label: "سەرپەڕە",           visible: true,  type: "builtin", headerLayout: "classic", showLogo: true, showNameEn: true, showContact: true, showStatus: true },
+    { id: "parties",   label: "کڕیار و نوێنەر",    visible: true,  type: "builtin", showPhone: true, showCity: true, showRep: true, showWarehouse: true, partiesLayout: "side" },
+    { id: "items",     label: "خشتەی بەرهەمەکان",  visible: true,  type: "builtin", showRowNumbers: true, showUnitPrice: true, stripedRows: true, tableStyle: "standard" },
+    { id: "summary",   label: "کۆی گشتی",           visible: true,  type: "builtin", summaryStyle: "card", summaryPosition: "right" },
     { id: "bonus",     label: "شیکاری بۆنەس",       visible: false, type: "builtin" },
     { id: "note",      label: "تێبینی",              visible: false, type: "builtin" },
     { id: "terms",     label: "مەرجەکان",            visible: false, type: "builtin" },
-    { id: "qr",        label: "QR کۆد",              visible: false, type: "builtin" },
-    { id: "signature", label: "واژوو",               visible: false, type: "builtin" },
-    { id: "footer",    label: "پێپەڕە",              visible: true,  type: "builtin" },
+    { id: "qr",        label: "QR کۆد",              visible: true,  type: "builtin", qrSize: 120, qrPosition: "right" },
+    { id: "signature", label: "واژوو",               visible: false, type: "builtin", signatureCount: 2, showSignatureLine: true },
+    { id: "footer",    label: "پێپەڕە",              visible: true,  type: "builtin", footerStyle: "centered" },
   ];
-
   return base.map(b => {
     const override = overrides[b.id];
     return override ? { ...b, ...override } : b;
   });
 }
 
-// ── Preset Templates ─────────────────────────────────────────
-
 export const PRESET_TEMPLATES: Omit<InvoiceTemplate, "id" | "createdAt">[] = [
+  // 1. Classic Professional — standard header, striped table, card summary
   {
     name: "کلاسیکی پڕۆفیشناڵ",
     docType: "invoice",
     blocks: blocks({
-      parties:   { visible: true },
-      summary:   { visible: true },
+      header:    { headerLayout: "classic" },
+      items:     { tableStyle: "standard", stripedRows: true },
+      summary:   { summaryStyle: "card" },
       note:      { visible: true, customText: "سوپاس بۆ کڕینەکەت" },
-      qr:        { visible: true, qrSize: 120 },
-      footer:    { visible: true },
+      qr:        { visible: true },
+      footer:    { footerStyle: "centered" },
     }),
-    showBonusCol: false,
+    showBonusCol: true,
+    defaultDiscount: 0,
     defaultNote: "سوپاس بۆ کڕینەکەت",
     defaultTerms: "",
-    defaultDiscount: 0,
-    options: {
-      paperSize: "A4",
-      primaryColor: "#4263EB",
-      fontFamily: "system",
-    },
+    options: { paperSize: "A4", primaryColor: "#4263EB", fontFamily: "system" },
   },
+
+  // 2. Bold Banner — banner header, bordered table, large total
+  {
+    name: "بانەری ئاوەدان",
+    docType: "invoice",
+    blocks: blocks({
+      header:    { headerLayout: "banner" },
+      items:     { tableStyle: "bordered", stripedRows: false },
+      summary:   { summaryStyle: "large" },
+      signature: { visible: true, signatureCount: 2, showSignatureLine: true },
+      footer:    { footerStyle: "full" },
+    }),
+    showBonusCol: true,
+    defaultDiscount: 0,
+    defaultNote: "",
+    defaultTerms: "",
+    options: { paperSize: "A4", primaryColor: "#C2255C", fontFamily: "system" },
+  },
+
+  // 3. Thermal Receipt — minimal header, compact table, inline summary
   {
     name: "وەسڵی حەرارەتی",
     docType: "receipt",
     blocks: blocks({
-      header:    { visible: true, fontSize: 14 },
-      parties:   { visible: true, fontSize: 11 },
-      items:     { visible: true, fontSize: 11 },
-      summary:   { visible: true, fontSize: 12 },
-      bonus:     { visible: false },
-      note:      { visible: false },
-      terms:     { visible: false },
-      qr:        { visible: true, qrSize: 80 },
+      header:    { headerLayout: "centered", showLogo: false, showNameEn: false, showContact: false },
+      parties:   { partiesLayout: "stacked", showCity: false, showWarehouse: false },
+      items:     { tableStyle: "compact", showRowNumbers: false, showUnitPrice: false, stripedRows: false },
+      summary:   { summaryStyle: "inline" },
+      qr:        { visible: false },
       signature: { visible: false },
-      footer:    { visible: true, fontSize: 10 },
+      footer:    { footerStyle: "minimal" },
     }),
     showBonusCol: false,
+    defaultDiscount: 0,
     defaultNote: "",
     defaultTerms: "",
-    defaultDiscount: 0,
-    options: {
-      paperSize: "thermal",
-      primaryColor: "#1A1A2E",
-      fontFamily: "mono",
-    },
+    options: { paperSize: "thermal", primaryColor: "#1A1A2E", fontFamily: "system" },
   },
-  {
-    name: "وەرقەی گەیاندن",
-    docType: "delivery",
-    blocks: blocks({
-      header:    { visible: true },
-      parties:   { visible: true },
-      items:     { visible: true },
-      summary:   { visible: false },
-      bonus:     { visible: false },
-      note:      { visible: true, customText: "تکایە کاڵاکان پشکنین بکە لە کاتی وەرگرتن" },
-      terms:     { visible: false },
-      qr:        { visible: false },
-      signature: { visible: true, signatureLabels: ["واژووی شۆفێر", "واژووی وەرگر"] },
-      footer:    { visible: true },
-    }),
-    showBonusCol: false,
-    defaultNote: "تکایە کاڵاکان پشکنین بکە لە کاتی وەرگرتن",
-    defaultTerms: "",
-    defaultDiscount: 0,
-    options: {
-      paperSize: "A5",
-      primaryColor: "#F47B35",
-      fontFamily: "system",
-    },
-  },
+
+  // 4. Elegant Quote — centered header, minimal table, card summary
   {
     name: "نرخنامەی ئەلیگانت",
     docType: "quote",
     blocks: blocks({
-      header:    { visible: true },
-      parties:   { visible: true },
-      items:     { visible: true },
-      summary:   { visible: true },
-      bonus:     { visible: true },
-      note:      { visible: true, customText: "ئەم نرخنامەیە بۆ ماوەی ١٤ ڕۆژ دروستە" },
-      terms:     { visible: true, customText: "پارەدان پێش گەیاندن\nگەڕاندنەوە نییە دوای کڕین" },
-      qr:        { visible: false },
-      signature: { visible: true, signatureLabels: ["واژووی کۆمپانیا", "واژووی کڕیار"] },
-      footer:    { visible: true },
+      header:    { headerLayout: "centered" },
+      items:     { tableStyle: "minimal", stripedRows: false },
+      summary:   { summaryStyle: "card" },
+      terms:     { visible: true, customText: "ئەم نرخنامەیە ٣٠ ڕۆژ ماوەی هەیە" },
+      signature: { visible: true, signatureCount: 1, showSignatureLine: true },
+      footer:    { footerStyle: "centered" },
     }),
-    showBonusCol: true,
-    defaultNote: "ئەم نرخنامەیە بۆ ماوەی ١٤ ڕۆژ دروستە",
-    defaultTerms: "پارەدان پێش گەیاندن\nگەڕاندنەوە نییە دوای کڕین",
+    showBonusCol: false,
     defaultDiscount: 0,
-    options: {
-      paperSize: "A4",
-      primaryColor: "#7C3AED",
-      fontFamily: "system",
-      watermark: "نرخنامە",
-    },
+    defaultNote: "",
+    defaultTerms: "ئەم نرخنامەیە ٣٠ ڕۆژ ماوەی هەیە",
+    options: { paperSize: "A4", primaryColor: "#7C3AED", fontFamily: "system" },
   },
+
+  // 5. Delivery Slip — minimal header, bordered table, no signature
   {
-    name: "تەواو تایبەتمەندی",
-    docType: "invoice",
+    name: "وەرقەی گەیاندن",
+    docType: "delivery",
     blocks: blocks({
-      header:    { visible: true },
-      parties:   { visible: true },
-      items:     { visible: true },
-      summary:   { visible: true },
-      bonus:     { visible: true },
-      note:      { visible: true },
-      terms:     { visible: true },
-      qr:        { visible: true, qrSize: 140 },
-      signature: { visible: true, signatureLabels: ["واژووی فرۆشیار", "واژووی کڕیار"] },
-      footer:    { visible: true },
+      header:    { headerLayout: "minimal", showStatus: true },
+      parties:   { showPhone: true, showCity: true, showWarehouse: true },
+      items:     { tableStyle: "bordered", showUnitPrice: false, showRowNumbers: true },
+      summary:   { visible: false },
+      qr:        { visible: false },
+      signature: { visible: true, signatureCount: 2, showSignatureLine: true,
+                   signatureLabels: ["واژووی شۆفێر", "واژووی وەرگر"] },
+      footer:    { footerStyle: "minimal" },
     }),
-    showBonusCol: true,
+    showBonusCol: false,
+    defaultDiscount: 0,
     defaultNote: "",
     defaultTerms: "",
-    defaultDiscount: 0,
-    options: {
-      paperSize: "A4",
-      primaryColor: "#2B8A3E",
-      fontFamily: "system",
-    },
+    options: { paperSize: "A5", primaryColor: "#F47B35", fontFamily: "system" },
   },
 ];
-
-/** Get a preset by name */
-export function getPresetByName(name: string) {
-  return PRESET_TEMPLATES.find(p => p.name === name);
-}

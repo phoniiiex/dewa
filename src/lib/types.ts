@@ -262,12 +262,45 @@ export interface InvoiceBlockConfig {
   marginBottom?: number;     // 0–32
   opacity?: number;          // 0.3–1.0
 
+  // ── Header block ──
+  headerLayout?: "classic" | "centered" | "minimal" | "banner";
+  showLogo?: boolean;
+  logoPosition?: "right" | "left";
+  showNameEn?: boolean;
+  showContact?: boolean;
+  showStatus?: boolean;
+
+  // ── Parties block ──
+  showPhone?: boolean;
+  showCity?: boolean;
+  showRep?: boolean;
+  showWarehouse?: boolean;
+  partiesLayout?: "side" | "stacked";
+
+  // ── Items table block ──
+  showRowNumbers?: boolean;
+  showUnitPrice?: boolean;
+  stripedRows?: boolean;
+  tableStyle?: "standard" | "bordered" | "minimal" | "compact";
+
+  // ── Summary block ──
+  summaryPosition?: "right" | "left";
+  summaryStyle?: "card" | "inline" | "large";
+
   // ── Signature block ──
   signatureUrl?: string;       // uploaded/drawn signature data URL
   signatureLabels?: string[];  // e.g. ["واژووی فرۆشیار","واژووی کڕیار"]
+  signatureCount?: number;     // 1–4 slots
+  showSignatureLine?: boolean;
 
   // ── QR block ──
   qrSize?: number;             // 80–200px
+  qrPosition?: "right" | "left";
+  qrLabel?: string;
+
+  // ── Footer block ──
+  footerStyle?: "centered" | "minimal" | "full";
+  footerText?: string;
 }
 
 export interface TemplateOptions {
