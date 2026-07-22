@@ -668,7 +668,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [showToast]);
 
   const addClient = useCallback(async (c: Omit<Client, "id" | "createdAt">) => {
-    const nc: Client = { ...c, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
+    const nc: Client = {
+      ...c,
+      id: genId(),
+      createdAt: new Date().toISOString().split("T")[0],
+      qrToken: c.qrToken || genId(), // auto-generate QR token if not provided
+    };
     setClients((prev) => [nc, ...prev]);
     const { error } = await supabase.from("clients").insert(fromClient(nc));
     if (error) { showToast("هەڵە: " + error.message, "error"); return nc; }

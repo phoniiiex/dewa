@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import {
-  Printer, Eye, Star, Wrench,
+  Printer, Eye, Star,
   FileText, Receipt, FileCheck, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -159,15 +159,6 @@ export function PrintButton({
         >
           <Eye size={14} />
           پیشبینی پێش چاپ
-        </ContextMenuItem>
-
-        {/* Build new template */}
-        <ContextMenuItem
-          onClick={() => router.push("/dashboard/invoices/builder")}
-          className="gap-2"
-        >
-          <Wrench size={14} />
-          داڕێژەی نوێ دروست بکە
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

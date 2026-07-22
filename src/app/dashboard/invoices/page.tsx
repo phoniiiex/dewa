@@ -213,11 +213,8 @@ export default function TemplatesPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push("/dashboard/invoices/builder")} className="gap-1.5">
-            <Wand2 className="size-4" /> بیلدەری داڕێژە
-          </Button>
-          <Button onClick={() => openNew()}>
-            <Plus className="size-4 me-1" /> داڕێژەی نوێ (کلاسیک)
+          <Button onClick={() => openNew()} className="gap-1.5">
+            <Plus className="size-4" /> داڕێژەی نوێ
           </Button>
         </div>
       </div>
@@ -273,9 +270,9 @@ export default function TemplatesPage() {
                           className={cn("px-4 py-3 border-b border-b-border/50 transition-all border-e-2",
                             "bg-background border-e-transparent hover:bg-muted/40")}>
                           <div className="flex justify-between items-start gap-2">
-                            {/* Name + meta — click → builder */}
+                            {/* Name + meta */}
                             <div className="flex-1 min-w-0 cursor-pointer"
-                              onClick={() => router.push(`/dashboard/invoices/builder?id=${t.id}`)}>
+                              onClick={() => openEdit(t)}>
                               <p className="font-bold text-xs truncate">{t.name}</p>
                               <div className="flex items-center gap-1.5 mt-1">
                                 <Badge variant="secondary" className="text-[9px] px-1.5 py-0"
@@ -287,9 +284,9 @@ export default function TemplatesPage() {
                               </div>
                             </div>
                             <div className="flex gap-1 shrink-0">
-                              {/* Edit in builder */}
+                              {/* Edit */}
                               <Button variant="ghost" size="icon" className="size-6 text-primary hover:bg-primary/5"
-                                onClick={() => router.push(`/dashboard/invoices/builder?id=${t.id}`)}>
+                                onClick={() => openEdit(t)}>
                                 <Edit3 className="size-3" />
                               </Button>
                               {/* Print preview */}
