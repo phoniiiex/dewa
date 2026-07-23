@@ -1,119 +1,77 @@
-"use client";
-
 /**
- * Instant print engine — renders documents in a hidden iframe
- * and triggers the browser print dialog without navigating away.
+ * DEWA — Print Engine
  *
- * Usage:
- *   printOrder(orderId)                  → prints with default template
- *   printOrder(orderId, { templateId })  → prints with specific template
- *   printOrder(orderId, { preview: true }) → opens preview tab instead
+ * Handles printing via hidden iframe (instant print) or new tab (preview).
+ *
+ *   printOrder(orderId)                         → prints with default template
+ *   printOrder(orderId, { templateId })         → prints with specific template
+ *   printOrder(orderId, { preview: true })      → opens preview tab instead
+ *   printPaymentReceipt(clientId, orderIds)     → prints payment receipt
  */
 
-const FRAME_ID = "dewa-print-frame";
+// ── Types ────────────────────────────────────────────────────────────────────
 
 export interface PrintOptions {
-  templateId?: string;
-  docType?: string;
-  preview?: boolean;
+  templateId?: string;   // specific template, else default
+  preview?: boolean;     // true = open tab, false/undefined = silent iframe print
 }
 
-function getOrCreateFrame(): HTMLIFrameElement {
-  let frame = document.getElementById(FRAME_ID) as HTMLIFrameElement | null;
-  if (!frame) {
-    frame = document.createElement("iframe");
-    frame.id = FRAME_ID;
-    frame.name = FRAME_ID;
-    Object.assign(frame.style, {
-      position: "fixed",
-      width: "0",
-      height: "0",
-      border: "none",
-      top: "-9999px",
-      left: "-9999px",
-      visibility: "hidden",
-    });
-    document.body.appendChild(frame);
-  }
-  return frame;
-}
+// ── Build URL ────────────────────────────────────────────────────────────────
 
 function buildPrintUrl(orderId: string, opts: PrintOptions = {}): string {
   const params = new URLSearchParams();
   if (opts.templateId) params.set("t", opts.templateId);
-  if (opts.docType) params.set("doc", opts.docType);
-  params.set("silent", "true");
-  return `/print/${orderId}?${params.toString()}`;
+  if (!opts.preview) params.set("silent", "1");
+  const qs = params.toString();
+  return `/print/${encodeURIComponent(orderId)}${qs ? "?" + qs : ""}`;
 }
 
-/**
- * Print an order instantly using a hidden iframe.
- * Falls back to opening a new tab if iframe printing fails.
- */
-export function printOrder(orderId: string, opts: PrintOptions = {}): void {
-  // Preview mode — open in new tab with PrintShell overlay
-  if (opts.preview) {
-    const params = new URLSearchParams();
-    if (opts.templateId) params.set("t", opts.templateId);
-    if (opts.docType) params.set("doc", opts.docType);
-    params.set("preview", "true");
-    window.open(`/print/${orderId}?${params.toString()}`, "_blank");
-    return;
-  }
+// ── Print via hidden iframe (silent printing) ────────────────────────────────
 
-  // Instant print — hidden iframe
-  const frame = getOrCreateFrame();
+function silentPrint(url: string): void {
+  // Create a hidden iframe, load the print page, trigger window.print() from it
+  const existing = document.getElementById("__dewa_print_frame") as HTMLIFrameElement | null;
+  if (existing) existing.remove();
+
+  const iframe = document.createElement("iframe");
+  iframe.id = "__dewa_print_frame";
+  iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;opacity:0;pointer-events:none";
+  iframe.src = url;
+  document.body.appendChild(iframe);
+
+  // Auto-cleanup after 30s
+  setTimeout(() => {
+    try { iframe.remove(); } catch { /* noop */ }
+  }, 30_000);
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+
+/** Print an order invoice (left-click = silent, preview = new tab) */
+export function printOrder(orderId: string, opts: PrintOptions = {}): void {
   const url = buildPrintUrl(orderId, opts);
 
-  // Clean up previous listener
-  frame.onload = null;
-
-  frame.onload = () => {
-    try {
-      // Small delay to ensure CSS/fonts are loaded
-      setTimeout(() => {
-        frame.contentWindow?.print();
-      }, 300);
-    } catch {
-      // Cross-origin fallback — open in new tab
-      window.open(url.replace("silent=true", ""), "_blank");
-    }
-  };
-
-  frame.src = url;
+  if (opts.preview) {
+    window.open(url, "_blank");
+  } else {
+    silentPrint(url);
+  }
 }
 
-/**
- * Print a debt receipt for a client.
- * Routes to `/print/debt/[clientId]` endpoint.
- */
-export function printDebtReceipt(
+/** Print a payment receipt for a client (debt payment) */
+export function printPaymentReceipt(
   clientId: string,
-  opts: { templateId?: string; preview?: boolean } = {}
+  orderIds: string[],
+  opts: { preview?: boolean } = {}
 ): void {
-  if (opts.preview) {
-    const params = new URLSearchParams();
-    if (opts.templateId) params.set("t", opts.templateId);
-    params.set("preview", "true");
-    window.open(`/print/debt/${clientId}?${params.toString()}`, "_blank");
-    return;
-  }
-
-  const frame = getOrCreateFrame();
   const params = new URLSearchParams();
-  if (opts.templateId) params.set("t", opts.templateId);
-  params.set("silent", "true");
-  const url = `/print/debt/${clientId}?${params.toString()}`;
+  params.set("orders", orderIds.join(","));
+  if (!opts.preview) params.set("silent", "1");
+  const url = `/print/receipt/${encodeURIComponent(clientId)}?${params.toString()}`;
 
-  frame.onload = null;
-  frame.onload = () => {
-    try {
-      setTimeout(() => {
-        frame.contentWindow?.print();
-      }, 300);
-    } catch {
-      window.open(url.replace("silent=true", ""), "_blank");
-    }
-  };
-  frame.src = url;
+  if (opts.preview) {
+    window.open(url, "_blank");
+  } else {
+    silentPrint(url);
+  }
 }

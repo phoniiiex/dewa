@@ -251,14 +251,14 @@ export default function OrdersPage() {
         const rawTotal   = qty * pct / 100;
         const isFraction = !Number.isInteger(rawTotal);
         const totalBonus = isFraction ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal)) : rawTotal;
-        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonus, unitPrice, priceTypeId: form.priceTypeId, priceTypeName, bonusPct: 0, repBonusPct: pct, warehouseBonusQty: 0, repBonusQty: totalBonus, overrideWarehouseFulfillment: false };
+        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonus, unitPrice, priceTypeId: form.priceTypeId, priceTypeName, bonusPct: 0, repBonusPct: pct, warehouseBonusQty: 0, repBonusQty: totalBonus, overrideWarehouseFulfillment: false, expiryDate: prod?.expiryDate || "", company: prod?.company || "" };
       }
       if (form.orderFlow === 'DIRECT_WAREHOUSE') {
         // Rule 4: auto bonus = warehousePct, all goes to warehouse
         const warehousePct  = getWarehousePct(i.productId);
         const rawTotal      = qty * warehousePct / 100;
         const totalBonusQty = Number.isInteger(rawTotal) ? rawTotal : Math.floor(rawTotal);
-        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonusQty, unitPrice, priceTypeId: form.priceTypeId, priceTypeName, bonusPct: warehousePct, repBonusPct: 0, warehouseBonusQty: totalBonusQty, repBonusQty: 0, overrideWarehouseFulfillment: false };
+        return { productId: i.productId, productName: prod?.name || "", quantity: qty, bonusQty: totalBonusQty, unitPrice, priceTypeId: form.priceTypeId, priceTypeName, bonusPct: warehousePct, repBonusPct: 0, warehouseBonusQty: totalBonusQty, repBonusQty: 0, overrideWarehouseFulfillment: false, expiryDate: prod?.expiryDate || "", company: prod?.company || "" };
       }
       // STANDARD flow
       const warehousePct      = getWarehousePct(i.productId);
@@ -275,6 +275,7 @@ export default function OrdersPage() {
         bonusPct: warehousePct, repBonusPct: repAgreedPct,
         warehouseBonusQty, repBonusQty: agentPendingQty,
         overrideWarehouseFulfillment: i.fullBonusToWarehouse,
+        expiryDate: prod?.expiryDate || "", company: prod?.company || "",
       };
     });
     if (items.length === 0) { showToast("تکایە بەرهەمێک زیادبکە", "error"); return; }

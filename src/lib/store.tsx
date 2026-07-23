@@ -8,7 +8,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from "./supabase";
 import type {
   Product, Client, Rep, Supplier, Driver, Order,
-  Transaction, CompanySettings, User, InvoiceTemplate, TemplateOptions,
+  Transaction, CompanySettings, User, InvoiceTemplate,
   PriceType, ProductPrice, SampleRequest, ReturnRecord, ReturnStatus,
 } from "./types";
 import { RETURN_BONUS_RATE } from "./types";
@@ -266,7 +266,27 @@ function fromReturn(r: Partial<ReturnRecord>): Record<string, unknown> {
 }
 
 function toSettings(r: Record<string, unknown>): CompanySettings {
-  return { name: (r.name || "") as string, nameEn: (r.name_en || "") as string, phone: (r.phone || "") as string, email: (r.email || "") as string, city: (r.city || "") as string, address: (r.address || "") as string, currency: (r.currency || "IQD") as string, language: (r.language || "ckb") as string, logo: (r.logo || "") as string, profilePic: (r.profile_pic || "") as string, telegramBotToken: (r.telegram_bot_token || "") as string, telegramBotUsername: (r.telegram_bot_username || "") as string, telegramNotifyChatIds: Array.isArray(r.telegram_notify_chat_ids) ? r.telegram_notify_chat_ids as string[] : [] };
+  return {
+    name: (r.name || "") as string,
+    nameEn: (r.name_en || "") as string,
+    phone: (r.phone || "") as string,
+    email: (r.email || "") as string,
+    city: (r.city || "") as string,
+    address: (r.address || "") as string,
+    currency: (r.currency || "IQD") as string,
+    language: (r.language || "ckb") as string,
+    logo: (r.logo || "") as string,
+    profilePic: (r.profile_pic || "") as string,
+    establishedYear: (r.established_year || "") as string,
+    businessDesc: (r.business_desc || "") as string,
+    phoneAdmin: (r.phone_admin || "") as string,
+    phoneAccounting: (r.phone_accounting || "") as string,
+    phoneIT: (r.phone_it || "") as string,
+    phoneSales: (r.phone_sales || "") as string,
+    telegramBotToken: (r.telegram_bot_token || "") as string,
+    telegramBotUsername: (r.telegram_bot_username || "") as string,
+    telegramNotifyChatIds: Array.isArray(r.telegram_notify_chat_ids) ? r.telegram_notify_chat_ids as string[] : [],
+  };
 }
 function fromSettings(s: Partial<CompanySettings>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
@@ -280,6 +300,12 @@ function fromSettings(s: Partial<CompanySettings>): Record<string, unknown> {
   if (s.language !== undefined) m.language = s.language;
   if (s.logo !== undefined) m.logo = s.logo;
   if (s.profilePic !== undefined) m.profile_pic = s.profilePic;
+  if (s.establishedYear !== undefined) m.established_year = s.establishedYear;
+  if (s.businessDesc !== undefined) m.business_desc = s.businessDesc;
+  if (s.phoneAdmin !== undefined) m.phone_admin = s.phoneAdmin;
+  if (s.phoneAccounting !== undefined) m.phone_accounting = s.phoneAccounting;
+  if (s.phoneIT !== undefined) m.phone_it = s.phoneIT;
+  if (s.phoneSales !== undefined) m.phone_sales = s.phoneSales;
   if (s.telegramBotToken !== undefined) m.telegram_bot_token = s.telegramBotToken;
   if (s.telegramBotUsername !== undefined) m.telegram_bot_username = s.telegramBotUsername;
   if (s.telegramNotifyChatIds !== undefined) m.telegram_notify_chat_ids = s.telegramNotifyChatIds;
@@ -291,37 +317,65 @@ function toUser(r: Record<string, unknown>): User {
 }
 
 function toTemplate(r: Record<string, unknown>): InvoiceTemplate {
-  const opts = (r.options as Record<string, unknown>) || {};
+  // The new template is stored as a flat JSON blob in Supabase
+  // with nested objects for header, table, summary, etc.
+  const d = (r as Record<string, unknown>) || {};
   return {
-    id: r.id as string,
-    name: (r.name || "") as string,
-    docType: (r.doc_type || "invoice") as InvoiceTemplate["docType"],
-    blocks: (r.blocks || []) as InvoiceTemplate["blocks"],
-    showBonusCol: r.show_bonus_col !== false,
-    defaultNote: (r.default_note || "") as string,
-    defaultTerms: (r.default_terms || "") as string,
-    defaultDiscount: Number(r.default_discount || 0),
-    options: {
-      paperSize: (opts.paperSize as TemplateOptions["paperSize"]) || "A4",
-      primaryColor: (opts.primaryColor as string) || "#4263EB",
-      logoUrl: opts.logoUrl as string | undefined,
-      watermark: opts.watermark as string | undefined,
-      fontFamily: (opts.fontFamily as string) || "system",
-    },
-    createdAt: (r.created_at || "") as string,
+    id: d.id as string,
+    name: (d.name || "") as string,
+    isDefault: !!d.is_default,
+    paperSize: (d.paper_size || "A4") as InvoiceTemplate["paperSize"],
+    globalFont: (d.global_font || "zavi") as InvoiceTemplate["globalFont"],
+    primaryColor: (d.primary_color || "#4263EB") as string,
+    logoUrl: d.logo_url as string | undefined,
+    watermark: d.watermark as string | undefined,
+    showHeader: d.show_header !== false,
+    showInvoiceMeta: d.show_invoice_meta !== false,
+    showItemsTable: d.show_items_table !== false,
+    showSummary: d.show_summary !== false,
+    showQR: d.show_qr !== false,
+    showNotes: d.show_notes !== false,
+    showTerms: d.show_terms !== false,
+    showSignature: d.show_signature !== false,
+    showFooter: d.show_footer !== false,
+    header: (d.header || {}) as InvoiceTemplate["header"],
+    invoiceMeta: (d.invoice_meta || {}) as InvoiceTemplate["invoiceMeta"],
+    table: (d.table || {}) as InvoiceTemplate["table"],
+    summary: (d.summary || {}) as InvoiceTemplate["summary"],
+    qr: (d.qr || {}) as InvoiceTemplate["qr"],
+    signature: (d.signature || {}) as InvoiceTemplate["signature"],
+    footer: (d.footer || {}) as InvoiceTemplate["footer"],
+    defaultDiscount: Number(d.default_discount || 0),
+    createdAt: (d.created_at || "") as string,
   };
 }
-function fromTemplate(t: Partial<InvoiceTemplate>): Record<string, unknown> {
+function fromTemplate(t: Partial<Omit<InvoiceTemplate, "id" | "createdAt">> & { id?: string; createdAt?: string }): Record<string, unknown> {
   const m: Record<string, unknown> = {};
   if (t.id !== undefined) m.id = t.id;
   if (t.name !== undefined) m.name = t.name;
-  if (t.docType !== undefined) m.doc_type = t.docType;
-  if (t.blocks !== undefined) m.blocks = t.blocks;
-  if (t.showBonusCol !== undefined) m.show_bonus_col = t.showBonusCol;
-  if (t.defaultNote !== undefined) m.default_note = t.defaultNote;
-  if (t.defaultTerms !== undefined) m.default_terms = t.defaultTerms;
+  if (t.isDefault !== undefined) m.is_default = t.isDefault;
+  if (t.paperSize !== undefined) m.paper_size = t.paperSize;
+  if (t.globalFont !== undefined) m.global_font = t.globalFont;
+  if (t.primaryColor !== undefined) m.primary_color = t.primaryColor;
+  if (t.logoUrl !== undefined) m.logo_url = t.logoUrl;
+  if (t.watermark !== undefined) m.watermark = t.watermark;
+  if (t.showHeader !== undefined) m.show_header = t.showHeader;
+  if (t.showInvoiceMeta !== undefined) m.show_invoice_meta = t.showInvoiceMeta;
+  if (t.showItemsTable !== undefined) m.show_items_table = t.showItemsTable;
+  if (t.showSummary !== undefined) m.show_summary = t.showSummary;
+  if (t.showQR !== undefined) m.show_qr = t.showQR;
+  if (t.showNotes !== undefined) m.show_notes = t.showNotes;
+  if (t.showTerms !== undefined) m.show_terms = t.showTerms;
+  if (t.showSignature !== undefined) m.show_signature = t.showSignature;
+  if (t.showFooter !== undefined) m.show_footer = t.showFooter;
+  if (t.header !== undefined) m.header = t.header;
+  if (t.invoiceMeta !== undefined) m.invoice_meta = t.invoiceMeta;
+  if (t.table !== undefined) m.table = t.table;
+  if (t.summary !== undefined) m.summary = t.summary;
+  if (t.qr !== undefined) m.qr = t.qr;
+  if (t.signature !== undefined) m.signature = t.signature;
+  if (t.footer !== undefined) m.footer = t.footer;
   if (t.defaultDiscount !== undefined) m.default_discount = t.defaultDiscount;
-  if (t.options !== undefined) m.options = t.options;
   if (t.createdAt !== undefined) m.created_at = t.createdAt;
   return m;
 }

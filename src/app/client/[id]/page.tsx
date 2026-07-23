@@ -75,7 +75,7 @@ export default function ClientPortalPage() {
 
         // Fetch settings
         const { data: settingsRows } = await supabase
-          .from("settings")
+          .from("company_settings")
           .select("name, nameEn:name_en, phone")
           .limit(1);
         if (settingsRows?.[0]) setSettings(settingsRows[0]);

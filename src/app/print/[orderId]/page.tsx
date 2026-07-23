@@ -1,189 +1,183 @@
 // ============================================================
-// DEWA — /print/[orderId]
-// Server component — fetches data, renders PrintDocument.
-// Wrapped in PrintShell (client) which:
-//   • Covers dashboard chrome with a fixed overlay on screen
-//   • Auto-triggers window.print() via useEffect
-//   • Hides itself in @media print so only document prints
+// DEWA — /print/[orderId] (Print Route)
 //
-// URL: /print/[orderId]?t=[templateId]&doc=[docType]&preview=true
-//   preview=true  →  skip auto-print (view only)
+// Server component that:
+//   1. Fetches order, client, settings, template from Supabase
+//   2. Generates QR code
+//   3. Renders InvoiceDocument
+//   4. Auto-triggers window.print() if ?silent=1
 // ============================================================
+
 import { createAdminClient } from "@/lib/supabase";
-import { PrintDocument, type PrintOrder, type PrintClient, type PrintSettings } from "@/components/print/PrintDocument";
-import { PrintShell } from "@/components/print/PrintShell";
-import { DEFAULT_TEMPLATE_OPTIONS } from "@/lib/types";
-import type { InvoiceTemplate, TemplateOptions } from "@/lib/types";
+import InvoiceDocument from "@/components/print/InvoiceDocument";
+import type { InvoiceData } from "@/components/print/InvoiceDocument";
+import type { CompanySettings, InvoiceTemplate, OrderItem } from "@/lib/types";
+import { DEFAULT_INVOICE_TEMPLATE, DEFAULT_SECTION_STYLE } from "@/lib/types";
 import QRCode from "qrcode";
+import PrintShell from "@/components/print/PrintShell";
 
-// ── Default template when no saved template is selected ─────
-function defaultTemplate(docType = "invoice"): InvoiceTemplate {
-  return {
-    id: "quick",
-    name: "چاپی خێرا",
-    docType: docType as InvoiceTemplate["docType"],
-    blocks: [
-      { id:"header",    label:"سەرپەڕە",         visible:true,  required:true,  type:"builtin" },
-      { id:"parties",   label:"کڕیار / نوێنەر",  visible:true,  required:false, type:"builtin" },
-      { id:"items",     label:"بەرهەمەکان",       visible:true,  required:true,  type:"builtin" },
-      { id:"summary",   label:"کۆی گشتی",         visible:true,  required:false, type:"builtin" },
-      { id:"note",      label:"تێبینی",            visible:true,  required:false, type:"builtin" },
-      { id:"qr",        label:"QR کۆد",           visible:true,  required:false, type:"builtin" },
-      { id:"signature", label:"واژوو",             visible:true,  required:false, type:"builtin" },
-      { id:"footer",    label:"پێپەڕە",            visible:true,  required:false, type:"builtin" },
-    ],
-    showBonusCol: true,
-    defaultNote: "",
-    defaultTerms: "",
-    defaultDiscount: 0,
-    options: DEFAULT_TEMPLATE_OPTIONS,
-    createdAt: "",
-  };
-}
-
-// ── DB mappers ──────────────────────────────────────────────
-function toOrder(r: Record<string, unknown>): PrintOrder {
-  return {
-    id:             r.id as string,
-    orderNumber:    (r.order_number || "") as string,
-    clientId:       (r.client_id   || "") as string,
-    clientName:     (r.client_name || "") as string,
-    repName:        (r.rep_name    || "") as string,
-    warehouseName:  r.warehouse_name as string | null,
-    items:          (Array.isArray(r.items) ? r.items : []) as PrintOrder["items"],
-    status:         (r.status      || "WAITING") as string,
-    totalAmount:    Number(r.total_amount  || 0),
-    notes:          (r.notes       || "") as string,
-    createdAt:      (r.created_at  || "") as string,
-  };
-}
-
-function toTemplate(r: Record<string, unknown>): InvoiceTemplate {
-  const opts = (r.options as Record<string, unknown>) || {};
-  return {
-    id:              r.id as string,
-    name:            (r.name       || "") as string,
-    docType:         (r.doc_type   || "invoice") as InvoiceTemplate["docType"],
-    blocks:          (r.blocks     || []) as InvoiceTemplate["blocks"],
-    showBonusCol:    r.show_bonus_col !== false,
-    defaultNote:     (r.default_note   || "") as string,
-    defaultTerms:    (r.default_terms  || "") as string,
-    defaultDiscount: Number(r.default_discount || 0),
-    options: {
-      paperSize:    (opts.paperSize    as TemplateOptions["paperSize"]) || "A4",
-      primaryColor: (opts.primaryColor as string) || "#4263EB",
-      logoUrl:      opts.logoUrl  as string | undefined,
-      watermark:    opts.watermark as string | undefined,
-      fontFamily:   (opts.fontFamily   as string) || "system",
-    },
-    createdAt: (r.created_at || "") as string,
-  };
-}
-
-// ── Doc label map ────────────────────────────────────────────
-const DOC_LABELS: Record<string, string> = {
-  invoice:"پسووڵە", receipt:"وەسڵ", delivery:"وەرقەی گەیاندن", quote:"نرخنامە",
-};
-
-// ── Page ────────────────────────────────────────────────────
 export default async function PrintPage(props: {
   params: Promise<{ orderId: string }>;
-  searchParams: Promise<{ t?: string; preview?: string; doc?: string; silent?: string }>;
+  searchParams: Promise<{ t?: string; preview?: string; silent?: string }>;
 }) {
   const params = await props.params;
   const searchParams = await props.searchParams;
-  const isPreview = searchParams.preview === "true";
-  const isSilent = searchParams.silent === "true";
-  const db = createAdminClient();
+  const supabase = createAdminClient();
 
-  // ── Fetch order ──────────────────────────────────────────
-  const { data: orderRow } = await db
-    .from("orders").select("*").eq("id", params.orderId).single();
+  // ── 1. Fetch order ──
+  const { data: orderRow } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("id", params.orderId)
+    .single();
 
   if (!orderRow) {
     return (
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
-        minHeight:"60vh", color:"#6B7280", fontSize:15 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", color: "#999", direction: "rtl" }}>
         داواکاری نەدۆزرایەوە
       </div>
     );
   }
-  const order = toOrder(orderRow as Record<string, unknown>);
 
-  // ── Fetch template ───────────────────────────────────────
-  let template: InvoiceTemplate;
+  // ── 2. Fetch client ──
+  const { data: clientRow } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", orderRow.client_id)
+    .single();
+
+  // ── 3. Fetch settings ──
+  const { data: settingsRows } = await supabase
+    .from("company_settings")
+    .select("*")
+    .limit(1);
+  const settingsRow = settingsRows?.[0] || {};
+
+  // ── 4. Fetch template ──
+  let templateRow: Record<string, unknown> | null = null;
   if (searchParams.t) {
-    const { data: tRow } = await db
-      .from("invoice_templates").select("*").eq("id", searchParams.t).single();
-    template = tRow
-      ? toTemplate(tRow as Record<string, unknown>)
-      : defaultTemplate(searchParams.doc);
-  } else {
-    template = defaultTemplate(searchParams.doc);
+    const { data } = await supabase
+      .from("invoice_templates")
+      .select("*")
+      .eq("id", searchParams.t)
+      .single();
+    templateRow = data;
+  }
+  if (!templateRow) {
+    // Try default
+    const { data } = await supabase
+      .from("invoice_templates")
+      .select("*")
+      .eq("is_default", true)
+      .limit(1);
+    templateRow = data?.[0] || null;
   }
 
-  // ── Fetch client ─────────────────────────────────────────
-  const { data: clientRow } = await db
-    .from("clients").select("*").eq("id", order.clientId).single();
-
-  const client: PrintClient | undefined = clientRow ? {
-    name:  (clientRow.name  || "") as string,
-    phone: (clientRow.phone || "") as string,
-    city:  (clientRow.city  || "") as string,
-    type:  (clientRow.type  || "") as string,
-  } : undefined;
-
-  // ── Fetch company settings ───────────────────────────────
-  const { data: settingsRow } = await db.from("company_settings").select("*").single();
-  const settings: PrintSettings = {
-    name:    (settingsRow?.name    || "دەوا فارما") as string,
-    nameEn:  (settingsRow?.name_en || "") as string,
-    phone:   (settingsRow?.phone   || "") as string,
-    email:   (settingsRow?.email   || "") as string,
-    address: (settingsRow?.address || "") as string,
+  // ── 5. Map data ──
+  const settings: CompanySettings = {
+    name: (settingsRow.name || "") as string,
+    nameEn: (settingsRow.name_en || "") as string,
+    phone: (settingsRow.phone || "") as string,
+    email: (settingsRow.email || "") as string,
+    city: (settingsRow.city || "") as string,
+    address: (settingsRow.address || "") as string,
+    currency: (settingsRow.currency || "IQD") as string,
+    language: (settingsRow.language || "ckb") as string,
+    logo: (settingsRow.logo || "") as string,
+    profilePic: (settingsRow.profile_pic || "") as string,
+    establishedYear: (settingsRow.established_year || "") as string,
+    businessDesc: (settingsRow.business_desc || "") as string,
+    phoneAdmin: (settingsRow.phone_admin || "") as string,
+    phoneAccounting: (settingsRow.phone_accounting || "") as string,
+    phoneIT: (settingsRow.phone_it || "") as string,
+    phoneSales: (settingsRow.phone_sales || "") as string,
+    telegramBotToken: (settingsRow.telegram_bot_token || "") as string,
+    telegramBotUsername: (settingsRow.telegram_bot_username || "") as string,
+    telegramNotifyChatIds: Array.isArray(settingsRow.telegram_notify_chat_ids)
+      ? settingsRow.telegram_notify_chat_ids as string[]
+      : [],
   };
 
-  // ── Generate QR as base64 PNG ────────────────────────────
-  const hasQrBlock = template.blocks.some(b => b.id === "qr" && b.visible);
+  const template: InvoiceTemplate = templateRow
+    ? mapTemplate(templateRow)
+    : { id: "default", createdAt: new Date().toISOString(), ...DEFAULT_INVOICE_TEMPLATE } as InvoiceTemplate;
+
+  const items: OrderItem[] = (orderRow.items as OrderItem[]) || [];
+
+  // ── 6. QR code ──
   let qrDataUrl: string | undefined;
-
-  if (hasQrBlock && clientRow?.qr_token) {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-      ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  if (template.showQR && clientRow?.qr_token) {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://dewa.app";
     const qrUrl = `${baseUrl}/q/${clientRow.qr_token}`;
-    qrDataUrl = await QRCode.toDataURL(qrUrl, {
-      width: 160,
-      margin: 1,
-      color: { dark: "#000000", light: "#ffffff" },
-      errorCorrectionLevel: "M",
-    });
+    try {
+      qrDataUrl = await QRCode.toDataURL(qrUrl, {
+        width: template.qr.size * 2,
+        margin: 1,
+        color: { dark: "#1A1A2E", light: "#FFFFFF" },
+      });
+    } catch { /* noop */ }
   }
 
-  const docLabel = DOC_LABELS[template.docType] ?? template.docType;
-  const pageLabel = `${order.orderNumber} — ${docLabel}`;
+  // ── 7. Build InvoiceData ──
+  const invoiceData: InvoiceData = {
+    order: {
+      id: orderRow.id,
+      orderNumber: orderRow.order_number || "",
+      clientName: orderRow.client_name || "",
+      repName: orderRow.rep_name || "",
+      items,
+      totalAmount: Number(orderRow.total_amount || 0),
+      notes: orderRow.notes || "",
+      status: orderRow.status || "",
+      createdAt: orderRow.created_at || "",
+    },
+    client: {
+      name: clientRow?.name || orderRow.client_name || "",
+      balance: Number(clientRow?.balance || 0),
+      qrToken: clientRow?.qr_token || "",
+    },
+    settings,
+    template,
+    qrDataUrl,
+  };
 
-  // Silent mode: render only the document (for iframe printing)
-  if (isSilent) {
-    return (
-      <PrintDocument
-        order={order}
-        client={client}
-        settings={settings}
-        template={template}
-        qrDataUrl={qrDataUrl}
-      />
-    );
-  }
+  const isSilent = searchParams.silent === "1";
 
   return (
-    <PrintShell label={pageLabel} autoPrint={!isPreview}>
-      <PrintDocument
-        order={order}
-        client={client}
-        settings={settings}
-        template={template}
-        qrDataUrl={qrDataUrl}
-      />
+    <PrintShell silent={isSilent} globalFont={template.globalFont}>
+      <InvoiceDocument data={invoiceData} />
     </PrintShell>
   );
+}
+
+// ── Template mapper (same logic as store.tsx but for server context) ──
+function mapTemplate(r: Record<string, unknown>): InvoiceTemplate {
+  return {
+    id: r.id as string,
+    name: (r.name || "") as string,
+    isDefault: !!r.is_default,
+    paperSize: (r.paper_size || "A4") as InvoiceTemplate["paperSize"],
+    globalFont: (r.global_font || "zavi") as InvoiceTemplate["globalFont"],
+    primaryColor: (r.primary_color || "#4263EB") as string,
+    logoUrl: r.logo_url as string | undefined,
+    watermark: r.watermark as string | undefined,
+    showHeader: r.show_header !== false,
+    showInvoiceMeta: r.show_invoice_meta !== false,
+    showItemsTable: r.show_items_table !== false,
+    showSummary: r.show_summary !== false,
+    showQR: r.show_qr !== false,
+    showNotes: r.show_notes !== false,
+    showTerms: r.show_terms !== false,
+    showSignature: r.show_signature !== false,
+    showFooter: r.show_footer !== false,
+    header: (r.header || {}) as InvoiceTemplate["header"],
+    invoiceMeta: (r.invoice_meta || {}) as InvoiceTemplate["invoiceMeta"],
+    table: (r.table || {}) as InvoiceTemplate["table"],
+    summary: (r.summary || {}) as InvoiceTemplate["summary"],
+    qr: (r.qr || {}) as InvoiceTemplate["qr"],
+    signature: (r.signature || {}) as InvoiceTemplate["signature"],
+    footer: (r.footer || {}) as InvoiceTemplate["footer"],
+    defaultDiscount: Number(r.default_discount || 0),
+    createdAt: (r.created_at || "") as string,
+  };
 }

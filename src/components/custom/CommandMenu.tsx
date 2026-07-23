@@ -43,7 +43,6 @@ const navPages = [
   { label: "ڕاپۆرت",           href: "/dashboard/analytics",  icon: BarChart2,       color: "text-green-600" },
   { label: "بەرهەمەکان",       href: "/dashboard/products",   icon: Package,         color: "text-green-600" },
   { label: "داواکارییەکان",     href: "/dashboard/orders",     icon: ShoppingCart,    color: "text-orange-500" },
-  { label: "پسووڵەکان",        href: "/dashboard/invoices",   icon: FileText,        color: "text-amber-600" },
   { label: "بۆنەس",             href: "/dashboard/bonus",      icon: Gift,            color: "text-pink-500" },
   { label: "نموونەکان",        href: "/dashboard/samples",    icon: FlaskConical,    color: "text-cyan-600" },
   { label: "گەڕاوەکان",        href: "/dashboard/returns",    icon: RotateCcw,       color: "text-rose-500" },

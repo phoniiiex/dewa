@@ -164,7 +164,6 @@ export default function AppSidebar() {
         { label: "شیکاری",        href: "/dashboard/analytics", icon: BarChart3,      managerOnly: true },
         { label: "بەرهەمەکان",    href: "/dashboard/products",  icon: Package },
         { label: "داواکارییەکان", href: "/dashboard/orders",    icon: ShoppingCart },
-        { label: "پسوولەکان",     href: "/dashboard/invoices",  icon: FileText },
         { label: "بۆنەس",         href: "/dashboard/bonus",     icon: Gift,           managerOnly: true },
         { label: "نموونەکان",    href: "/dashboard/samples",  icon: FlaskConical },
         { label: "گەڕاوەکان",    href: "/dashboard/returns",  icon: RotateCcw },

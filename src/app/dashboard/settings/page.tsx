@@ -325,6 +325,26 @@ export default function SettingsPage() {
                   <div className="space-y-2"><Label>دراو</Label><Input value={companyForm.currency} onChange={(e) => setCompanyForm({ ...companyForm, currency: e.target.value })} /></div>
                 </div>
                 <div className="space-y-2 mt-4"><Label>ناونیشان</Label><Input value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} /></div>
+
+                {/* ── New: Business Info ── */}
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="space-y-2"><Label>ساڵی دامەزراندن</Label><Input value={companyForm.establishedYear || ""} onChange={(e) => setCompanyForm({ ...companyForm, establishedYear: e.target.value })} placeholder="بۆ نموونە: 2015" /></div>
+                  <div className="space-y-2 col-span-2"><Label>وەسفی کار</Label><Input value={companyForm.businessDesc || ""} onChange={(e) => setCompanyForm({ ...companyForm, businessDesc: e.target.value })} placeholder="بۆ نموونە: فرۆشتنی دەرمان و بەرهەمی پزیشکی" /></div>
+                </div>
+
+                {/* ── New: Categorized Phones ── */}
+                <div className="mt-5 pt-4 border-t border-border">
+                  <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                    <Phone className="size-3.5" /> ژمارە تەلەفۆنەکان (بۆ پسووڵە)
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label className="text-xs">بەڕێوەبەرایەتی</Label><Input value={companyForm.phoneAdmin || ""} onChange={(e) => setCompanyForm({ ...companyForm, phoneAdmin: e.target.value })} placeholder="07XX XXX XXXX" type="tel" /></div>
+                    <div className="space-y-2"><Label className="text-xs">ژمێریاری</Label><Input value={companyForm.phoneAccounting || ""} onChange={(e) => setCompanyForm({ ...companyForm, phoneAccounting: e.target.value })} placeholder="07XX XXX XXXX" type="tel" /></div>
+                    <div className="space-y-2"><Label className="text-xs">کۆمپیوتەر / IT</Label><Input value={companyForm.phoneIT || ""} onChange={(e) => setCompanyForm({ ...companyForm, phoneIT: e.target.value })} placeholder="07XX XXX XXXX" type="tel" /></div>
+                    <div className="space-y-2"><Label className="text-xs">فرۆشتن / گەڕاندنەوە</Label><Input value={companyForm.phoneSales || ""} onChange={(e) => setCompanyForm({ ...companyForm, phoneSales: e.target.value })} placeholder="07XX XXX XXXX" type="tel" /></div>
+                  </div>
+                </div>
+
                 <div className="mt-6">
                   <Button type="submit" className="gap-2"><Save className="size-3.5" /> پاشەکەوتکردن</Button>
                 </div>

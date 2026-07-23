@@ -1,89 +1,62 @@
 "use client";
-import { useEffect } from "react";
-import { Printer, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+// ============================================================
+// DEWA — PrintShell
+//
+// Wraps the invoice page with:
+//   - Auto window.print() for silent mode
+//   - Print-optimized styles via <style> tag
+// ============================================================
 
-interface Props {
-  label: string;
-  autoPrint: boolean;
+import { useEffect } from "react";
+import type { SectionStyle } from "@/lib/types";
+
+const FONT_STACKS: Record<SectionStyle["fontFamily"], string> = {
+  zavi:   "'Zavi Gifts', 'Segoe UI', Tahoma, sans-serif",
+  system: "'Segoe UI', Tahoma, Arial, sans-serif",
+  naskh:  "'Noto Naskh Arabic', 'Segoe UI', sans-serif",
+  serif:  "Georgia, 'Times New Roman', serif",
+  mono:   "'Courier New', Courier, monospace",
+};
+
+interface PrintShellProps {
   children: React.ReactNode;
+  silent?: boolean;
+  globalFont?: SectionStyle["fontFamily"];
 }
 
-export function PrintShell({ label, autoPrint, children }: Props) {
+export default function PrintShell({ children, silent, globalFont = "zavi" }: PrintShellProps) {
   useEffect(() => {
-    if (!autoPrint) return;
-    const t = setTimeout(() => window.print(), 700);
-    return () => clearTimeout(t);
-  }, [autoPrint]);
+    if (silent) {
+      // Wait for fonts and images to load, then print
+      const timer = setTimeout(() => {
+        window.print();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [silent]);
 
   return (
     <>
-      <style>{`
-        .ps-root {
-          position: fixed;
-          inset: 0;
-          z-index: 9999;
-          background: hsl(var(--muted) / 0.95);
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          padding: 24px 16px 64px;
-          gap: 16px;
+      <style dangerouslySetInnerHTML={{ __html: `
+        @page { margin: 0; }
+        body {
+          font-family: ${FONT_STACKS[globalFont]};
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          background: ${silent ? '#fff' : '#f3f4f6'} !important;
         }
-        .ps-topbar {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          background: hsl(var(--background));
-          border: 1px solid hsl(var(--border));
-          border-radius: 12px;
-          padding: 8px 12px 8px 16px;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-          font-size: 13px;
-          color: hsl(var(--foreground));
-          font-weight: 500;
-        }
-        .ps-doc {
-          box-shadow: 0 4px 32px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.04);
-          border-radius: 4px;
-          background: white;
+        @media screen {
+          body {
+            display: flex;
+            justify-content: center;
+            padding: ${silent ? '0' : '32px 16px'};
+          }
         }
         @media print {
-          .ps-root {
-            position: static;
-            background: white;
-            padding: 0;
-            display: block;
-          }
-          .ps-topbar { display: none !important; }
-          .ps-doc {
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            width: 100% !important;
-          }
-          thead tr,
-          .print-color-exact {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
+          body { background: #fff !important; }
         }
-      `}</style>
-
-      <div className="ps-root">
-        <div className="ps-topbar">
-          <span>{label}</span>
-          <Button size="sm" className="gap-1.5 text-xs h-8" onClick={() => window.print()}>
-            <Printer size={13} /> چاپکردن
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8" onClick={() => window.close()}>
-            <X size={13} /> داخستن
-          </Button>
-        </div>
-        <div className="ps-doc">
-          {children}
-        </div>
-      </div>
+      `}} />
+      {children}
     </>
   );
 }

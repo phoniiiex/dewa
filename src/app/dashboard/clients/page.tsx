@@ -4,7 +4,7 @@ import { Search, Plus, Users, Phone, MapPin, Edit3, Trash2, Eye, X, Building2, S
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
-import { buildDebtReceiptHTML } from "@/lib/debtReceipt";
+import { printPaymentReceipt } from "@/lib/print-engine";
 import type { Client, ClientType, PaymentTerms, Order } from "@/lib/types";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
@@ -758,11 +758,9 @@ export default function ClientsPage() {
                       <Button variant="outline" onClick={() => setPaymentStep("select")}>\u2190 گەڕانەوە</Button>
                       <Button variant="outline" className="text-primary border-primary/30"
                         onClick={() => {
-                          const html = buildDebtReceiptHTML(paymentClient!.name, targetOrders, totalToPay, discountAmt, receiverName, settings ?? null);
-                          const w = window.open("", "_blank");
-                          if (!w) return;
-                          w.document.write(html);
-                          w.document.close();
+                          if (!paymentClient) return;
+                          const orderIds = selectedOrderIds.length > 0 ? selectedOrderIds : getDeliveredOrders(paymentClient.id).map(o => o.id);
+                          printPaymentReceipt(paymentClient.id, orderIds);
                         }}>
                         <Printer className="size-3.5 me-1" /> پرینتی وەسڵ
                       </Button>
