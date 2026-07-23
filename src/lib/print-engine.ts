@@ -1,7 +1,7 @@
 /**
  * DEWA — Print Engine
  *
- * Handles printing via hidden iframe (instant print) or new tab (preview).
+ * Handles printing via popup window (instant print) or new tab (preview).
  *
  *   printOrder(orderId)                         → prints with default template
  *   printOrder(orderId, { templateId })         → prints with specific template
@@ -13,7 +13,7 @@
 
 export interface PrintOptions {
   templateId?: string;   // specific template, else default
-  preview?: boolean;     // true = open tab, false/undefined = silent iframe print
+  preview?: boolean;     // true = open tab, false/undefined = silent popup print
 }
 
 // ── Build URL ────────────────────────────────────────────────────────────────
@@ -26,28 +26,25 @@ function buildPrintUrl(orderId: string, opts: PrintOptions = {}): string {
   return `/print/${encodeURIComponent(orderId)}${qs ? "?" + qs : ""}`;
 }
 
-// ── Print via hidden iframe (silent printing) ────────────────────────────────
+// ── Print via popup window ───────────────────────────────────────────────────
 
 function silentPrint(url: string): void {
-  // Create a hidden iframe, load the print page, trigger window.print() from it
-  const existing = document.getElementById("__dewa_print_frame") as HTMLIFrameElement | null;
-  if (existing) existing.remove();
+  // Open a small popup window — PrintShell will trigger window.print() then close
+  const popup = window.open(
+    url,
+    "__dewa_print",
+    "width=900,height=700,menubar=no,toolbar=no,status=no,scrollbars=yes"
+  );
 
-  const iframe = document.createElement("iframe");
-  iframe.id = "__dewa_print_frame";
-  iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;opacity:0;pointer-events:none";
-  iframe.src = url;
-  document.body.appendChild(iframe);
-
-  // Auto-cleanup after 30s
-  setTimeout(() => {
-    try { iframe.remove(); } catch { /* noop */ }
-  }, 30_000);
+  // If popup was blocked, fall back to new tab
+  if (!popup) {
+    window.open(url, "_blank");
+  }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/** Print an order invoice (left-click = silent, preview = new tab) */
+/** Print an order invoice (left-click = silent popup, preview = new tab) */
 export function printOrder(orderId: string, opts: PrintOptions = {}): void {
   const url = buildPrintUrl(orderId, opts);
 

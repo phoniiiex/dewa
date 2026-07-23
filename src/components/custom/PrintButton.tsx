@@ -6,7 +6,7 @@
 // Right-click → context menu: template picker + build new + preview
 // ============================================================
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Printer, Plus, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,9 +33,11 @@ export function PrintButton({ order, className, iconOnly = true }: PrintButtonPr
   const defaultTemplate = invoiceTemplates.find(t => t.isDefault) || invoiceTemplates[0];
 
   // ── Left-click: instant print with default ──
-  const handleClick = () => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     printOrder(order.id, { templateId: defaultTemplate?.id });
-  };
+  }, [order.id, defaultTemplate?.id]);
 
   // ── Context menu item: print with specific template ──
   const handlePrintWith = (templateId: string) => {
@@ -57,21 +59,28 @@ export function PrintButton({ order, className, iconOnly = true }: PrintButtonPr
     <>
       <ContextMenu>
         <ContextMenuTrigger>
-          <Button
-            size={iconOnly ? "icon" : "sm"}
-            variant="ghost"
-            className={iconOnly ? "size-7" : className}
+          <div
             onClick={handleClick}
+            role="button"
+            tabIndex={0}
+            className="inline-flex"
             title="چاپکردن (ڕاست‌کلیک بۆ بژاردەکان)"
           >
-            <Printer className={iconOnly ? "size-3.5" : "size-3.5 me-1"} />
-            {!iconOnly && "چاپ"}
-          </Button>
+            <Button
+              size={iconOnly ? "icon" : "sm"}
+              variant="ghost"
+              className={iconOnly ? "size-7 pointer-events-none" : `${className || ""} pointer-events-none`}
+              tabIndex={-1}
+            >
+              <Printer className={iconOnly ? "size-3.5" : "size-3.5 me-1"} />
+              {!iconOnly && "چاپ"}
+            </Button>
+          </div>
         </ContextMenuTrigger>
 
         <ContextMenuContent className="w-52 print-context-menu" dir="rtl">
           {/* Quick Print (default) */}
-          <ContextMenuItem onClick={handleClick} className="gap-2">
+          <ContextMenuItem onClick={() => printOrder(order.id, { templateId: defaultTemplate?.id })} className="gap-2">
             <Printer className="size-3.5" />
             چاپی خێرا
             {defaultTemplate && (

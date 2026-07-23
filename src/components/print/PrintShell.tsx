@@ -27,11 +27,21 @@ interface PrintShellProps {
 export default function PrintShell({ children, silent, globalFont = "zavi" }: PrintShellProps) {
   useEffect(() => {
     if (silent) {
+      // Close popup after printing is done
+      const handleAfterPrint = () => {
+        setTimeout(() => window.close(), 300);
+      };
+      window.addEventListener("afterprint", handleAfterPrint);
+
       // Wait for fonts and images to load, then print
       const timer = setTimeout(() => {
         window.print();
-      }, 800);
-      return () => clearTimeout(timer);
+      }, 1200);
+
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener("afterprint", handleAfterPrint);
+      };
     }
   }, [silent]);
 
