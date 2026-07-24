@@ -146,6 +146,8 @@ export interface OrderItem {
   overrideWarehouseFulfillment: boolean;  // if true, warehouse ships ALL of totalBonusQty (agentPending = 0)
   expiryDate?: string;                    // product expiry, denormalized at order time
   company?: string;                       // manufacturing company, from Product.company
+  batchNumber?: string;                   // batch number, from Product.batchNumber
+  category?: string;                      // product category, from Product.category
 }
 
 export interface Order {
@@ -317,6 +319,7 @@ export interface InvoiceTemplate {
     showCustomerName: boolean;
     showCurrency: boolean;
     showRepName: boolean;
+    showPharmacyName: boolean;
   };
 
   // ── Items table config ──
@@ -331,6 +334,8 @@ export interface InvoiceTemplate {
     showLineTotal: boolean;
     showExpiryDate: boolean;
     showCompany: boolean;
+    showBatchNumber: boolean;
+    showProductType: boolean;
   };
 
   // ── Summary config ──
@@ -435,6 +440,7 @@ export const DEFAULT_INVOICE_TEMPLATE: Omit<InvoiceTemplate, "id" | "createdAt">
     showCustomerName: true,
     showCurrency: true,
     showRepName: true,
+    showPharmacyName: true,
   },
 
   table: {
@@ -448,6 +454,8 @@ export const DEFAULT_INVOICE_TEMPLATE: Omit<InvoiceTemplate, "id" | "createdAt">
     showLineTotal: true,
     showExpiryDate: true,
     showCompany: true,
+    showBatchNumber: true,
+    showProductType: true,
   },
 
   summary: {
@@ -523,5 +531,17 @@ export interface ActivityLog {
   entityId: string;
   entityName: string;
   meta: Record<string, unknown>;
+  createdAt: string;
+}
+
+// ── Saved Signatures ────────────────────────────────────────
+
+export interface SavedSignature {
+  id: string;
+  userId: string;
+  userName: string;
+  name: string;
+  imageUrl: string;
+  isDefault: boolean;
   createdAt: string;
 }

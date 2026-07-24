@@ -7,7 +7,7 @@
 // ============================================================
 
 import { useState, useCallback } from "react";
-import { Printer, Plus, Eye } from "lucide-react";
+import { Printer, Plus, Eye, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem,
@@ -25,7 +25,7 @@ interface PrintButtonProps {
 }
 
 export function PrintButton({ order, className, iconOnly = true }: PrintButtonProps) {
-  const { invoiceTemplates } = useData();
+  const { invoiceTemplates, savedSignatures } = useData();
   const [builderOpen, setBuilderOpen] = useState(false);
   const [builderTemplate, setBuilderTemplate] = useState<InvoiceTemplate | null>(null);
 
@@ -120,6 +120,26 @@ export function PrintButton({ order, className, iconOnly = true }: PrintButtonPr
             <Eye className="size-3.5" />
             پیشبینی
           </ContextMenuItem>
+
+          {/* Print with Signature */}
+          {savedSignatures.length > 0 && (
+            <>
+              <ContextMenuSeparator />
+              {savedSignatures.map(sig => (
+                <ContextMenuItem
+                  key={sig.id}
+                  onClick={() => printOrder(order.id, { templateId: defaultTemplate?.id, signatureId: sig.id })}
+                  className="gap-2"
+                >
+                  <PenLine className="size-3.5" />
+                  <span className="text-xs truncate flex-1">چاپ بە واژوو{savedSignatures.length > 1 ? ` (${sig.name})` : ""}</span>
+                  {sig.isDefault && (
+                    <span className="text-[9px] bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-full">بنەڕەت</span>
+                  )}
+                </ContextMenuItem>
+              ))}
+            </>
+          )}
         </ContextMenuContent>
       </ContextMenu>
 

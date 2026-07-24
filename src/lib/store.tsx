@@ -10,6 +10,7 @@ import type {
   Product, Client, Rep, Supplier, Driver, Order,
   Transaction, CompanySettings, User, InvoiceTemplate,
   PriceType, ProductPrice, SampleRequest, ReturnRecord, ReturnStatus,
+  SavedSignature,
 } from "./types";
 import { RETURN_BONUS_RATE } from "./types";
 
@@ -499,6 +500,10 @@ interface DataStore {
   updateReturn: (id: string, r: Partial<ReturnRecord>) => Promise<void>;
   deleteReturn: (id: string) => void;
   updateSettings: (s: Partial<CompanySettings>) => void;
+  savedSignatures: SavedSignature[];
+  addSignature: (sig: Omit<SavedSignature, "id" | "createdAt">) => Promise<SavedSignature>;
+  deleteSignature: (id: string) => void;
+  setDefaultSignature: (id: string) => Promise<void>;
   showToast: (message: string, type?: "success" | "error") => void;
   toast: { message: string; type: "success" | "error"; visible: boolean };
   refreshData: () => Promise<void>;
@@ -540,6 +545,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [invoiceTemplates, setInvoiceTemplates] = useState<InvoiceTemplate[]>((_c?.invoiceTemplates as InvoiceTemplate[]) ?? []);
   const [sampleRequests, setSampleRequests] = useState<SampleRequest[]>((_c?.sampleRequests as SampleRequest[]) ?? []);
   const [returns, setReturns] = useState<ReturnRecord[]>((_c?.returns as ReturnRecord[]) ?? []);
+  const [savedSignatures, setSavedSignatures] = useState<SavedSignature[]>([]);
   // loading = false immediately if cache exists — no flash, no shimmer needed
   const [loading, setLoading] = useState(!_c);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error"; visible: boolean }>({ message: "", type: "success", visible: false });
@@ -597,6 +603,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setPriceTypes(fresh.priceTypes);
       setSampleRequests(fresh.sampleRequests);
       setReturns(fresh.returns);
+
+      // Load saved signatures separately (not cached)
+      const { data: sigRows } = await supabase.from("user_signatures").select("*").order("created_at", { ascending: false });
+      setSavedSignatures(
+        (sigRows || []).map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          userId: (r.user_id || "") as string,
+          userName: (r.user_name || "") as string,
+          name: (r.name || "") as string,
+          imageUrl: (r.image_url || "") as string,
+          isDefault: !!r.is_default,
+          createdAt: (r.created_at || "") as string,
+        }))
+      );
 
       // Cache fresh data for next load
       try { localStorage.setItem("dewa_data_cache_v1", JSON.stringify(fresh)); } catch { /* ignore quota errors */ }
@@ -1074,6 +1094,32 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
   }, [showToast]);
 
+  // ── Saved Signatures CRUD ──────────────────────────────────
+  const addSignature = useCallback(async (sig: Omit<SavedSignature, "id" | "createdAt">) => {
+    const ns: SavedSignature = { ...sig, id: genId(), createdAt: new Date().toISOString() };
+    setSavedSignatures((prev) => [ns, ...prev]);
+    const { error } = await supabase.from("user_signatures").insert({
+      id: ns.id, user_id: ns.userId, user_name: ns.userName,
+      name: ns.name, image_url: ns.imageUrl, is_default: ns.isDefault,
+    });
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("واژوو پاشەکەوتکرا ✅");
+    return ns;
+  }, [showToast]);
+
+  const deleteSignature = useCallback(async (id: string) => {
+    setSavedSignatures((prev) => prev.filter((x) => x.id !== id));
+    const { error } = await supabase.from("user_signatures").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("واژوو سڕایەوە");
+  }, [showToast]);
+
+  const setDefaultSignature = useCallback(async (id: string) => {
+    setSavedSignatures((prev) => prev.map((x) => ({ ...x, isDefault: x.id === id })));
+    // Unset all defaults, then set the chosen one
+    await supabase.from("user_signatures").update({ is_default: false }).neq("id", "");
+    const { error } = await supabase.from("user_signatures").update({ is_default: true }).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("واژووی بنەڕەت دانرا");
+  }, [showToast]);
+
   return (
     <DataContext.Provider
       value={{
@@ -1092,6 +1138,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         addSampleRequest, updateSampleRequest, deleteSampleRequest,
         addReturn, updateReturn, deleteReturn,
         updateSettings,
+        savedSignatures, addSignature, deleteSignature, setDefaultSignature,
         showToast, toast, refreshData,
       }}
     >

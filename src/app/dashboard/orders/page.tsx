@@ -3,7 +3,7 @@ import { useState, FormEvent, useRef, useMemo, useEffect } from "react";
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X,
   CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign, Pencil,
-  PackageCheck, TriangleAlert, Tag,
+  PackageCheck, TriangleAlert, Tag, QrCode,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useData } from "@/lib/store";
@@ -28,6 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ExportButton from "@/components/custom/ExportButton";
 import { PrintButton } from "@/components/custom/PrintButton";
+import { printSticker } from "@/lib/print-engine";
 import ClientCombobox from "@/components/custom/ClientCombobox";
 import type { ExportColumn } from "@/lib/export";
 import { notifyDriverOfOrder, sendTelegramMessage } from "@/lib/telegram";
@@ -229,6 +230,15 @@ export default function OrdersPage() {
 
   const hasAnyViolation = liveBonusItems.some(i => i.belowMinimum || i.pendingRounding);
 
+  // ── Form validation — disable submit until required fields are filled ──
+  const isFormValid = useMemo(() => {
+    if (!form.clientId) return false;
+    if (!isRep && !form.repId) return false;
+    const hasValidItem = orderItems.some(i => i.productId && Number(i.quantity) > 0);
+    if (!hasValidItem) return false;
+    return true;
+  }, [form.clientId, form.repId, isRep, orderItems]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -363,19 +373,18 @@ export default function OrdersPage() {
 
   const confirmSend = async () => {
     if (!sendModalOrder) return;
-    const driver = drivers.find(d => d.id === selectedDriverId);
-    if (!driver) { showToast("تکایە شوفێرێک هەڵبژێرە", "error"); return; }
+    const driver = selectedDriverId ? drivers.find(d => d.id === selectedDriverId) : null;
     setSending(true);
     try {
       await updateOrder(sendModalOrder.id, {
         status: "READY",
-        driverId: driver.id,
-        driverName: driver.name,
-        driverPhone: driver.phone,
+        driverId: driver?.id || "",
+        driverName: driver?.name || "",
+        driverPhone: driver?.phone || "",
       });
-      showToast("شوفێر دەستنیشانکرا — داواکاری ئامادەیە ✔️");
+      showToast(driver ? "شوفێر دەستنیشانکرا — داواکاری ئامادەیە ✔️" : "داواکاری ئامادەیە ✔️");
 
-      if (driver.telegramChatId && settings.telegramBotToken) {
+      if (driver?.telegramChatId && settings.telegramBotToken) {
         const client = clients.find(c => c.id === sendModalOrder.clientId);
         // 1. Send text notification to driver
         const result = await notifyDriverOfOrder(settings.telegramBotToken, {
@@ -633,6 +642,9 @@ export default function OrdersPage() {
                     )}
                     <Button size="icon" variant="ghost" className="size-7" onClick={() => setDetailOrder(o)}><Eye className="size-3.5" /></Button>
                     <PrintButton order={o} />
+                    {["READY", "SENT", "DELIVERED", "PAID"].includes(o.status) && (
+                      <Button size="icon" variant="ghost" className="size-7 text-teal-600 hover:text-teal-700 hover:bg-teal-50 dark:hover:bg-teal-950/30" title="چاپکردنی ستیکەر" onClick={() => printSticker(o.id)}><QrCode className="size-3.5" /></Button>
+                    )}
                     {isManager && <Button size="icon" variant="ghost" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(o.id)}><Trash2 className="size-3.5" /></Button>}
                   </div>
                 </TableCell>
@@ -1022,16 +1034,15 @@ export default function OrdersPage() {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  if (pendingConfirm && !editOrder) { setPendingConfirm(false); return; }
                   setNewOrderOpen(false); resetForm();
                 }}
               >
-                {pendingConfirm && !editOrder ? "گۆڕین / دەستکاری" : "پاشگەزبوونەوە"}
+                پاشگەزبوونەوە
               </Button>
               <Button
                 type="submit"
                 form="order-form"
-                disabled={hasAnyViolation}
+                disabled={hasAnyViolation || (!editOrder && !pendingConfirm && !isFormValid)}
                 className={cn(
                   "transition-all duration-300",
                   pendingConfirm && !editOrder && "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/30 scale-105"
@@ -1125,7 +1136,7 @@ export default function OrdersPage() {
       ════════════════════════════════════════════════════════════════ */}
       <Dialog open={!!sendModalOrder} onOpenChange={open => !open && setSendModalOrder(null)}>
         <DialogContent className="sm:max-w-md" dir="rtl">
-          <DialogHeader><DialogTitle>ئامادەیە — هەڵبژاردنی شوفێر</DialogTitle><DialogDescription>شوفێرێک هەڵبژێرە بۆ ناردنی داواکاری</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>ئامادەکردنی داواکاری</DialogTitle><DialogDescription>دەتوانیت شوفێرێک هەڵبژێریت یان بەبێ شوفێر بەردەوام بیت</DialogDescription></DialogHeader>
         <div className="flex flex-col gap-4 modal-stagger">
           {sendModalOrder && (
             <div className="px-3.5 py-2.5 bg-muted rounded-[10px] text-[13px]">
@@ -1135,7 +1146,7 @@ export default function OrdersPage() {
             </div>
           )}
           <div className="space-y-2">
-            <Label>شوفێر *</Label>
+            <Label>شوفێر (ئارەزوویە)</Label>
             <Select value={selectedDriverId || null} onValueChange={(v: string | null) => v && setSelectedDriverId(v)}>
               <SelectTrigger><SelectValue placeholder="هەڵبژاردن..." /></SelectTrigger>
               <SelectContent>
@@ -1144,6 +1155,11 @@ export default function OrdersPage() {
                 ))}
               </SelectContent>
             </Select>
+            {selectedDriverId && (
+              <Button type="button" variant="ghost" size="sm" className="text-xs text-muted-foreground h-6 px-2" onClick={() => setSelectedDriverId("")}>
+                <X size={11} className="me-1" /> لابردنی شوفێر
+              </Button>
+            )}
           </div>
           {selectedDriverId && (() => {
             const d = drivers.find(x => x.id === selectedDriverId);
@@ -1159,6 +1175,7 @@ export default function OrdersPage() {
             ) : null;
           })()}
           {/* Telegram voice info banner */}
+          {selectedDriverId && (
           <div className="px-3.5 py-3 bg-primary/5 rounded-[10px] border border-primary/20">
             <div className="text-[13px] font-bold text-primary mb-1">🎙️ ئەوازی تێبینی</div>
             <div className="text-xs text-muted-foreground leading-relaxed">
@@ -1166,10 +1183,11 @@ export default function OrdersPage() {
               ئەو ئەوازەیان بینێرن بۆ بۆتەکە — بۆتەکە بەخۆی دەیدرێتە شوفێرەکە.
             </div>
           </div>
+          )}
 
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setSendModalOrder(null)}>پاشگەزبوونەوە</Button>
-            <Button onClick={confirmSend} disabled={sending || !selectedDriverId} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Button onClick={confirmSend} disabled={sending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               {sending ? "ناردن..." : "✔ ئامادەیە"}
             </Button>
           </div>

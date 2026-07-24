@@ -18,7 +18,7 @@ import PrintShell from "@/components/print/PrintShell";
 
 export default async function PrintPage(props: {
   params: Promise<{ orderId: string }>;
-  searchParams: Promise<{ t?: string; preview?: string; silent?: string }>;
+  searchParams: Promise<{ t?: string; preview?: string; silent?: string; sig?: string }>;
 }) {
   const params = await props.params;
   const searchParams = await props.searchParams;
@@ -104,6 +104,26 @@ export default async function PrintPage(props: {
 
   const items: OrderItem[] = (orderRow.items as OrderItem[]) || [];
 
+  // ── 5b. Enrich items with product batch numbers and categories ──
+  const productIds = [...new Set(items.map(i => i.productId).filter(Boolean))];
+  let productMap: Record<string, { batchNumber?: string; category?: string }> = {};
+  if (productIds.length > 0) {
+    const { data: productRows } = await supabase
+      .from("products")
+      .select("id, batch_number, category")
+      .in("id", productIds);
+    if (productRows) {
+      productMap = Object.fromEntries(
+        productRows.map(p => [p.id, { batchNumber: p.batch_number || "", category: p.category || "" }])
+      );
+    }
+  }
+  const enrichedItems: OrderItem[] = items.map(item => ({
+    ...item,
+    batchNumber: item.batchNumber || productMap[item.productId]?.batchNumber || "",
+    category: item.category || productMap[item.productId]?.category || "",
+  }));
+
   // ── 6. QR code ──
   let qrDataUrl: string | undefined;
   if (template.showQR && clientRow?.qr_token) {
@@ -118,6 +138,17 @@ export default async function PrintPage(props: {
     } catch { /* noop */ }
   }
 
+  // ── 6b. Fetch saved signature if requested ──
+  let signatureImageUrl: string | undefined;
+  if (searchParams.sig) {
+    const { data: sigRow } = await supabase
+      .from("user_signatures")
+      .select("image_url")
+      .eq("id", searchParams.sig)
+      .single();
+    signatureImageUrl = (sigRow?.image_url || "") as string || undefined;
+  }
+
   // ── 7. Build InvoiceData ──
   const invoiceData: InvoiceData = {
     order: {
@@ -125,7 +156,8 @@ export default async function PrintPage(props: {
       orderNumber: orderRow.order_number || "",
       clientName: orderRow.client_name || "",
       repName: orderRow.rep_name || "",
-      items,
+      pharmacyName: orderRow.pharmacy_name || "",
+      items: enrichedItems,
       totalAmount: Number(orderRow.total_amount || 0),
       notes: orderRow.notes || "",
       status: orderRow.status || "",
@@ -139,6 +171,7 @@ export default async function PrintPage(props: {
     settings,
     template,
     qrDataUrl,
+    signatureImageUrl,
   };
 
   const isSilent = searchParams.silent === "1";

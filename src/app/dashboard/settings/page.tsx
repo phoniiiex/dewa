@@ -4,6 +4,7 @@ import { useTheme } from "next-themes";
 import {
   Settings2, Building2, Save, RefreshCw, Camera, Upload, Users, ArrowLeft,
   Sun, Moon, Trash2, Download, AlertTriangle, Shield, User, Phone, Mail, BadgeCheck,
+  PenLine, Star,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
@@ -43,9 +44,113 @@ function ImageUploader({ value, onChange, label, shape }: { value?: string; onCh
   );
 }
 
+function SignatureInput({ onSave }: { onSave: (dataUrl: string) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [hasStrokes, setHasStrokes] = useState(false);
+
+  // Simple canvas drawing
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = 320 * ratio;
+    canvas.height = 100 * ratio;
+    ctx.scale(ratio, ratio);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#1A1A2E";
+
+    let isDown = false;
+    const getPos = (e: MouseEvent | TouchEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+      const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    };
+
+    const down = (e: MouseEvent | TouchEvent) => { isDown = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+    const move = (e: MouseEvent | TouchEvent) => { if (!isDown) return; e.preventDefault(); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); setHasStrokes(true); };
+    const up = () => { isDown = false; };
+
+    canvas.addEventListener("mousedown", down);
+    canvas.addEventListener("mousemove", move);
+    canvas.addEventListener("mouseup", up);
+    canvas.addEventListener("mouseleave", up);
+    canvas.addEventListener("touchstart", down, { passive: false });
+    canvas.addEventListener("touchmove", move, { passive: false });
+    canvas.addEventListener("touchend", up);
+
+    return () => {
+      canvas.removeEventListener("mousedown", down);
+      canvas.removeEventListener("mousemove", move);
+      canvas.removeEventListener("mouseup", up);
+      canvas.removeEventListener("mouseleave", up);
+      canvas.removeEventListener("touchstart", down);
+      canvas.removeEventListener("touchmove", move);
+      canvas.removeEventListener("touchend", up);
+    };
+  }, [drawing]);
+
+  const handleSaveDrawn = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !hasStrokes) return;
+    onSave(canvas.toDataURL("image/png"));
+    const ctx = canvas.getContext("2d");
+    if (ctx) { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+    setHasStrokes(false);
+    setDrawing(false);
+  };
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => { if (ev.target?.result) onSave(ev.target.result as string); };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  if (drawing) {
+    return (
+      <div className="space-y-2">
+        <canvas
+          ref={canvasRef}
+          style={{ width: 320, height: 100 }}
+          className="border border-border rounded-lg bg-white cursor-crosshair touch-none"
+        />
+        <div className="flex gap-1.5">
+          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setDrawing(false); setHasStrokes(false); }}>
+            پاشگەزبوونەوە
+          </Button>
+          <Button size="sm" className="text-xs h-7" disabled={!hasStrokes} onClick={handleSaveDrawn}>
+            <Save className="size-3 me-1" />پاشەکەوتکردن
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2">
+      <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5" onClick={() => setDrawing(true)}>
+        <PenLine className="size-3" />کێشانی واژوو
+      </Button>
+      <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5" onClick={() => fileRef.current?.click()}>
+        <Upload className="size-3" />هەڵکێشانی وێنە
+      </Button>
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleUpload} />
+    </div>
+  );
+}
 
 export default function SettingsPage() {
-  const { settings, updateSettings, showToast } = useData();
+  const { settings, updateSettings, showToast, savedSignatures, addSignature, deleteSignature, setDefaultSignature } = useData();
   const { currentUser, updateCurrentUserProfile } = useLayout();
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -424,6 +529,69 @@ export default function SettingsPage() {
               {deleteStep === "done" && (
                 <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800/40 rounded-xl p-4 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
                   ✅ هەموو داتاکان سڕانەوە. لاپەڕەکە نوێ دەبێتەوە...
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ═══ Signature Management ═══ */}
+          <Card className="border-border shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2"><PenLine className="size-4" />بەڕێوەبەردنی واژووەکان</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                واژوویەک زیادبکە بۆ بەکارهێنان لە چاپکردندا. لە کاتی چاپکردندا ڕاست‌کلیک بکە لەسەر ئایکۆنی چاپکردن و "چاپ بە واژوو" هەڵبژێرە.
+              </p>
+
+              {/* Signature input */}
+              <SignatureInput
+                onSave={(dataUrl) => {
+                  addSignature({
+                    userId: currentUser?.id || "",
+                    userName: currentUser?.name || "",
+                    name: `واژووی ${savedSignatures.length + 1}`,
+                    imageUrl: dataUrl,
+                    isDefault: savedSignatures.length === 0,
+                  });
+                }}
+              />
+
+              {/* Saved signatures list */}
+              {savedSignatures.length > 0 && (
+                <div className="space-y-2 mt-4">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">واژووە پاشەکەوتکراوەکان</Label>
+                  <div className="grid gap-2">
+                    {savedSignatures.map(sig => (
+                      <div key={sig.id} className={cn(
+                        "flex items-center gap-3 p-3 rounded-xl border transition-all",
+                        sig.isDefault
+                          ? "border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20"
+                          : "border-border hover:border-muted-foreground/30"
+                      )}>
+                        <div className="w-24 h-10 border border-border rounded-lg bg-white flex items-center justify-center overflow-hidden">
+                          <img src={sig.imageUrl} alt={sig.name} className="max-w-full max-h-full object-contain" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold truncate">{sig.name}</div>
+                          <div className="text-[10px] text-muted-foreground">{sig.userName}</div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {!sig.isDefault && (
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs gap-1" onClick={() => setDefaultSignature(sig.id)}>
+                              <Star className="size-3" />بنەڕەت
+                            </Button>
+                          )}
+                          {sig.isDefault && (
+                            <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-bold">بنەڕەت</span>
+                          )}
+                          <Button size="icon" variant="ghost" className="size-7 text-destructive hover:text-destructive" onClick={() => deleteSignature(sig.id)}>
+                            <Trash2 className="size-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </CardContent>

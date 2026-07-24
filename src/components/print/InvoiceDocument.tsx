@@ -31,6 +31,7 @@ export interface InvoiceData {
     orderNumber: string;
     clientName: string;
     repName: string;
+    pharmacyName?: string;
     items: OrderItem[];
     totalAmount: number;
     notes: string;
@@ -46,6 +47,7 @@ export interface InvoiceData {
   template: InvoiceTemplate;
   qrDataUrl?: string;          // base64 QR image
   printUser?: string;          // who clicked print
+  signatureImageUrl?: string;  // saved signature image to render
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -89,7 +91,7 @@ function formatDateTime(): { date: string; time: string } {
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export default function InvoiceDocument({ data }: { data: InvoiceData }) {
-  const { order, client, settings, template: t, qrDataUrl, printUser } = data;
+  const { order, client, settings, template: t, qrDataUrl, printUser, signatureImageUrl } = data;
 
   const globalStyle: SectionStyle = { ...DEFAULT_SECTION_STYLE, fontFamily: t.globalFont, accentColor: t.primaryColor };
   const subtotal = order.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
@@ -196,6 +198,12 @@ export default function InvoiceDocument({ data }: { data: InvoiceData }) {
                 <span className={styles.metaValue}>{order.repName}</span>
               </div>
             )}
+            {t.invoiceMeta.showPharmacyName && order.pharmacyName && (
+              <div className={styles.metaItem}>
+                <span className={styles.metaLabel}>فارمۆخانە</span>
+                <span className={styles.metaValue}>{order.pharmacyName}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -217,6 +225,8 @@ export default function InvoiceDocument({ data }: { data: InvoiceData }) {
                 {t.table.showLineTotal && <th>کۆ</th>}
                 {t.table.showExpiryDate && <th>بەسەرچوون</th>}
                 {t.table.showCompany && <th>بەرهەمهێنەر</th>}
+                {t.table.showBatchNumber && <th>ژمارەی باچ</th>}
+                {t.table.showProductType && <th>جۆری بەرهەم</th>}
               </tr>
             </thead>
             <tbody>
@@ -230,6 +240,8 @@ export default function InvoiceDocument({ data }: { data: InvoiceData }) {
                   {t.table.showLineTotal && <td>{formatIQD(item.quantity * item.unitPrice)}</td>}
                   {t.table.showExpiryDate && <td>{item.expiryDate || "—"}</td>}
                   {t.table.showCompany && <td>{item.company || "—"}</td>}
+                  {t.table.showBatchNumber && <td>{item.batchNumber || "—"}</td>}
+                  {t.table.showProductType && <td>{item.category || "—"}</td>}
                 </tr>
               ))}
             </tbody>
@@ -321,6 +333,9 @@ export default function InvoiceDocument({ data }: { data: InvoiceData }) {
         >
           {t.signature.labels.slice(0, t.signature.count).map((label, i) => (
             <div key={i} className={styles.sigBox}>
+              {signatureImageUrl && i === 0 && (
+                <img src={signatureImageUrl} alt="واژوو" className={styles.sigImage} />
+              )}
               {t.signature.showLine && <div className={styles.sigLine} />}
               <div className={styles.sigLabel}>{label}</div>
             </div>
@@ -363,5 +378,7 @@ function getActiveColumns(t: InvoiceTemplate): number {
   if (t.table.showLineTotal) count++;
   if (t.table.showExpiryDate) count++;
   if (t.table.showCompany) count++;
+  if (t.table.showBatchNumber) count++;
+  if (t.table.showProductType) count++;
   return count;
 }

@@ -525,6 +525,7 @@ function renderMetadataToggles(
           <ToggleRow label="ناوی کڕیار" checked={template.invoiceMeta.showCustomerName} onChange={v => updateNested("invoiceMeta", "showCustomerName", v)} />
           <ToggleRow label="جۆری دراو" checked={template.invoiceMeta.showCurrency} onChange={v => updateNested("invoiceMeta", "showCurrency", v)} />
           <ToggleRow label="ناوی نوێنەر" checked={template.invoiceMeta.showRepName} onChange={v => updateNested("invoiceMeta", "showRepName", v)} />
+          <ToggleRow label="ناوی فارمۆخانە" checked={template.invoiceMeta.showPharmacyName} onChange={v => updateNested("invoiceMeta", "showPharmacyName", v)} />
         </>
       );
 
@@ -539,6 +540,8 @@ function renderMetadataToggles(
           <ToggleRow label="کۆی ریز" checked={template.table.showLineTotal} onChange={v => updateNested("table", "showLineTotal", v)} />
           <ToggleRow label="بەرواری بەسەرچوون" checked={template.table.showExpiryDate} onChange={v => updateNested("table", "showExpiryDate", v)} />
           <ToggleRow label="کۆمپانیای بەرهەمهێنەر" checked={template.table.showCompany} onChange={v => updateNested("table", "showCompany", v)} />
+          <ToggleRow label="ژمارەی باچ" checked={template.table.showBatchNumber} onChange={v => updateNested("table", "showBatchNumber", v)} />
+          <ToggleRow label="جۆری بەرهەم" checked={template.table.showProductType} onChange={v => updateNested("table", "showProductType", v)} />
         </>
       );
 
