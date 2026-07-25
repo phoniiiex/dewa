@@ -1033,16 +1033,7 @@ export default function OrdersPage() {
           </ScrollArea>
 
           <DrawerFooter className="border-t shrink-0 px-6 py-4" dir="rtl">
-            <div className="flex gap-2 justify-between">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setNewOrderOpen(false); resetForm();
-                }}
-              >
-                پاشگەزبوونەوە
-              </Button>
+            <div className="flex gap-2 justify-end">
               <Button
                 type="submit"
                 form="order-form"
