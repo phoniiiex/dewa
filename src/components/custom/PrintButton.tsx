@@ -1,13 +1,13 @@
 "use client";
 // ============================================================
-// DEWA — PrintButton (New Print System)
+// DEWA — PrintButton (Client-Side Print)
 //
-// Left-click  → instant print with default template
-// Right-click → context menu: template picker + build new + preview
+// Left-click  → instant print via hidden iframe
+// Right-click → context menu: quick print, print with signature
 // ============================================================
 
-import { useState, useCallback } from "react";
-import { Printer, Plus, Eye, PenLine } from "lucide-react";
+import { useCallback } from "react";
+import { Printer, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem,
@@ -15,8 +15,7 @@ import {
 } from "@/components/ui/context-menu";
 import { useData } from "@/lib/store";
 import { printOrder } from "@/lib/print-engine";
-import type { Order, InvoiceTemplate } from "@/lib/types";
-import InvoiceBuilder from "@/components/print/InvoiceBuilder";
+import type { Order } from "@/lib/types";
 
 interface PrintButtonProps {
   order: Order;
@@ -25,132 +24,69 @@ interface PrintButtonProps {
 }
 
 export function PrintButton({ order, className, iconOnly = true }: PrintButtonProps) {
-  const { invoiceTemplates, savedSignatures } = useData();
-  const [builderOpen, setBuilderOpen] = useState(false);
-  const [builderTemplate, setBuilderTemplate] = useState<InvoiceTemplate | null>(null);
+  const { settings, savedSignatures } = useData();
 
-  // Find default template (first with isDefault, or first available)
-  const defaultTemplate = invoiceTemplates.find(t => t.isDefault) || invoiceTemplates[0];
-
-  // ── Left-click: instant print with default ──
+  // ── Left-click: instant print ──
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    printOrder(order.id, { templateId: defaultTemplate?.id });
-  }, [order.id, defaultTemplate?.id]);
+    printOrder(order, settings);
+  }, [order, settings]);
 
-  // ── Context menu item: print with specific template ──
-  const handlePrintWith = (templateId: string) => {
-    printOrder(order.id, { templateId });
-  };
-
-  // ── Context menu item: preview ──
-  const handlePreview = () => {
-    printOrder(order.id, { preview: true, templateId: defaultTemplate?.id });
-  };
-
-  // ── Context menu item: new template ──
-  const handleNewTemplate = () => {
-    setBuilderTemplate(null);
-    setBuilderOpen(true);
+  // ── Print with signature ──
+  const handlePrintWithSig = (sigUrl: string) => {
+    printOrder(order, settings, { signatureUrl: sigUrl });
   };
 
   return (
-    <>
-      <ContextMenu>
-        <ContextMenuTrigger>
-          <div
-            onClick={handleClick}
-            role="button"
-            tabIndex={0}
-            className="inline-flex"
-            title="چاپکردن (ڕاست‌کلیک بۆ بژاردەکان)"
+    <ContextMenu>
+      <ContextMenuTrigger>
+        <div
+          onClick={handleClick}
+          role="button"
+          tabIndex={0}
+          className="inline-flex"
+          title="چاپکردن (ڕاست‌کلیک بۆ بژاردەکان)"
+        >
+          <Button
+            size={iconOnly ? "icon" : "sm"}
+            variant="ghost"
+            className={iconOnly ? "size-7 pointer-events-none" : `${className || ""} pointer-events-none`}
+            tabIndex={-1}
           >
-            <Button
-              size={iconOnly ? "icon" : "sm"}
-              variant="ghost"
-              className={iconOnly ? "size-7 pointer-events-none" : `${className || ""} pointer-events-none`}
-              tabIndex={-1}
-            >
-              <Printer className={iconOnly ? "size-3.5" : "size-3.5 me-1"} />
-              {!iconOnly && "چاپ"}
-            </Button>
-          </div>
-        </ContextMenuTrigger>
+            <Printer className={iconOnly ? "size-3.5" : "size-3.5 me-1"} />
+            {!iconOnly && "چاپ"}
+          </Button>
+        </div>
+      </ContextMenuTrigger>
 
-        <ContextMenuContent className="w-52 print-context-menu" dir="rtl">
-          {/* Quick Print (default) */}
-          <ContextMenuItem onClick={() => printOrder(order.id, { templateId: defaultTemplate?.id })} className="gap-2">
-            <Printer className="size-3.5" />
-            چاپی خێرا
-            {defaultTemplate && (
-              <span className="text-[10px] text-muted-foreground ms-auto truncate max-w-20">{defaultTemplate.name}</span>
-            )}
-          </ContextMenuItem>
+      <ContextMenuContent className="w-52 print-context-menu" dir="rtl">
+        {/* Quick Print */}
+        <ContextMenuItem onClick={() => printOrder(order, settings)} className="gap-2">
+          <Printer className="size-3.5" />
+          چاپی خێرا
+        </ContextMenuItem>
 
-          <ContextMenuSeparator />
-
-          {/* Saved templates */}
-          {invoiceTemplates.length > 0 && (
-            <>
-              {invoiceTemplates.map(t => (
-                <ContextMenuItem
-                  key={t.id}
-                  onClick={() => handlePrintWith(t.id)}
-                  className="gap-2"
-                >
-                  <span className="text-xs truncate flex-1">{t.name}</span>
-                  {t.isDefault && (
-                    <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">بنەڕەت</span>
-                  )}
-                </ContextMenuItem>
-              ))}
-              <ContextMenuSeparator />
-            </>
-          )}
-
-          {/* New template */}
-          <ContextMenuItem onClick={handleNewTemplate} className="gap-2 text-primary">
-            <Plus className="size-3.5" />
-            داڕێژەی نوێ
-          </ContextMenuItem>
-
-          {/* Preview */}
-          <ContextMenuItem onClick={handlePreview} className="gap-2">
-            <Eye className="size-3.5" />
-            پیشبینی
-          </ContextMenuItem>
-
-          {/* Print with Signature */}
-          {savedSignatures.length > 0 && (
-            <>
-              <ContextMenuSeparator />
-              {savedSignatures.map(sig => (
-                <ContextMenuItem
-                  key={sig.id}
-                  onClick={() => printOrder(order.id, { templateId: defaultTemplate?.id, signatureId: sig.id })}
-                  className="gap-2"
-                >
-                  <PenLine className="size-3.5" />
-                  <span className="text-xs truncate flex-1">چاپ بە واژوو{savedSignatures.length > 1 ? ` (${sig.name})` : ""}</span>
-                  {sig.isDefault && (
-                    <span className="text-[9px] bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-full">بنەڕەت</span>
-                  )}
-                </ContextMenuItem>
-              ))}
-            </>
-          )}
-        </ContextMenuContent>
-      </ContextMenu>
-
-      {/* Invoice Builder Drawer */}
-      {builderOpen && (
-        <InvoiceBuilder
-          open={builderOpen}
-          onClose={() => setBuilderOpen(false)}
-          editTemplate={builderTemplate}
-        />
-      )}
-    </>
+        {/* Print with Signature */}
+        {savedSignatures.length > 0 && (
+          <>
+            <ContextMenuSeparator />
+            {savedSignatures.map(sig => (
+              <ContextMenuItem
+                key={sig.id}
+                onClick={() => handlePrintWithSig(sig.imageUrl)}
+                className="gap-2"
+              >
+                <PenLine className="size-3.5" />
+                <span className="text-xs truncate flex-1">چاپ بە واژوو{savedSignatures.length > 1 ? ` (${sig.name})` : ""}</span>
+                {sig.isDefault && (
+                  <span className="text-[9px] bg-emerald-500/10 text-emerald-600 px-1.5 py-0.5 rounded-full">بنەڕەت</span>
+                )}
+              </ContextMenuItem>
+            ))}
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

@@ -1407,7 +1407,7 @@ export default function OrdersPage() {
               size="sm"
               className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5"
               onClick={() => {
-                if (stickerOrder) printSticker(stickerOrder.id);
+                if (stickerOrder) printSticker(stickerOrder, settings);
                 setStickerOrder(null);
               }}
             >
