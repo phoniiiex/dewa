@@ -32,34 +32,15 @@ export default function PrintShell({ children, silent, globalFont = "zavi" }: Pr
 
     let cancelled = false;
 
-    const triggerPrint = () => {
-      if (cancelled) return;
-
-      // Notify parent iframe (if we're inside one) that we're ready
-      try {
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage("__dewa_print_ready", "*");
-          // When inside an iframe, the parent handles printing — don't auto-print
-          return;
-        }
-      } catch {
-        // Cross-origin — we're in a popup, auto-print below
-      }
-
-      // Standalone popup/tab mode — trigger print ourselves
-      window.print();
-    };
-
-    // Wait for fonts AND images to load, then trigger print
     const waitAndPrint = async () => {
       try {
-        // 1. Wait for fonts to load (with 3s timeout)
+        // 1. Wait for fonts (with 3s timeout)
         await Promise.race([
           document.fonts.ready,
           new Promise(resolve => setTimeout(resolve, 3000)),
         ]);
 
-        // 2. Wait for all images to load (with 4s timeout)
+        // 2. Wait for all images (with 4s timeout)
         const images = Array.from(document.querySelectorAll("img"));
         if (images.length > 0) {
           await Promise.race([
@@ -69,7 +50,7 @@ export default function PrintShell({ children, silent, globalFont = "zavi" }: Pr
                   ? Promise.resolve()
                   : new Promise<void>(resolve => {
                       img.onload = () => resolve();
-                      img.onerror = () => resolve(); // Don't block on failed images
+                      img.onerror = () => resolve();
                     })
               )
             ),
@@ -78,23 +59,20 @@ export default function PrintShell({ children, silent, globalFont = "zavi" }: Pr
         }
 
         // 3. Small buffer for layout settling
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 400));
 
-        triggerPrint();
+        if (!cancelled) window.print();
       } catch {
-        // If anything fails, still try to print after a delay
-        setTimeout(triggerPrint, 2000);
+        if (!cancelled) setTimeout(() => window.print(), 2000);
       }
     };
 
     waitAndPrint();
 
-    // Close popup after printing is done (standalone mode only)
+    // Close window after printing is done
     const handleAfterPrint = () => {
       setTimeout(() => {
-        try {
-          if (window.parent === window) window.close();
-        } catch { /* noop */ }
+        try { window.close(); } catch { /* noop */ }
       }, 300);
     };
     window.addEventListener("afterprint", handleAfterPrint);

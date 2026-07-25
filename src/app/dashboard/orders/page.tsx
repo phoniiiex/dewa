@@ -3,7 +3,7 @@ import { useState, FormEvent, useRef, useMemo, useEffect } from "react";
 import {
   Search, Plus, ShoppingCart, Eye, Trash2, X,
   CheckCircle, Clock, Package, Truck, Upload, XCircle, DollarSign, Pencil,
-  PackageCheck, TriangleAlert, Tag, QrCode,
+  PackageCheck, TriangleAlert, Tag,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useData } from "@/lib/store";
@@ -119,6 +119,9 @@ export default function OrdersPage() {
   const [sendModalOrder, setSendModalOrder]   = useState<Order | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState("");
   const [sending, setSending]                 = useState(false);
+
+  // Sticker modal (after READY)
+  const [stickerOrder, setStickerOrder]       = useState<Order | null>(null);
 
   // Reject modal
   const [rejectOrder, setRejectOrder] = useState<Order | null>(null);
@@ -419,8 +422,12 @@ export default function OrdersPage() {
       }
     } finally {
       setSending(false);
+      // Save ref before clearing modal
+      const readyOrder = sendModalOrder;
       setSendModalOrder(null);
       setSelectedDriverId("");
+      // Show sticker print modal
+      if (readyOrder) setStickerOrder(readyOrder);
     }
   };
 
@@ -642,9 +649,6 @@ export default function OrdersPage() {
                     )}
                     <Button size="icon" variant="ghost" className="size-7" onClick={() => setDetailOrder(o)}><Eye className="size-3.5" /></Button>
                     <PrintButton order={o} />
-                    {["READY", "SENT", "DELIVERED", "PAID"].includes(o.status) && (
-                      <Button size="icon" variant="ghost" className="size-7 text-teal-600 hover:text-teal-700 hover:bg-teal-50 dark:hover:bg-teal-950/30" title="چاپکردنی ستیکەر" onClick={() => printSticker(o.id)}><QrCode className="size-3.5" /></Button>
-                    )}
                     {isManager && <Button size="icon" variant="ghost" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(o.id)}><Trash2 className="size-3.5" /></Button>}
                   </div>
                 </TableCell>
@@ -1384,6 +1388,43 @@ export default function OrdersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ═══ Sticker Print Modal (after READY) ═══ */}
+      <Dialog open={!!stickerOrder} onOpenChange={open => !open && setStickerOrder(null)}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">چاپکردنی ستیکەر</DialogTitle>
+            <DialogDescription>
+              داواکاری <strong>{stickerOrder?.orderNumber}</strong> ئامادەیە. دەتەوێت ستیکەری QR چاپبکەیت؟
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-muted/50 rounded-xl p-4 text-sm space-y-2">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">کڕیار</span>
+              <span className="font-bold">{stickerOrder?.clientName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">ژمارە</span>
+              <span className="font-semibold">{stickerOrder?.orderNumber}</span>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:gap-2">
+            <Button variant="outline" size="sm" onClick={() => setStickerOrder(null)}>
+              داخستن
+            </Button>
+            <Button
+              size="sm"
+              className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5"
+              onClick={() => {
+                if (stickerOrder) printSticker(stickerOrder.id);
+                setStickerOrder(null);
+              }}
+            >
+              🏷️ چاپکردنی ستیکەر
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
 
     </>
