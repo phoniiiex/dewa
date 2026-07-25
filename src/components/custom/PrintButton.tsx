@@ -24,18 +24,19 @@ interface PrintButtonProps {
 }
 
 export function PrintButton({ order, className, iconOnly = true }: PrintButtonProps) {
-  const { settings, savedSignatures } = useData();
+  const { settings, savedSignatures, invoiceTemplates } = useData();
+  const defaultTemplate = invoiceTemplates.find(t => t.isDefault) || invoiceTemplates[0];
 
   // ── Left-click: instant print ──
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    printOrder(order, settings);
-  }, [order, settings]);
+    printOrder(order, settings, { template: defaultTemplate });
+  }, [order, settings, defaultTemplate]);
 
   // ── Print with signature ──
   const handlePrintWithSig = (sigUrl: string) => {
-    printOrder(order, settings, { signatureUrl: sigUrl });
+    printOrder(order, settings, { signatureUrl: sigUrl, template: defaultTemplate });
   };
 
   return (

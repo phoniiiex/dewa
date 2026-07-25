@@ -1,156 +1,247 @@
 /**
  * DEWA — Print Engine (100% Client-Side)
  *
- * Generates invoice HTML from store data and prints it using a hidden iframe.
- * No server routes, no new tabs — the OS print dialog appears directly.
+ * Renders invoices using the same template config as InvoiceDocument,
+ * then prints via hidden iframe. No server routes, no new tabs.
  */
 
-import type { Order, CompanySettings } from "@/lib/types";
+import type { Order, CompanySettings, InvoiceTemplate, SectionStyle } from "@/lib/types";
+import { DEFAULT_INVOICE_TEMPLATE, DEFAULT_SECTION_STYLE } from "@/lib/types";
 
 export interface PrintOptions {
   templateId?: string;
-  signatureId?: string;
+  signatureUrl?: string;
   preview?: boolean;
 }
+
+// ── Font stacks ──────────────────────────────────────────────────────────────
+
+const FONT_STACKS: Record<SectionStyle["fontFamily"], string> = {
+  zavi:   "'Zavi Gifts', 'Segoe UI', Tahoma, sans-serif",
+  system: "'Segoe UI', Tahoma, Arial, sans-serif",
+  naskh:  "'Noto Naskh Arabic', 'Segoe UI', sans-serif",
+  serif:  "Georgia, 'Times New Roman', serif",
+  mono:   "'Courier New', Courier, monospace",
+};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(iso: string): string {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleDateString("ckb-IQ", { year: "numeric", month: "2-digit", day: "2-digit" });
-  } catch {
-    return iso.slice(0, 10);
-  }
+    return new Date(iso).toLocaleDateString("ku", { year: "numeric", month: "long", day: "numeric" });
+  } catch { return iso.slice(0, 10); }
 }
 
-function formatNumber(n: number): string {
-  return n.toLocaleString("en-US");
+function fmtNum(n: number): string {
+  return `${n.toLocaleString("en-US")} د.ع`;
 }
 
-// ── Build invoice HTML ───────────────────────────────────────────────────────
+function ms(base: SectionStyle, over: Partial<SectionStyle> = {}): SectionStyle {
+  return { ...base, ...over };
+}
 
-function buildInvoiceHTML(order: Order, settings: CompanySettings, signatureUrl?: string): string {
+function cssVars(s: SectionStyle): string {
+  return `
+    --sec-font: ${FONT_STACKS[s.fontFamily]};
+    --sec-size: ${s.fontSize}px;
+    --sec-weight: ${s.fontWeight};
+    --sec-color: ${s.color};
+    --sec-bg: ${s.bgColor};
+    --sec-accent: ${s.accentColor};
+    --sec-radius: ${s.borderRadius}px;
+    --sec-border-w: ${s.borderWidth}px;
+    --sec-border-c: ${s.borderColor};
+    --sec-pad: ${s.padding}px;
+    --sec-align: ${s.textAlign};
+  `;
+}
+
+// ── Build the full invoice HTML (matches InvoiceDocument exactly) ─────────────
+
+function buildInvoiceHTML(
+  order: Order,
+  settings: CompanySettings,
+  template: InvoiceTemplate,
+  signatureUrl?: string,
+): string {
+  const t = template;
+  const gs: SectionStyle = { ...DEFAULT_SECTION_STYLE, fontFamily: t.globalFont, accentColor: t.primaryColor };
   const items = order.items || [];
-  const subtotal = items.reduce((sum, it) => sum + it.quantity * it.unitPrice, 0);
-  const total = order.totalAmount || subtotal;
+  const subtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  const discount = t.defaultDiscount > 0 ? subtotal * (t.defaultDiscount / 100) : 0;
+  const netTotal = subtotal - discount;
+  const now = new Date();
+  const printDate = now.toLocaleDateString("ku", { year: "numeric", month: "long", day: "numeric" });
+  const printTime = now.toLocaleTimeString("ku", { hour: "2-digit", minute: "2-digit" });
+  const accent = t.primaryColor || "#4263EB";
+  const pageW = t.paperSize === "A5" ? "148mm" : "210mm";
+  const pageMinH = t.paperSize === "A5" ? "210mm" : "297mm";
 
-  const itemRows = items.map((it, i) => `
-    <tr>
-      <td style="padding:6px 10px;border-bottom:1px solid #E5E7EB;text-align:center;font-size:12px;color:#6B7280">${i + 1}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #E5E7EB;font-size:13px;font-weight:600">${it.productName}</td>
-      ${it.batchNumber ? `<td style="padding:6px 10px;border-bottom:1px solid #E5E7EB;text-align:center;font-size:12px">${it.batchNumber}</td>` : ""}
-      ${it.category ? `<td style="padding:6px 10px;border-bottom:1px solid #E5E7EB;text-align:center;font-size:12px">${it.category}</td>` : ""}
-      <td style="padding:6px 10px;border-bottom:1px solid #E5E7EB;text-align:center;font-size:13px">${it.quantity}</td>
-      ${it.bonusQty > 0 ? `<td style="padding:6px 10px;border-bottom:1px solid #E5E7EB;text-align:center;font-size:13px;color:#059669">${it.bonusQty}</td>` : ""}
-      <td style="padding:6px 10px;border-bottom:1px solid #E5E7EB;text-align:center;font-size:13px">${formatNumber(it.unitPrice)}</td>
-      <td style="padding:6px 10px;border-bottom:1px solid #E5E7EB;text-align:center;font-size:13px;font-weight:700">${formatNumber(it.quantity * it.unitPrice)}</td>
-    </tr>
-  `).join("");
+  // ── Table header columns
+  const thCells: string[] = [];
+  if (t.table.showRowNumbers)   thCells.push("<th>#</th>");
+  if (t.table.showProductName)  thCells.push("<th>ناوی بەرهەم</th>");
+  if (t.table.showQuantity)     thCells.push("<th>بڕ</th>");
+  if (t.table.showFreeQty)      thCells.push("<th>بۆنەس</th>");
+  if (t.table.showUnitPrice)    thCells.push("<th>نرخی یەکە</th>");
+  if (t.table.showLineTotal)    thCells.push("<th>کۆ</th>");
+  if (t.table.showExpiryDate)   thCells.push("<th>بەسەرچوون</th>");
+  if (t.table.showCompany)      thCells.push("<th>بەرهەمهێنەر</th>");
+  if (t.table.showBatchNumber)  thCells.push("<th>ژمارەی باچ</th>");
+  if (t.table.showProductType)  thCells.push("<th>جۆری بەرهەم</th>");
 
-  const hasBatch = items.some(it => it.batchNumber);
-  const hasCat = items.some(it => it.category);
-  const hasBonus = items.some(it => it.bonusQty > 0);
+  // ── Table body rows
+  const bodyRows = items.map((it, i) => {
+    const cells: string[] = [];
+    if (t.table.showRowNumbers)   cells.push(`<td>${i + 1}</td>`);
+    if (t.table.showProductName)  cells.push(`<td>${it.productName}</td>`);
+    if (t.table.showQuantity)     cells.push(`<td>${it.quantity}</td>`);
+    if (t.table.showFreeQty)      cells.push(`<td>${it.bonusQty || "—"}</td>`);
+    if (t.table.showUnitPrice)    cells.push(`<td>${fmtNum(it.unitPrice)}</td>`);
+    if (t.table.showLineTotal)    cells.push(`<td>${fmtNum(it.quantity * it.unitPrice)}</td>`);
+    if (t.table.showExpiryDate)   cells.push(`<td>${it.expiryDate || "—"}</td>`);
+    if (t.table.showCompany)      cells.push(`<td>${it.company || "—"}</td>`);
+    if (t.table.showBatchNumber)  cells.push(`<td>${it.batchNumber || "—"}</td>`);
+    if (t.table.showProductType)  cells.push(`<td>${it.category || "—"}</td>`);
+    return `<tr>${cells.join("")}</tr>`;
+  }).join("");
 
-  const headerCols = [
-    `<th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:700;color:#fff;background:#1A1A2E;border-bottom:2px solid #4263EB">#</th>`,
-    `<th style="padding:8px 10px;text-align:right;font-size:11px;font-weight:700;color:#fff;background:#1A1A2E;border-bottom:2px solid #4263EB">بەرهەم</th>`,
-    hasBatch ? `<th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:700;color:#fff;background:#1A1A2E;border-bottom:2px solid #4263EB">باچ</th>` : "",
-    hasCat ? `<th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:700;color:#fff;background:#1A1A2E;border-bottom:2px solid #4263EB">جۆر</th>` : "",
-    `<th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:700;color:#fff;background:#1A1A2E;border-bottom:2px solid #4263EB">عەدەد</th>`,
-    hasBonus ? `<th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:700;color:#fff;background:#1A1A2E;border-bottom:2px solid #4263EB">بۆنەس</th>` : "",
-    `<th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:700;color:#fff;background:#1A1A2E;border-bottom:2px solid #4263EB">نرخ</th>`,
-    `<th style="padding:8px 10px;text-align:center;font-size:11px;font-weight:700;color:#fff;background:#1A1A2E;border-bottom:2px solid #4263EB">کۆ</th>`,
-  ].join("");
+  // ── Build section HTML blocks
+  const headerHTML = !t.showHeader ? "" : `
+    <header style="${cssVars(ms(gs, t.header.style))};border-bottom:2px solid ${accent};padding-bottom:16px;margin-bottom:20px">
+      <div style="display:flex;align-items:flex-start;gap:16px${t.header.layout === "centered" ? ";flex-direction:column;align-items:center;text-align:center" : ""}">
+        ${t.header.showLogo && settings.logo ? `<img src="${settings.logo}" alt="Logo" style="width:64px;height:64px;object-fit:contain;border-radius:8px">` : ""}
+        <div style="flex:1">
+          ${t.header.showNameKu ? `<div style="font-size:20px;font-weight:800;line-height:1.3">${settings.name}</div>` : ""}
+          ${t.header.showNameEn && settings.nameEn ? `<div style="font-size:14px;font-weight:600;opacity:0.7;margin-top:2px">${settings.nameEn}</div>` : ""}
+          ${t.header.showEstYear && settings.establishedYear ? `<div style="font-size:11px;opacity:0.6;margin-top:4px">دامەزراوەی ${settings.establishedYear}</div>` : ""}
+          ${t.header.showBusinessDesc && settings.businessDesc ? `<div style="font-size:11px;opacity:0.7;margin-top:2px">${settings.businessDesc}</div>` : ""}
+          ${t.header.showAddress && (settings.address || settings.city) ? `<div style="font-size:11px;opacity:0.65;margin-top:4px">📍 ${settings.address}${settings.city ? `، ${settings.city}` : ""}</div>` : ""}
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:10.5px;opacity:0.65;margin-top:10px;border-top:1px solid rgba(0,0,0,0.06);padding-top:8px">
+        ${t.header.showPhoneAdmin && settings.phoneAdmin ? `<span>بەڕێوەبەرایەتی: ${settings.phoneAdmin}</span>` : ""}
+        ${t.header.showPhoneAccounting && settings.phoneAccounting ? `<span>ژمێریاری: ${settings.phoneAccounting}</span>` : ""}
+        ${t.header.showPhoneIT && settings.phoneIT ? `<span>کۆمپیوتەر: ${settings.phoneIT}</span>` : ""}
+        ${t.header.showPhoneSales && settings.phoneSales ? `<span>فرۆشتن: ${settings.phoneSales}</span>` : ""}
+      </div>
+    </header>`;
+
+  const metaItems: string[] = [];
+  if (t.invoiceMeta.showInvoiceNumber) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">ژمارە</span><span style="font-size:13px;font-weight:600">${order.orderNumber}</span></div>`);
+  if (t.invoiceMeta.showDate) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">بەروار</span><span style="font-size:13px;font-weight:600">${formatDate(order.createdAt)}</span></div>`);
+  if (t.invoiceMeta.showCopyLabel) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">نسخە</span><span style="font-size:13px;font-weight:600">نسخەی یەکەم</span></div>`);
+  if (t.invoiceMeta.showCustomerName) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">کڕیار</span><span style="font-size:13px;font-weight:600">${order.clientName}</span></div>`);
+  if (t.invoiceMeta.showCurrency) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">دراو</span><span style="font-size:13px;font-weight:600">${settings.currency}</span></div>`);
+  if (t.invoiceMeta.showRepName) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">نوێنەر</span><span style="font-size:13px;font-weight:600">${order.repName}</span></div>`);
+  if (t.invoiceMeta.showPharmacyName && order.pharmacyName) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">فارمۆخانە</span><span style="font-size:13px;font-weight:600">${order.pharmacyName}</span></div>`);
+
+  const metaHTML = !t.showInvoiceMeta ? "" : `
+    <div style="${cssVars(ms(gs, t.invoiceMeta.style))};background:#F8F9FF;border-radius:12px;padding:16px 20px;border:1px solid #E8EAFF;margin-bottom:12px">
+      <div style="font-size:16px;font-weight:700;color:${accent};margin-bottom:10px">پسووڵە</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px">${metaItems.join("")}</div>
+    </div>`;
+
+  const tableLayoutClass = t.table.layout || "default";
+  const extraTableStyles = tableLayoutClass === "striped" ? `tbody tr:nth-child(even) { background: #F8F9FF; }` : "";
+  const tableBorder = tableLayoutClass === "bordered" ? "border:1px solid #DEE2E6;" : "";
+  const thStyle = tableLayoutClass === "minimal"
+    ? `background:transparent;color:#1A1A2E;border-bottom:2px solid ${accent};`
+    : `color:#fff;background:${accent};`;
+
+  const tableHTML = !t.showItemsTable ? "" : `
+    <div style="${cssVars(ms(gs, t.table.style))};margin-bottom:12px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;${tableBorder}">
+        <thead><tr>${thCells.join("")}</tr></thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>`;
+
+  // ── Summary
+  const summaryRows: string[] = [];
+  if (t.summary.showSubtotal) summaryRows.push(`<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;border-bottom:1px dashed rgba(0,0,0,0.08)"><span>کۆی ناخاوەن</span><span>${fmtNum(subtotal)} ${settings.currency}</span></div>`);
+  if (t.summary.showDiscount && discount > 0) summaryRows.push(`<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;border-bottom:1px dashed rgba(0,0,0,0.08)"><span>داشکاندن (${t.defaultDiscount}%)</span><span style="color:#DC2626">${fmtNum(discount)} ${settings.currency}</span></div>`);
+  if (t.summary.showNetTotal) summaryRows.push(`<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;font-weight:800;color:${accent};border-top:2px solid ${accent};margin-top:4px"><span>کۆی خاوەن</span><span>${fmtNum(netTotal)} ${settings.currency}</span></div>`);
+
+  const summaryJustify = t.summary.position === "left" ? "flex-start" : t.summary.position === "full" ? "stretch" : "flex-end";
+  const summaryHTML = !t.showSummary ? "" : `
+    <div style="${cssVars(ms(gs, t.summary.style))};display:flex;justify-content:${summaryJustify};margin-top:8px;margin-bottom:12px">
+      <div style="min-width:260px;max-width:${t.summary.position === "full" ? "none" : "360px"}">${summaryRows.join("")}</div>
+    </div>`;
+
+  // ── Notes & Terms
+  const notesHTML = t.showNotes && t.footer.showNotes && order.notes ? `<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:700;margin-bottom:3px;color:${accent}">تێبینی</div><div style="font-size:11px;opacity:0.7;line-height:1.6">${order.notes}</div></div>` : "";
+  const termsHTML = t.showTerms && t.footer.showTerms && t.footer.customTerms ? `<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:700;margin-bottom:3px;color:${accent}">مەرج و ڕێسا</div><div style="font-size:11px;opacity:0.7;line-height:1.6">${t.footer.customTerms}</div></div>` : "";
+
+  const qrNotesHTML = (notesHTML || termsHTML) ? `
+    <div style="display:flex;align-items:flex-start;gap:20px;margin-bottom:12px">
+      <div style="flex:1">${notesHTML}${termsHTML}</div>
+    </div>` : "";
+
+  // ── Signature
+  const sigBoxes = t.showSignature ? t.signature.labels.slice(0, t.signature.count).map((label, i) => `
+    <div style="text-align:center;min-width:120px">
+      ${signatureUrl && i === 0 ? `<img src="${signatureUrl}" alt="واژوو" style="max-width:140px;max-height:50px;object-fit:contain;margin-bottom:4px">` : ""}
+      ${t.signature.showLine ? `<div style="border-bottom:1.5px solid #333;width:100%;margin-bottom:6px;height:40px"></div>` : ""}
+      <div style="font-size:10.5px;font-weight:600;opacity:0.6">${label}</div>
+    </div>
+  `).join("") : "";
+  const signatureHTML = !t.showSignature ? "" : `
+    <div style="${cssVars(ms(gs, t.signature.style))};display:flex;justify-content:space-around;gap:24px;margin-top:24px;padding-top:12px">${sigBoxes}</div>`;
+
+  // ── Footer
+  const footerParts: string[] = [];
+  if (t.footer.showPrintDateTime) footerParts.push(`<span>${printDate} — ${printTime}</span>`);
+  if (t.footer.showPageNumber) footerParts.push(`<span>لاپەڕە ١</span>`);
+  const footerHTML = !t.showFooter ? "" : `
+    <footer style="${cssVars(ms(gs, t.footer.style))};display:flex;justify-content:center;gap:24px;font-size:10px;opacity:0.5;border-top:1px solid rgba(0,0,0,0.06);padding-top:10px;margin-top:auto">${footerParts.join("")}</footer>`;
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ckb">
 <head>
   <meta charset="utf-8">
-  <title>وەسڵ - ${order.orderNumber}</title>
+  <title>پسووڵە - ${order.orderNumber}</title>
   <style>
-    @page { margin: 8mm; }
+    @page { margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; color: #1A1A2E; background: #fff; }
-    @media print { body { background: #fff; } }
+    body {
+      font-family: ${FONT_STACKS[t.globalFont]};
+      color: #1A1A2E;
+      background: #fff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    table th {
+      font-weight: 700; font-size: 10.5px; letter-spacing: 0.03em;
+      ${thStyle}
+      padding: 8px 10px; text-align: right; white-space: nowrap;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    table th:first-child { border-radius: 0 8px 0 0; }
+    table th:last-child  { border-radius: 8px 0 0 0; }
+    table td {
+      padding: 7px 10px; border-bottom: 1px solid #F0F0F0; font-size: 12px;
+    }
+    table tbody tr:last-child td { border-bottom: none; }
+    ${extraTableStyles}
+    @media print {
+      body { background: #fff; }
+    }
   </style>
 </head>
 <body>
-  <div style="max-width:750px;margin:0 auto;padding:16px">
-
-    <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #1A1A2E;margin-bottom:16px">
-      <div>
-        ${settings.logo ? `<img src="${settings.logo}" style="height:50px;max-width:140px;object-fit:contain" alt="logo">` : ""}
-      </div>
-      <div style="text-align:left">
-        <div style="font-size:22px;font-weight:800;color:#1A1A2E">${settings.name || ""}</div>
-        ${settings.nameEn ? `<div style="font-size:12px;color:#6B7280">${settings.nameEn}</div>` : ""}
-        ${settings.phone ? `<div style="font-size:11px;color:#9CA3AF;margin-top:2px">📞 ${settings.phone}</div>` : ""}
-      </div>
+  <div style="width:${pageW};min-height:${pageMinH};padding:32px 40px;margin:0 auto;position:relative">
+    ${t.watermark ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:72px;font-weight:700;color:rgba(0,0,0,0.04);transform:rotate(-30deg);pointer-events:none;z-index:0;user-select:none">${t.watermark}</div>` : ""}
+    <div style="position:relative;z-index:1">
+      ${headerHTML}
+      ${metaHTML}
+      ${tableHTML}
+      ${summaryHTML}
+      ${qrNotesHTML}
+      ${signatureHTML}
+      ${footerHTML}
     </div>
-
-    <!-- Invoice Meta -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;font-size:13px">
-      <div style="background:#F8F9FA;padding:10px 14px;border-radius:8px">
-        <span style="color:#6B7280;font-size:11px">ژمارەی وەسڵ</span>
-        <div style="font-weight:800;font-size:16px;color:#4263EB">${order.orderNumber}</div>
-      </div>
-      <div style="background:#F8F9FA;padding:10px 14px;border-radius:8px">
-        <span style="color:#6B7280;font-size:11px">بەروار</span>
-        <div style="font-weight:600">${formatDate(order.createdAt)}</div>
-      </div>
-      <div style="background:#F8F9FA;padding:10px 14px;border-radius:8px">
-        <span style="color:#6B7280;font-size:11px">کڕیار</span>
-        <div style="font-weight:700">${order.clientName}</div>
-      </div>
-      <div style="background:#F8F9FA;padding:10px 14px;border-radius:8px">
-        <span style="color:#6B7280;font-size:11px">نوێنەر</span>
-        <div style="font-weight:600">${order.repName || "—"}</div>
-      </div>
-      ${order.pharmacyName ? `
-      <div style="background:#F8F9FA;padding:10px 14px;border-radius:8px;grid-column:span 2">
-        <span style="color:#6B7280;font-size:11px">دەرمانخانە</span>
-        <div style="font-weight:600">${order.pharmacyName}</div>
-      </div>` : ""}
-    </div>
-
-    <!-- Items Table -->
-    <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-      <thead><tr>${headerCols}</tr></thead>
-      <tbody>${itemRows}</tbody>
-    </table>
-
-    <!-- Summary -->
-    <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-      <div style="min-width:220px;background:#F8F9FA;border-radius:10px;padding:14px 18px">
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
-          <span style="color:#6B7280">کۆی گشتی</span>
-          <span style="font-weight:800;font-size:16px;color:#1A1A2E">${formatNumber(total)} ${settings.currency || "IQD"}</span>
-        </div>
-      </div>
-    </div>
-
-    ${order.notes ? `
-    <!-- Notes -->
-    <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px">
-      <strong style="color:#92400E">تێبینی:</strong> ${order.notes}
-    </div>` : ""}
-
-    ${signatureUrl ? `
-    <!-- Signature -->
-    <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-      <div style="text-align:center">
-        <img src="${signatureUrl}" style="max-width:160px;max-height:60px;object-fit:contain" alt="signature">
-        <div style="border-top:1px solid #D1D5DB;margin-top:6px;padding-top:4px;font-size:10px;color:#9CA3AF">واژوو</div>
-      </div>
-    </div>` : ""}
-
-    <!-- Footer -->
-    <div style="border-top:2px solid #E5E7EB;padding-top:10px;text-align:center;font-size:10px;color:#9CA3AF">
-      ${settings.name || ""} ${settings.phone ? `• ${settings.phone}` : ""} ${settings.address ? `• ${settings.address}` : ""}
-    </div>
-
   </div>
 </body>
 </html>`;
@@ -159,7 +250,6 @@ function buildInvoiceHTML(order: Order, settings: CompanySettings, signatureUrl?
 // ── Iframe-based print (no new tab) ──────────────────────────────────────────
 
 function printHTML(html: string): void {
-  // Remove any existing print iframe
   const existing = document.getElementById("__dewa_print_frame");
   if (existing) existing.remove();
 
@@ -169,16 +259,9 @@ function printHTML(html: string): void {
   iframe.srcdoc = html;
 
   iframe.onload = () => {
-    // Small delay for fonts/rendering
     setTimeout(() => {
-      try {
-        iframe.contentWindow?.print();
-      } catch {
-        // Fallback: open as blob URL
-        const blob = new Blob([html], { type: "text/html" });
-        window.open(URL.createObjectURL(blob), "_blank");
-      }
-      // Clean up after print dialog closes
+      try { iframe.contentWindow?.print(); }
+      catch { window.open(URL.createObjectURL(new Blob([html], { type: "text/html" })), "_blank"); }
       setTimeout(() => iframe.remove(), 3000);
     }, 300);
   };
@@ -188,14 +271,14 @@ function printHTML(html: string): void {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/** Print an order invoice — shows OS print dialog directly, no new tab */
+/** Print an order invoice using the template from the store */
 export function printOrder(
   order: Order,
   settings: CompanySettings,
-  opts: { signatureUrl?: string } = {}
+  opts: { signatureUrl?: string; template?: InvoiceTemplate } = {}
 ): void {
-  const html = buildInvoiceHTML(order, settings, opts.signatureUrl);
-  printHTML(html);
+  const t = opts.template || { id: "default", createdAt: new Date().toISOString(), ...DEFAULT_INVOICE_TEMPLATE } as InvoiceTemplate;
+  printHTML(buildInvoiceHTML(order, settings, t, opts.signatureUrl));
 }
 
 /** Print a sticker with customer name */
@@ -207,7 +290,7 @@ export function printSticker(order: Order, settings: CompanySettings): void {
   <style>
     @page { margin: 4mm; size: 80mm auto; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; display: flex; justify-content: center; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; display: flex; justify-content: center; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   </style>
 </head>
 <body>
@@ -221,7 +304,8 @@ export function printSticker(order: Order, settings: CompanySettings): void {
 </html>`;
   printHTML(html);
 }
-/** Print a payment receipt (opens in new tab — needs server-side order aggregation) */
+
+/** Print a payment receipt (opens in new tab — needs server-side data) */
 export function printPaymentReceipt(
   clientId: string,
   orderIds: string[],
@@ -232,4 +316,3 @@ export function printPaymentReceipt(
   if (!opts.preview) params.set("silent", "1");
   window.open(`/print/receipt/${encodeURIComponent(clientId)}?${params.toString()}`, "_blank");
 }
-
