@@ -28,9 +28,7 @@ export function PrintButton({ order, className, iconOnly = true }: PrintButtonPr
   const defaultTemplate = invoiceTemplates.find(t => t.isDefault) || invoiceTemplates[0];
 
   // ── Left-click: instant print ──
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleClick = useCallback(() => {
     printOrder(order, settings, { template: defaultTemplate });
   }, [order, settings, defaultTemplate]);
 
@@ -42,28 +40,26 @@ export function PrintButton({ order, className, iconOnly = true }: PrintButtonPr
   return (
     <ContextMenu>
       <ContextMenuTrigger>
-        <div
-          onClick={handleClick}
-          role="button"
-          tabIndex={0}
-          className="inline-flex"
+        <Button
+          size={iconOnly ? "icon" : "sm"}
+          variant="ghost"
+          className={iconOnly ? "size-7" : className || ""}
           title="چاپکردن (ڕاست‌کلیک بۆ بژاردەکان)"
+          onPointerDown={(e) => {
+            if (e.button === 0) { // left click only
+              e.preventDefault();
+              handleClick();
+            }
+          }}
         >
-          <Button
-            size={iconOnly ? "icon" : "sm"}
-            variant="ghost"
-            className={iconOnly ? "size-7 pointer-events-none" : `${className || ""} pointer-events-none`}
-            tabIndex={-1}
-          >
-            <Printer className={iconOnly ? "size-3.5" : "size-3.5 me-1"} />
-            {!iconOnly && "چاپ"}
-          </Button>
-        </div>
+          <Printer className={iconOnly ? "size-3.5" : "size-3.5 me-1"} />
+          {!iconOnly && "چاپ"}
+        </Button>
       </ContextMenuTrigger>
 
       <ContextMenuContent className="w-52 print-context-menu" dir="rtl">
         {/* Quick Print */}
-        <ContextMenuItem onClick={() => printOrder(order, settings)} className="gap-2">
+        <ContextMenuItem onClick={() => printOrder(order, settings, { template: defaultTemplate })} className="gap-2">
           <Printer className="size-3.5" />
           چاپی خێرا
         </ContextMenuItem>

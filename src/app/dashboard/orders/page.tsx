@@ -1401,7 +1401,7 @@ export default function OrdersPage() {
           </div>
           <DialogFooter className="flex gap-2 sm:gap-2">
             <Button variant="outline" size="sm" onClick={() => setStickerOrder(null)}>
-              داخستن
+              تێپەڕاندن
             </Button>
             <Button
               size="sm"
