@@ -247,26 +247,33 @@ function buildInvoiceHTML(
 </html>`;
 }
 
-// ── Iframe-based print (no new tab) ──────────────────────────────────────────
+// ── Print via popup window (most reliable cross-browser method) ──────────────
 
 function printHTML(html: string): void {
-  const existing = document.getElementById("__dewa_print_frame");
-  if (existing) existing.remove();
-
-  const iframe = document.createElement("iframe");
-  iframe.id = "__dewa_print_frame";
-  iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:800px;height:600px;border:none;visibility:hidden;";
-  iframe.srcdoc = html;
-
-  iframe.onload = () => {
-    setTimeout(() => {
-      try { iframe.contentWindow?.print(); }
-      catch { window.open(URL.createObjectURL(new Blob([html], { type: "text/html" })), "_blank"); }
-      setTimeout(() => iframe.remove(), 3000);
-    }, 300);
-  };
-
-  document.body.appendChild(iframe);
+  const w = window.open("", "_blank");
+  if (!w) {
+    // Popup blocked — fallback to iframe
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;";
+    iframe.srcdoc = html;
+    iframe.onload = () => {
+      setTimeout(() => { try { iframe.contentWindow?.print(); } catch {} }, 500);
+      setTimeout(() => iframe.remove(), 5000);
+    };
+    document.body.appendChild(iframe);
+    return;
+  }
+  w.document.write(html);
+  w.document.close();
+  // Wait for content to render, then print
+  setTimeout(() => {
+    w.focus();
+    w.print();
+    // Auto-close after print dialog closes
+    w.addEventListener("afterprint", () => w.close());
+    // Fallback close if afterprint doesn't fire
+    setTimeout(() => { try { w.close(); } catch {} }, 60000);
+  }, 500);
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
