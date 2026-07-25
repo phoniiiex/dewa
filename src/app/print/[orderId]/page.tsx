@@ -13,7 +13,6 @@ import InvoiceDocument from "@/components/print/InvoiceDocument";
 import type { InvoiceData } from "@/components/print/InvoiceDocument";
 import type { CompanySettings, InvoiceTemplate, OrderItem } from "@/lib/types";
 import { DEFAULT_INVOICE_TEMPLATE, DEFAULT_SECTION_STYLE } from "@/lib/types";
-import QRCode from "qrcode";
 import PrintShell from "@/components/print/PrintShell";
 
 export default async function PrintPage(props: {
@@ -124,18 +123,19 @@ export default async function PrintPage(props: {
     category: item.category || productMap[item.productId]?.category || "",
   }));
 
-  // ── 6. QR code ──
+  // ── 6. QR code (dynamic import to avoid bundling issues) ──
   let qrDataUrl: string | undefined;
   if (template.showQR && clientRow?.qr_token) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://dewa.app";
-    const qrUrl = `${baseUrl}/q/${clientRow.qr_token}`;
     try {
+      const QRCode = (await import("qrcode")).default;
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://dewa.app";
+      const qrUrl = `${baseUrl}/q/${clientRow.qr_token}`;
       qrDataUrl = await QRCode.toDataURL(qrUrl, {
         width: template.qr.size * 2,
         margin: 1,
         color: { dark: "#1A1A2E", light: "#FFFFFF" },
       });
-    } catch { /* noop */ }
+    } catch { /* QR generation failed — continue without it */ }
   }
 
   // ── 6b. Fetch saved signature if requested ──

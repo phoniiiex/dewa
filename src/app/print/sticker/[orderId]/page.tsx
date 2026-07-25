@@ -9,7 +9,6 @@
 // ============================================================
 
 import { createAdminClient } from "@/lib/supabase";
-import QRCode from "qrcode";
 import PrintShell from "@/components/print/PrintShell";
 
 export default async function StickerPage(props: {
@@ -42,17 +41,18 @@ export default async function StickerPage(props: {
     .limit(1);
   const settings = (settingsRows?.[0] || {}) as Record<string, unknown>;
 
-  // ── Generate QR code ──
+  // ── Generate QR code (dynamic import) ──
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://dewa.app";
   const verifyUrl = `${baseUrl}/verify/${order.client_id}`;
   let qrDataUrl = "";
   try {
+    const QRCode = (await import("qrcode")).default;
     qrDataUrl = await QRCode.toDataURL(verifyUrl, {
       width: 300,
       margin: 1,
       color: { dark: "#1A1A2E", light: "#FFFFFF" },
     });
-  } catch { /* noop */ }
+  } catch { /* QR generation failed — continue without it */ }
 
   const isSilent = searchParams.silent === "1";
   const companyName = (settings.name || "") as string;
