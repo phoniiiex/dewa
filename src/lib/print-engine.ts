@@ -77,15 +77,15 @@ function buildInvoiceHTML(
   const gs: SectionStyle = { ...DEFAULT_SECTION_STYLE, fontFamily: t.globalFont, accentColor: t.primaryColor };
   const items = order.items || [];
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-  // Use order's own discount if set, otherwise fall back to template default
+  // Use order's own discount — no template fallback
   const orderDiscountVal = order.discountValue || 0;
   const orderDiscountType = order.discountType || "AMOUNT";
-  const discount = orderDiscountVal > 0
-    ? (orderDiscountType === "PERCENTAGE" ? subtotal * (orderDiscountVal / 100) : orderDiscountVal)
-    : (t.defaultDiscount > 0 ? subtotal * (t.defaultDiscount / 100) : 0);
-  const discountLabel = orderDiscountVal > 0
-    ? (orderDiscountType === "PERCENTAGE" ? `داشکاندن (${orderDiscountVal}%)` : "داشکاندن")
-    : (t.defaultDiscount > 0 ? `داشکاندن (${t.defaultDiscount}%)` : "داشکاندن");
+  const discount = orderDiscountType === "PERCENTAGE"
+    ? subtotal * (orderDiscountVal / 100)
+    : orderDiscountVal;
+  const discountLabel = orderDiscountType === "PERCENTAGE"
+    ? `داشکاندن (${orderDiscountVal}%)`
+    : "داشکاندن";
   const netTotal = subtotal - discount;
   const now = new Date();
   const printDate = now.toLocaleDateString("ku", { year: "numeric", month: "long", day: "numeric" });
