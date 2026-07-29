@@ -77,7 +77,15 @@ function buildInvoiceHTML(
   const gs: SectionStyle = { ...DEFAULT_SECTION_STYLE, fontFamily: t.globalFont, accentColor: t.primaryColor };
   const items = order.items || [];
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
-  const discount = t.defaultDiscount > 0 ? subtotal * (t.defaultDiscount / 100) : 0;
+  // Use order's own discount if set, otherwise fall back to template default
+  const orderDiscountVal = order.discountValue || 0;
+  const orderDiscountType = order.discountType || "AMOUNT";
+  const discount = orderDiscountVal > 0
+    ? (orderDiscountType === "PERCENTAGE" ? subtotal * (orderDiscountVal / 100) : orderDiscountVal)
+    : (t.defaultDiscount > 0 ? subtotal * (t.defaultDiscount / 100) : 0);
+  const discountLabel = orderDiscountVal > 0
+    ? (orderDiscountType === "PERCENTAGE" ? `داشکاندن (${orderDiscountVal}%)` : "داشکاندن")
+    : (t.defaultDiscount > 0 ? `داشکاندن (${t.defaultDiscount}%)` : "داشکاندن");
   const netTotal = subtotal - discount;
   const now = new Date();
   const printDate = now.toLocaleDateString("ku", { year: "numeric", month: "long", day: "numeric" });
@@ -175,7 +183,7 @@ function buildInvoiceHTML(
   // Left column: Order totals
   const leftRows: string[] = [];
   if (t.summary.showSubtotal) leftRows.push(sumRow("بڕی داواکاری", `${fmtNum(subtotal)} ${cur}`));
-  if (t.summary.showDiscount && discount > 0) leftRows.push(sumRow(`داشکاندنی داواکاری (${t.defaultDiscount}%)`, `${fmtNum(discount)} ${cur}`, false, "#DC2626"));
+  if (t.summary.showDiscount && discount > 0) leftRows.push(sumRow(discountLabel, `${fmtNum(discount)} ${cur}`, false, "#DC2626"));
   if (t.summary.showNetTotal) leftRows.push(`<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;font-weight:800;color:${accent};border-top:2px solid ${accent};margin-top:4px"><span>کۆی گشتی داواکاری</span><span>${fmtNum(netTotal)} ${cur}</span></div>`);
   if (t.summary.showAmountInWords) leftRows.push(`<div style="font-size:10px;opacity:0.6;padding:3px 0">بڕ بە پیت: ${fmtNum(netTotal)}</div>`);
 

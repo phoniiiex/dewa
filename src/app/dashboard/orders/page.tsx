@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
-import type { Order, OrderStatus, OrderItem, OrderFlow } from "@/lib/types";
+import type { Order, OrderStatus, OrderItem, OrderFlow, DiscountType } from "@/lib/types";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -150,13 +150,14 @@ export default function OrdersPage() {
   const [form, setForm] = useState<{
     clientId: string; clientName: string; repId: string;
     orderFlow: OrderFlow; pharmacyId: string; notes: string; priceTypeId: string;
-  }>({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "" });
+    discountType: DiscountType; discountValue: string;
+  }>({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "", discountType: "AMOUNT", discountValue: "" });
   type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean; bonusRounding: 'floor' | 'ceil' | null; fullBonusToWarehouse: boolean };
   const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, bonusRounding: null, fullBonusToWarehouse: false }]);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
 
   const resetForm = () => {
-    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "" });
+    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "", discountType: "AMOUNT", discountValue: "" });
     setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, bonusRounding: null, fullBonusToWarehouse: false }]);
     setEditOrder(null);
     setPendingConfirm(false);
@@ -294,14 +295,19 @@ export default function OrdersPage() {
     if (items.length === 0) { showToast("تکایە بەرهەمێک زیادبکە", "error"); return; }
     if (hasAnyViolation) { showToast("تکایە کێشەکانی بۆنەس چارەسەر بکە", "error"); return; }
 
-    const totalAmount = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+    const subtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+    const discountVal = Math.max(0, Number(form.discountValue) || 0);
+    const discountAmt = form.discountType === "PERCENTAGE" ? subtotal * (discountVal / 100) : discountVal;
+    const totalAmount = Math.max(0, subtotal - discountAmt);
     const orderPayload = {
       clientId: billingClient.id, clientName: billingClient.name,
       repId: repRecord.id, repName: repRecord.name,
       orderFlow: form.orderFlow,
       pharmacyId: pharmacyClient?.id || null,
       pharmacyName: pharmacyClient?.name || null,
-      items, totalAmount, notes: form.notes,
+      items, totalAmount,
+      discountType: form.discountType, discountValue: discountVal,
+      notes: form.notes,
     };
 
     if (editOrder) {
@@ -345,6 +351,8 @@ export default function OrdersPage() {
       pharmacyId: o.pharmacyId || "",
       notes: o.notes.startsWith("[EDIT_REQUEST]:") ? "" : o.notes,
       priceTypeId: o.items[0]?.priceTypeId || "",
+      discountType: o.discountType || "AMOUNT",
+      discountValue: o.discountValue ? String(o.discountValue) : "",
     });
     setOrderItems(o.items.map(i => ({
       productId: i.productId, quantity: String(i.quantity),
@@ -833,6 +841,48 @@ export default function OrdersPage() {
             <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="تێبینی..." />
           </div>
 
+          {/* ── Discount ── */}
+          <div className="mt-4 space-y-2">
+            <Label className="flex items-center gap-1.5">داشکاندن</Label>
+            <div className="flex gap-2 items-center">
+              <div className="flex rounded-lg border overflow-hidden">
+                <button type="button"
+                  className={`px-3 py-1.5 text-xs font-semibold transition-colors ${form.discountType === "AMOUNT" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
+                  onClick={() => setForm({ ...form, discountType: "AMOUNT" })}>IQD</button>
+                <button type="button"
+                  className={`px-3 py-1.5 text-xs font-semibold transition-colors ${form.discountType === "PERCENTAGE" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-accent"}`}
+                  onClick={() => setForm({ ...form, discountType: "PERCENTAGE" })}>%</button>
+              </div>
+              <Input
+                type="number" min={0} max={form.discountType === "PERCENTAGE" ? 100 : undefined}
+                value={form.discountValue}
+                onChange={e => setForm({ ...form, discountValue: e.target.value })}
+                placeholder={form.discountType === "PERCENTAGE" ? "٪ داشکاندن" : "بڕی داشکاندن (IQD)"}
+                className="flex-1"
+              />
+            </div>
+            {/* Live discount preview */}
+            {Number(form.discountValue) > 0 && orderItems.some(i => i.productId && Number(i.quantity) > 0) && (() => {
+              const sub = orderItems.reduce((s, i) => {
+                const prod = products.find(p => p.id === i.productId);
+                const qty = parseInt(i.quantity) || 0;
+                const price = prod ? (form.priceTypeId && prod.prices?.find(pp => pp.typeId === form.priceTypeId)?.amount || prod.price) : 0;
+                return s + qty * price;
+              }, 0);
+              const dv = Math.max(0, Number(form.discountValue) || 0);
+              const dAmt = form.discountType === "PERCENTAGE" ? sub * (dv / 100) : dv;
+              const net = Math.max(0, sub - dAmt);
+              return (
+                <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">کۆی ناخاوەن</span><span>{formatIQD(sub)}</span></div>
+                  <div className="flex justify-between text-red-600"><span>داشکاندن {form.discountType === "PERCENTAGE" ? `(${dv}%)` : ""}</span><span>-{formatIQD(dAmt)}</span></div>
+                  <Separator />
+                  <div className="flex justify-between font-bold text-emerald-600"><span>کۆی خاوەن</span><span>{formatIQD(net)}</span></div>
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Warehouse bonus info banner (no global rep input anymore) */}
           {selectedWarehouse && (
             <div className="mb-3 px-3.5 py-2.5 bg-violet-100 dark:bg-violet-950/30 rounded-[10px] text-[13px] text-violet-600">
@@ -1075,6 +1125,7 @@ export default function OrdersPage() {
                   { label: "نوێنەر", value: o.repName },
                   { label: "فارمۆخانە", value: o.pharmacyName || "ڕاستەوخۆ" },
                   { label: "کۆی گشتی", value: formatIQD(o.totalAmount) },
+                  ...(o.discountValue > 0 ? [{ label: "داشکاندن", value: o.discountType === "PERCENTAGE" ? `${o.discountValue}%` : formatIQD(o.discountValue) }] : []),
                   { label: "بەروار", value: new Date(o.createdAt).toLocaleDateString("ku") },
                   ...(o.rejectionReason ? [{ label: "هۆی ڕەتکردن", value: o.rejectionReason }] : []),
                   ...(o.deliveredAt ? [{ label: "بەرواری گەیشتن", value: new Date(o.deliveredAt).toLocaleDateString("ku") }] : []),

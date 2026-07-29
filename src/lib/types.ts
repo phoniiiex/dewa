@@ -150,6 +150,8 @@ export interface OrderItem {
   category?: string;                      // product category, from Product.category
 }
 
+export type DiscountType = "AMOUNT" | "PERCENTAGE";
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -165,7 +167,10 @@ export interface Order {
   pharmacyName: string | null;
   items: OrderItem[];
   status: OrderStatus;
-  totalAmount: number;
+  // Discount (applied at order creation)
+  discountType: DiscountType;
+  discountValue: number;           // IQD amount or percentage (0-100)
+  totalAmount: number;             // NET total (subtotal - discount)
   notes: string;
   // Driver (assigned when READY → SENT)
   driverId: string;

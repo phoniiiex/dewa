@@ -155,6 +155,8 @@ function toOrder(r: Record<string, unknown>): Order {
     pharmacyName: (r.pharmacy_name || null) as string | null,
     items: (r.items || []) as Order["items"],
     status: (r.status || "WAITING") as Order["status"],
+    discountType: (r.discount_type || "AMOUNT") as Order["discountType"],
+    discountValue: Number(r.discount_value || 0),
     totalAmount: Number(r.total_amount || 0),
     notes: (r.notes || "") as string,
     driverId: (r.driver_id || "") as string,
@@ -181,6 +183,8 @@ function fromOrder(o: Partial<Order>): Record<string, unknown> {
   if (o.pharmacyName !== undefined) m.pharmacy_name = o.pharmacyName;
   if (o.items !== undefined) m.items = o.items;
   if (o.status !== undefined) m.status = o.status;
+  if (o.discountType !== undefined) m.discount_type = o.discountType;
+  if (o.discountValue !== undefined) m.discount_value = o.discountValue;
   if (o.totalAmount !== undefined) m.total_amount = o.totalAmount;
   if (o.notes !== undefined) m.notes = o.notes;
   if (o.driverId !== undefined) m.driver_id = o.driverId;
