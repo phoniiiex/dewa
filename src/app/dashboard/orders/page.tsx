@@ -952,14 +952,12 @@ export default function OrdersPage() {
                   </Select>
                   {!item.productId ? (
                     <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
-                            disabled
-                            className="opacity-40 cursor-not-allowed" />
-                        </div>
+                      <TooltipTrigger className="w-full">
+                        <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
+                          disabled
+                          className="opacity-40 cursor-not-allowed" />
                       </TooltipTrigger>
-                      <TooltipContent side="top"><p>سەرەتا بەرهەم هەڵبژێرە</p></TooltipContent>
+                      <TooltipContent side="top">سەرەتا بەرهەم هەڵبژێرە</TooltipContent>
                     </Tooltip>
                   ) : (
                     <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
@@ -969,13 +967,11 @@ export default function OrdersPage() {
                   {form.orderFlow !== 'DIRECT_WAREHOUSE' && (
                     !item.productId ? (
                       <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="relative">
-                            <Input type="number" disabled className="ps-7 opacity-40 cursor-not-allowed" placeholder="0" />
-                            <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
-                          </div>
+                        <TooltipTrigger className="relative w-full">
+                          <Input type="number" disabled className="ps-7 opacity-40 cursor-not-allowed" placeholder="0" />
+                          <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
                         </TooltipTrigger>
-                        <TooltipContent side="top"><p>سەرەتا بەرهەم هەڵبژێرە</p></TooltipContent>
+                        <TooltipContent side="top">سەرەتا بەرهەم هەڵبژێرە</TooltipContent>
                       </Tooltip>
                     ) : (
                       <div className="relative">
