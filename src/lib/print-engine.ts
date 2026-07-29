@@ -278,13 +278,30 @@ function printHTML(html: string): void {
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
+/** Safely merge a partial template with all defaults */
+function safeTemplate(t?: InvoiceTemplate): InvoiceTemplate {
+  const d = DEFAULT_INVOICE_TEMPLATE;
+  if (!t) return { id: "default", createdAt: new Date().toISOString(), ...d } as InvoiceTemplate;
+  return {
+    ...d,
+    ...t,
+    header:      { ...d.header,      ...(t.header || {}) },
+    invoiceMeta: { ...d.invoiceMeta, ...(t.invoiceMeta || {}) },
+    table:       { ...d.table,       ...(t.table || {}) },
+    summary:     { ...d.summary,     ...(t.summary || {}) },
+    qr:          { ...d.qr,          ...(t.qr || {}) },
+    signature:   { ...d.signature,   ...(t.signature || {}) },
+    footer:      { ...d.footer,      ...(t.footer || {}) },
+  } as InvoiceTemplate;
+}
+
 /** Print an order invoice using the template from the store */
 export function printOrder(
   order: Order,
   settings: CompanySettings,
   opts: { signatureUrl?: string; template?: InvoiceTemplate } = {}
 ): void {
-  const t = opts.template || { id: "default", createdAt: new Date().toISOString(), ...DEFAULT_INVOICE_TEMPLATE } as InvoiceTemplate;
+  const t = safeTemplate(opts.template);
   printHTML(buildInvoiceHTML(order, settings, t, opts.signatureUrl));
 }
 
