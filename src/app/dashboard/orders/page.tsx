@@ -949,15 +949,18 @@ export default function OrdersPage() {
                     <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
                     <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                   </Select>
-                  <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
-                    disabled={!item.productId}
-                    className={!item.productId ? "opacity-40 cursor-not-allowed" : ""}
-                    onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value, bonusRounding: null } : x))} />
+                  <div title={!item.productId ? "سەرەتا بەرهەم هەڵبژێرە" : undefined}>
+                    <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
+                      disabled={!item.productId}
+                      className={!item.productId ? "opacity-40 cursor-not-allowed" : ""}
+                      onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value, bonusRounding: null } : x))} />
+                  </div>
                   {/* Bonus % input — hidden for DIRECT_WAREHOUSE */}
                   {form.orderFlow !== 'DIRECT_WAREHOUSE' && (
-                    <div className="relative">
+                    <div className="relative" title={!item.productId ? "سەرەتا بەرهەم هەڵبژێرە" : undefined}>
                       <Input type="number" min={0} max={200}
-                        className={`ps-7 ${live?.belowMinimum ? 'border-amber-400 focus-visible:ring-amber-400' : ''}`}
+                        disabled={!item.productId}
+                        className={`ps-7 ${!item.productId ? 'opacity-40 cursor-not-allowed' : ''} ${live?.belowMinimum ? 'border-amber-400 focus-visible:ring-amber-400' : ''}`}
                         placeholder="0"
                         value={item.repBonusPct}
                         onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, repBonusPct: e.target.value, bonusRounding: null } : x))} />
