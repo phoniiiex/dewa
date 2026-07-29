@@ -548,11 +548,17 @@ function renderMetadataToggles(
     case "summary":
       return (
         <>
-          <ToggleRow label="کۆی ناخاوەن" checked={template.summary.showSubtotal} onChange={v => updateNested("summary", "showSubtotal", v)} />
-          <ToggleRow label="داشکاندن" checked={template.summary.showDiscount} onChange={v => updateNested("summary", "showDiscount", v)} />
-          <ToggleRow label="کۆی خاوەن" checked={template.summary.showNetTotal} onChange={v => updateNested("summary", "showNetTotal", v)} />
+          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">داواکاری (لای چەپ)</div>
+          <ToggleRow label="بڕی داواکاری" checked={template.summary.showSubtotal} onChange={v => updateNested("summary", "showSubtotal", v)} />
+          <ToggleRow label="داشکاندنی داواکاری" checked={template.summary.showDiscount} onChange={v => updateNested("summary", "showDiscount", v)} />
+          <ToggleRow label="کۆی گشتی داواکاری" checked={template.summary.showNetTotal} onChange={v => updateNested("summary", "showNetTotal", v)} />
           <ToggleRow label="بڕ بە پیت" checked={template.summary.showAmountInWords} onChange={v => updateNested("summary", "showAmountInWords", v)} />
-          <ToggleRow label="باڵانسی کڕیار" checked={template.summary.showCustomerBalance} onChange={v => updateNested("summary", "showCustomerBalance", v)} />
+          <Separator className="my-2" />
+          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">قەرز (لای ڕاست)</div>
+          <ToggleRow label="قەرزی پێشوو" checked={template.summary.showPreviousDebt} onChange={v => updateNested("summary", "showPreviousDebt", v)} />
+          <ToggleRow label="بڕی وەرگیراو" checked={template.summary.showReceivedAmount} onChange={v => updateNested("summary", "showReceivedAmount", v)} />
+          <ToggleRow label="کۆی قەرز" checked={template.summary.showTotalDebt} onChange={v => updateNested("summary", "showTotalDebt", v)} />
+          <ToggleRow label="ژمارەی داواکاری" checked={template.summary.showTotalOrderCount} onChange={v => updateNested("summary", "showTotalOrderCount", v)} />
         </>
       );
 

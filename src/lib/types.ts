@@ -342,10 +342,17 @@ export interface InvoiceTemplate {
   summary: {
     style: Partial<SectionStyle>;
     position: "right" | "left" | "full";
+    // Left column
     showSubtotal: boolean;
     showDiscount: boolean;
     showNetTotal: boolean;
     showAmountInWords: boolean;
+    // Right column
+    showPreviousDebt: boolean;
+    showReceivedAmount: boolean;
+    showTotalDebt: boolean;
+    showTotalOrderCount: boolean;
+    /** @deprecated Use showPreviousDebt instead */
     showCustomerBalance: boolean;
   };
 
@@ -465,7 +472,11 @@ export const DEFAULT_INVOICE_TEMPLATE: Omit<InvoiceTemplate, "id" | "createdAt">
     showDiscount: true,
     showNetTotal: true,
     showAmountInWords: true,
-    showCustomerBalance: true,
+    showPreviousDebt: true,
+    showReceivedAmount: true,
+    showTotalDebt: true,
+    showTotalOrderCount: true,
+    showCustomerBalance: false,
   },
 
   qr: {

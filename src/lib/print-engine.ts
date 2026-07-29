@@ -59,11 +59,19 @@ function cssVars(s: SectionStyle): string {
 
 // ── Build the full invoice HTML (matches InvoiceDocument exactly) ─────────────
 
+export interface ClientData {
+  previousDebt: number;
+  receivedAmount: number;
+  totalDebt: number;
+  totalOrderCount: number;
+}
+
 function buildInvoiceHTML(
   order: Order,
   settings: CompanySettings,
   template: InvoiceTemplate,
   signatureUrl?: string,
+  clientData?: ClientData,
 ): string {
   const t = template;
   const gs: SectionStyle = { ...DEFAULT_SECTION_STYLE, fontFamily: t.globalFont, accentColor: t.primaryColor };
@@ -158,16 +166,37 @@ function buildInvoiceHTML(
       </table>
     </div>`;
 
-  // ── Summary
-  const summaryRows: string[] = [];
-  if (t.summary.showSubtotal) summaryRows.push(`<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;border-bottom:1px dashed rgba(0,0,0,0.08)"><span>کۆی ناخاوەن</span><span>${fmtNum(subtotal)} ${settings.currency}</span></div>`);
-  if (t.summary.showDiscount && discount > 0) summaryRows.push(`<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;border-bottom:1px dashed rgba(0,0,0,0.08)"><span>داشکاندن (${t.defaultDiscount}%)</span><span style="color:#DC2626">${fmtNum(discount)} ${settings.currency}</span></div>`);
-  if (t.summary.showNetTotal) summaryRows.push(`<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;font-weight:800;color:${accent};border-top:2px solid ${accent};margin-top:4px"><span>کۆی خاوەن</span><span>${fmtNum(netTotal)} ${settings.currency}</span></div>`);
+  // ── Summary (two-column layout)
+  const cur = settings.currency || "IQD";
+  const cd = clientData || { previousDebt: 0, receivedAmount: 0, totalDebt: 0, totalOrderCount: 0 };
+  const sumRow = (label: string, value: string, bold = false, color = "") =>
+    `<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-bottom:1px dashed rgba(0,0,0,0.08)${bold ? ";font-weight:800;font-size:13px" : ""}${color ? `;color:${color}` : ""}"><span>${label}</span><span>${value}</span></div>`;
 
-  const summaryJustify = t.summary.position === "left" ? "flex-start" : t.summary.position === "full" ? "stretch" : "flex-end";
+  // Left column: Order totals
+  const leftRows: string[] = [];
+  if (t.summary.showSubtotal) leftRows.push(sumRow("بڕی داواکاری", `${fmtNum(subtotal)} ${cur}`));
+  if (t.summary.showDiscount && discount > 0) leftRows.push(sumRow(`داشکاندنی داواکاری (${t.defaultDiscount}%)`, `${fmtNum(discount)} ${cur}`, false, "#DC2626"));
+  if (t.summary.showNetTotal) leftRows.push(`<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;font-weight:800;color:${accent};border-top:2px solid ${accent};margin-top:4px"><span>کۆی گشتی داواکاری</span><span>${fmtNum(netTotal)} ${cur}</span></div>`);
+  if (t.summary.showAmountInWords) leftRows.push(`<div style="font-size:10px;opacity:0.6;padding:3px 0">بڕ بە پیت: ${fmtNum(netTotal)}</div>`);
+
+  // Right column: Debt info
+  const rightRows: string[] = [];
+  if (t.summary.showPreviousDebt) rightRows.push(sumRow("قەرزی پێشوو", `${fmtNum(cd.previousDebt)} ${cur}`));
+  if (t.summary.showReceivedAmount) rightRows.push(sumRow("بڕی وەرگیراو", `${fmtNum(cd.receivedAmount)} ${cur}`, false, cd.receivedAmount > 0 ? "#059669" : ""));
+  if (t.summary.showTotalDebt) rightRows.push(`<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;font-weight:800;color:#DC2626;border-top:2px solid #DC2626;margin-top:4px"><span>کۆی قەرز</span><span>${fmtNum(cd.totalDebt)} ${cur}</span></div>`);
+  if (t.summary.showTotalOrderCount) rightRows.push(sumRow("ژمارەی داواکاری", `${cd.totalOrderCount}`));
+
+  const hasRight = rightRows.length > 0;
   const summaryHTML = !t.showSummary ? "" : `
-    <div style="${cssVars(ms(gs, t.summary.style))};display:flex;justify-content:${summaryJustify};margin-top:8px;margin-bottom:12px">
-      <div style="min-width:260px;max-width:${t.summary.position === "full" ? "none" : "360px"}">${summaryRows.join("")}</div>
+    <div style="${cssVars(ms(gs, t.summary.style))};display:flex;gap:24px;margin-top:12px;margin-bottom:12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:700;color:${accent};margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid ${accent}33">داواکاری</div>
+        ${leftRows.join("")}
+      </div>
+      ${hasRight ? `<div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:700;color:#DC2626;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #DC262633">قەرز</div>
+        ${rightRows.join("")}
+      </div>` : ""}
     </div>`;
 
   // ── Notes & Terms
@@ -299,10 +328,10 @@ function safeTemplate(t?: InvoiceTemplate): InvoiceTemplate {
 export function printOrder(
   order: Order,
   settings: CompanySettings,
-  opts: { signatureUrl?: string; template?: InvoiceTemplate } = {}
+  opts: { signatureUrl?: string; template?: InvoiceTemplate; clientData?: ClientData } = {}
 ): void {
   const t = safeTemplate(opts.template);
-  printHTML(buildInvoiceHTML(order, settings, t, opts.signatureUrl));
+  printHTML(buildInvoiceHTML(order, settings, t, opts.signatureUrl, opts.clientData));
 }
 
 /** Print a sticker with customer name */
