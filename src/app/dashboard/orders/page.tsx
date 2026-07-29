@@ -151,13 +151,15 @@ export default function OrdersPage() {
     clientId: string; clientName: string; repId: string;
     orderFlow: OrderFlow; pharmacyId: string; notes: string; priceTypeId: string;
     discountType: DiscountType; discountValue: string;
-  }>({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "", discountType: "AMOUNT", discountValue: "" });
+    fullBonusToWarehouse: boolean;
+  }>({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "", discountType: "AMOUNT", discountValue: "", fullBonusToWarehouse: false });
+  const [duplicateAlert, setDuplicateAlert] = useState<{ idx: number; productId: string } | null>(null);
   type ItemForm = { productId: string; quantity: string; repBonusPct: string; overrideWarehouseFulfillment: boolean; bonusRounding: 'floor' | 'ceil' | null; fullBonusToWarehouse: boolean };
   const [orderItems, setOrderItems] = useState<ItemForm[]>([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, bonusRounding: null, fullBonusToWarehouse: false }]);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
 
   const resetForm = () => {
-    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "", discountType: "AMOUNT", discountValue: "" });
+    setForm({ clientId: "", clientName: "", repId: myRep?.id || "", orderFlow: "STANDARD", pharmacyId: "", notes: "", priceTypeId: "", discountType: "AMOUNT", discountValue: "", fullBonusToWarehouse: false });
     setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, bonusRounding: null, fullBonusToWarehouse: false }]);
     setEditOrder(null);
     setPendingConfirm(false);
@@ -280,15 +282,15 @@ export default function OrdersPage() {
       const rawTotal          = qty * repAgreedPct / 100;
       const isFraction        = !Number.isInteger(rawTotal);
       const totalBonusQty     = isFraction ? (i.bonusRounding === 'ceil' ? Math.ceil(rawTotal) : Math.floor(rawTotal)) : rawTotal;
-      // Rule 3: Full Bonus to Warehouse override
-      const warehouseBonusQty = i.fullBonusToWarehouse ? totalBonusQty : Math.floor(qty * warehousePct / 100);
+      // Rule 3: Full Bonus to Warehouse override (global toggle)
+      const warehouseBonusQty = form.fullBonusToWarehouse ? totalBonusQty : Math.floor(qty * warehousePct / 100);
       const agentPendingQty   = totalBonusQty - warehouseBonusQty;
       return {
         productId: i.productId, productName: prod?.name || "", quantity: qty,
         bonusQty: totalBonusQty, unitPrice, priceTypeId: form.priceTypeId, priceTypeName,
         bonusPct: warehousePct, repBonusPct: repAgreedPct,
         warehouseBonusQty, repBonusQty: agentPendingQty,
-        overrideWarehouseFulfillment: i.fullBonusToWarehouse,
+        overrideWarehouseFulfillment: form.fullBonusToWarehouse,
         expiryDate: prod?.expiryDate || "", company: prod?.company || "",
       };
     });
@@ -353,6 +355,7 @@ export default function OrdersPage() {
       priceTypeId: o.items[0]?.priceTypeId || "",
       discountType: o.discountType || "AMOUNT",
       discountValue: o.discountValue ? String(o.discountValue) : "",
+      fullBonusToWarehouse: o.items.some(i => i.overrideWarehouseFulfillment),
     });
     setOrderItems(o.items.map(i => ({
       productId: i.productId, quantity: String(i.quantity),
@@ -890,6 +893,17 @@ export default function OrdersPage() {
               {selectedWarehouse.bonusRules.length > 0 && <span> · {selectedWarehouse.bonusRules.length} ڕێگەی تایبەت</span>}
             </div>
           )}
+          {/* Global: Full Bonus to Warehouse toggle (STANDARD flow only) */}
+          {form.orderFlow === 'STANDARD' && selectedWarehouse && (
+            <div className="mb-3 flex items-center gap-2.5 px-3.5 py-2.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-[10px] border border-indigo-200 dark:border-indigo-800" dir="rtl">
+              <Switch
+                checked={form.fullBonusToWarehouse}
+                onCheckedChange={(v) => setForm({ ...form, fullBonusToWarehouse: v })}
+              />
+              <span className="text-[13px] font-semibold text-indigo-700 dark:text-indigo-300">هەموو بۆنەس بۆ کۆگا</span>
+              <span className="text-[11px] text-indigo-500 dark:text-indigo-400 ms-auto">بۆنەسی هەموو بەرهەمەکان لە کۆگا دەبڕدرێت</span>
+            </div>
+          )}
           {isDirect && (
             <div className="mb-3 px-3.5 py-2.5 bg-amber-100 dark:bg-amber-950/30 rounded-[10px] text-[13px] text-amber-600">
               📦 داواکاری ڕاستەوخۆ — دەتوانی بۆ هەر بەرهەمێک بۆنەسی دیاری بکەیت (ئەگەر بەتاڵ بهێڵیتەوە = بۆنەس نییە)
@@ -905,7 +919,7 @@ export default function OrdersPage() {
               </div>
               <Button type="button" variant="ghost" size="sm"
                 className="bg-primary/10 text-primary hover:bg-primary/20 text-[13px] font-semibold"
-              onClick={() => setOrderItems([...orderItems, { productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, bonusRounding: null, fullBonusToWarehouse: false }])}>
+              onClick={() => setOrderItems([{ productId: "", quantity: "", repBonusPct: "", overrideWarehouseFulfillment: false, bonusRounding: null, fullBonusToWarehouse: false }, ...orderItems])}>
                 + زیادکردن
               </Button>
             </div>
@@ -924,12 +938,20 @@ export default function OrdersPage() {
                   style={{ gridTemplateColumns: form.orderFlow === 'DIRECT_WAREHOUSE' ? '1fr 100px auto' : '1fr 100px 100px auto' }}>
                   <Select value={item.productId || null} onValueChange={(v: string | null) => {
                     if (!v) return;
+                    // Check for duplicate
+                    const isDuplicate = orderItems.some((x, i) => i !== idx && x.productId === v);
+                    if (isDuplicate) {
+                      setDuplicateAlert({ idx, productId: v });
+                      return;
+                    }
                     setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v } : x));
                   }}>
                     <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
                     <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                   </Select>
                   <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
+                    disabled={!item.productId}
+                    className={!item.productId ? "opacity-40 cursor-not-allowed" : ""}
                     onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value, bonusRounding: null } : x))} />
                   {/* Bonus % input — hidden for DIRECT_WAREHOUSE */}
                   {form.orderFlow !== 'DIRECT_WAREHOUSE' && (
@@ -1000,16 +1022,7 @@ export default function OrdersPage() {
                   </div>
                 )}
                 {/* Rule 3: Full Bonus to Warehouse toggle (STANDARD only, when bonus is valid) */}
-                {form.orderFlow === 'STANDARD' && item.productId && !live?.belowMinimum && !live?.pendingRounding && (live?.totalBonusQty ?? 0) > 0 && (
-                  <div className="flex items-center gap-2 px-1" dir="rtl">
-                    <Switch
-                      size="sm"
-                      checked={item.fullBonusToWarehouse}
-                      onCheckedChange={(v) => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, fullBonusToWarehouse: v } : x))}
-                    />
-                    <span className="text-[11px] text-muted-foreground">هەموو بۆنەس بۆ کۆگا</span>
-                  </div>
-                )}
+
               </div>
             );
             })}
@@ -1468,6 +1481,28 @@ export default function OrdersPage() {
         </DialogContent>
       </Dialog>
 
+
+
+      {/* Duplicate item alert */}
+      <AlertDialog open={!!duplicateAlert} onOpenChange={(open) => { if (!open) setDuplicateAlert(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>بەرهەمی دووبارە</AlertDialogTitle>
+            <AlertDialogDescription>
+              ئەم بەرهەمە پێشتر لە لیستدا هەیە. دڵنیایت دەتەوێت هەڵیبژێریت؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDuplicateAlert(null)}>نەخێر</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (duplicateAlert) {
+                setOrderItems(orderItems.map((x, i) => i === duplicateAlert.idx ? { ...x, productId: duplicateAlert.productId } : x));
+              }
+              setDuplicateAlert(null);
+            }}>بەڵێ، زیادی بکە</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </>
   );
