@@ -183,7 +183,7 @@ function buildInvoiceHTML(
   // Left column: Order totals
   const leftRows: string[] = [];
   if (t.summary.showSubtotal) leftRows.push(sumRow("بڕی داواکاری", `${fmtNum(subtotal)} ${cur}`));
-  if (t.summary.showDiscount && discount > 0) leftRows.push(sumRow(discountLabel, `${fmtNum(discount)} ${cur}`, false, "#DC2626"));
+  if (t.summary.showDiscount) leftRows.push(sumRow(discountLabel, `${fmtNum(discount)} ${cur}`, false, "#DC2626"));
   if (t.summary.showNetTotal) leftRows.push(`<div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;font-weight:800;color:${accent};border-top:2px solid ${accent};margin-top:4px"><span>کۆی گشتی داواکاری</span><span>${fmtNum(netTotal)} ${cur}</span></div>`);
   if (t.summary.showAmountInWords) leftRows.push(`<div style="font-size:10px;opacity:0.6;padding:3px 0">بڕ بە پیت: ${fmtNum(netTotal)}</div>`);
 
