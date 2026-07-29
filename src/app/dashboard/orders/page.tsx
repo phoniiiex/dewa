@@ -937,19 +937,28 @@ export default function OrdersPage() {
               <div key={idx} className="mb-2.5 space-y-1.5">
                 <div className="grid gap-2 items-start"
                   style={{ gridTemplateColumns: form.orderFlow === 'DIRECT_WAREHOUSE' ? '1fr 100px auto' : '1fr 100px 100px auto' }}>
-                  <Select value={item.productId || null} onValueChange={(v: string | null) => {
-                    if (!v) return;
-                    // Check for duplicate
-                    const isDuplicate = orderItems.some((x, i) => i !== idx && x.productId === v);
-                    if (isDuplicate) {
-                      setDuplicateAlert({ idx, productId: v });
-                      return;
-                    }
-                    setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v } : x));
-                  }}>
-                    <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
-                    <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <div className="relative">
+                    <Select value={item.productId || null} onValueChange={(v: string | null) => {
+                      if (!v) return;
+                      // Check for duplicate
+                      const isDuplicate = orderItems.some((x, i) => i !== idx && x.productId === v);
+                      if (isDuplicate) {
+                        setDuplicateAlert({ idx, productId: v });
+                        return;
+                      }
+                      setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: v } : x));
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
+                      <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                    {item.productId && (
+                      <button type="button"
+                        className="absolute end-8 top-1/2 -translate-y-1/2 size-5 rounded-full bg-muted hover:bg-destructive/20 hover:text-destructive flex items-center justify-center transition-colors"
+                        onClick={() => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, productId: "", quantity: "", repBonusPct: "", bonusRounding: null } : x))}>
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
                   {!item.productId ? (
                     <Tooltip>
                       <TooltipTrigger className="w-full">
