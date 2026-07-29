@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ExportButton from "@/components/custom/ExportButton";
 import { PrintButton } from "@/components/custom/PrintButton";
@@ -949,23 +950,43 @@ export default function OrdersPage() {
                     <SelectTrigger><SelectValue placeholder="بەرهەم هەڵبژێرە..." /></SelectTrigger>
                     <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                   </Select>
-                  <div title={!item.productId ? "سەرەتا بەرهەم هەڵبژێرە" : undefined}>
+                  {!item.productId ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
+                            disabled
+                            className="opacity-40 cursor-not-allowed" />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top"><p>سەرەتا بەرهەم هەڵبژێرە</p></TooltipContent>
+                    </Tooltip>
+                  ) : (
                     <Input type="number" min={1} placeholder="ژمارە" value={item.quantity}
-                      disabled={!item.productId}
-                      className={!item.productId ? "opacity-40 cursor-not-allowed" : ""}
                       onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, quantity: e.target.value, bonusRounding: null } : x))} />
-                  </div>
+                  )}
                   {/* Bonus % input — hidden for DIRECT_WAREHOUSE */}
                   {form.orderFlow !== 'DIRECT_WAREHOUSE' && (
-                    <div className="relative" title={!item.productId ? "سەرەتا بەرهەم هەڵبژێرە" : undefined}>
-                      <Input type="number" min={0} max={200}
-                        disabled={!item.productId}
-                        className={`ps-7 ${!item.productId ? 'opacity-40 cursor-not-allowed' : ''} ${live?.belowMinimum ? 'border-amber-400 focus-visible:ring-amber-400' : ''}`}
-                        placeholder="0"
-                        value={item.repBonusPct}
-                        onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, repBonusPct: e.target.value, bonusRounding: null } : x))} />
-                      <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
-                    </div>
+                    !item.productId ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="relative">
+                            <Input type="number" disabled className="ps-7 opacity-40 cursor-not-allowed" placeholder="0" />
+                            <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top"><p>سەرەتا بەرهەم هەڵبژێرە</p></TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <div className="relative">
+                        <Input type="number" min={0} max={200}
+                          className={`ps-7 ${live?.belowMinimum ? 'border-amber-400 focus-visible:ring-amber-400' : ''}`}
+                          placeholder="0"
+                          value={item.repBonusPct}
+                          onChange={e => setOrderItems(orderItems.map((x, i) => i === idx ? { ...x, repBonusPct: e.target.value, bonusRounding: null } : x))} />
+                        <span className="absolute start-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                      </div>
+                    )
                   )}
                   {orderItems.length > 1 && (
                     <Button type="button" variant="ghost" size="icon" className="size-9 bg-red-100 dark:bg-red-950/30 text-red-600 hover:bg-red-200"
