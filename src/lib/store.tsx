@@ -106,6 +106,7 @@ function toRep(r: Record<string, unknown>): Rep {
     city: (r.city || "") as string,
     profilePic: (r.profile_pic || "") as string,
     telegramChatId: (r.telegram_chat_id || "") as string,
+    territories: (r._territories || []) as string[],
     isActive: r.is_active !== false,
     createdAt: (r.created_at || "") as string,
   };
@@ -562,7 +563,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Fetch all data from Supabase
   const refreshData = useCallback(async () => {
     try {
-      const [pRes, cRes, rRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes, retRes] = await Promise.all([
+      const [pRes, cRes, rRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes, retRes, rtRes] = await Promise.all([
         supabase.from("products").select("*"),
         supabase.from("clients").select("*"),
         supabase.from("reps").select("*"),
@@ -576,12 +577,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         supabase.from("price_types").select("*").order("created_at"),
         supabase.from("sample_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("returns").select("*").order("created_at", { ascending: false }),
+        supabase.from("rep_territories").select("*"),
       ]);
+
+      // Inject territories into rep records before mapping
+      const territoryRows = (rtRes.data || []) as Array<{ rep_id: string; region: string }>;
+      const repRows = (rRes.data || []).map((r: Record<string, unknown>) => {
+        const repTerritories = territoryRows.filter(t => t.rep_id === r.id).map(t => t.region);
+        return { ...r, _territories: repTerritories };
+      });
 
       const fresh = {
         products: pRes.data?.map(toProduct) ?? [],
         clients: cRes.data?.map(toClient) ?? [],
-        reps: rRes.data?.map(toRep) ?? [],
+        reps: repRows.map(toRep),
         suppliers: sRes.data?.map(toSupplier) ?? [],
         orders: oRes.data?.map(toOrder) ?? [],
         drivers: drRes.data?.map(toDriver) ?? [],
@@ -776,14 +785,36 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const nr: Rep = { ...r, id: genId(), createdAt: new Date().toISOString().split("T")[0] };
     setReps((prev) => [nr, ...prev]);
     const { error } = await supabase.from("reps").insert(fromRep(nr));
-    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("نوێنەر زیادکرا");
+    if (error) { showToast("هەڵە: " + error.message, "error"); }
+    else {
+      // Save territories
+      if (nr.territories.length > 0) {
+        await supabase.from("rep_territories").insert(
+          nr.territories.map(region => ({ rep_id: nr.id, region }))
+        );
+      }
+      showToast("نوێنەر زیادکرا");
+    }
     return nr;
   }, [showToast]);
 
   const updateRep = useCallback(async (id: string, r: Partial<Rep>) => {
     setReps((prev) => prev.map((x) => (x.id === id ? { ...x, ...r } : x)));
-    const { error } = await supabase.from("reps").update(fromRep(r)).eq("id", id);
-    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("نوێنەر نوێکرایەوە");
+    const { territories, ...rest } = r;
+    const { error } = await supabase.from("reps").update(fromRep(rest)).eq("id", id);
+    if (error) { showToast("هەڵە: " + error.message, "error"); }
+    else {
+      // Update territories: delete all then re-insert
+      if (territories !== undefined) {
+        await supabase.from("rep_territories").delete().eq("rep_id", id);
+        if (territories.length > 0) {
+          await supabase.from("rep_territories").insert(
+            territories.map(region => ({ rep_id: id, region }))
+          );
+        }
+      }
+      showToast("نوێنەر نوێکرایەوە");
+    }
   }, [showToast]);
 
   const deleteRep = useCallback(async (id: string) => {

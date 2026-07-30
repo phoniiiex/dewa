@@ -6,6 +6,8 @@ import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
 import { printPaymentReceipt } from "@/lib/print-engine";
 import type { Client, ClientType, PaymentTerms, Order } from "@/lib/types";
+import LocationPicker from "@/components/custom/LocationPicker";
+import { getRegionNames, extractRegion } from "@/lib/locations";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -50,7 +52,7 @@ const typeDisplayNames: Record<string, string> = {
   CLINIC: "کلینیک", WHOLESALE: "کڕینی گشتی", WAREHOUSE: "مەخزەن",
 };
 const paymentLabels: Record<PaymentTerms, string> = { IMMEDIATE: "ڕاستەوخۆ", NET_15: "١٥ ڕۆژ", NET_30: "٣٠ ڕۆژ" };
-const cities = ["سلێمانی", "هەولێر", "دهۆک", "کەرکوک", "هەڵەبجە"];
+const cities = getRegionNames();
 
 interface ClientRequest {
   id: string; name: string; owner: string; phone: string;
@@ -154,7 +156,7 @@ export default function ClientsPage() {
     const all: UnifiedRow[] = [...clientRows, ...warehouseRows];
     const filt = all.filter(r => {
       const matchSearch = r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.owner.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchCity   = cityFilter === "هەموو" || r.city === cityFilter;
+      const matchCity   = cityFilter === "هەموو" || extractRegion(r.city) === cityFilter;
       const matchType   = typeFilter === "هەموو" || r.displayType === typeFilter;
       return matchSearch && matchCity && matchType;
     });
@@ -486,11 +488,7 @@ export default function ClientsPage() {
             <div className="space-y-2"><Label>خاوەن *</Label><Input required value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })} /></div>
             <div className="space-y-2"><Label>تەلەفۆن *</Label><Input required value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
             <div className="space-y-2">
-              <Label>شار</Label>
-              <Select value={form.city} onValueChange={(v: string | null) => v && setForm({ ...form, city: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{cities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-              </Select>
+              <LocationPicker label="شوێن" value={form.city} onChange={v => setForm({ ...form, city: v })} />
             </div>
             <div className="space-y-2">
               <Label>جۆر</Label>

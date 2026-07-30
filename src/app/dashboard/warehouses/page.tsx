@@ -3,6 +3,8 @@ import { useState, FormEvent } from "react";
 import { Plus, Warehouse as WarehouseIcon, Edit3, Trash2, MapPin, Phone, Percent, Tag, X } from "lucide-react";
 import { useData } from "@/lib/store";
 import type { Client, BonusRule } from "@/lib/types";
+import LocationPicker from "@/components/custom/LocationPicker";
+import { getRegionNames } from "@/lib/locations";
 import ExportButton from "@/components/custom/ExportButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +27,7 @@ const warehouseExportCols = [
   { key: "bonusPct", label: "ڕێژەی بۆنەس", format: (v: unknown) => `${v}%` },
 ];
 
-const cities = ["سلێمانی", "هەولێر", "دهۆک", "کەرکوک", "هەڵەبجە"];
+const cities = getRegionNames();
 
 export default function WarehousesPage() {
   const { warehouses, orders, products, addWarehouse, updateWarehouse, deleteWarehouse, loading } = useData();
@@ -210,13 +212,7 @@ export default function WarehousesPage() {
                 <Input id="wh-name" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="ناوی کۆگا" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="wh-city">شار</Label>
-                <Select value={form.city || cities[0]} onValueChange={(v: string | null) => v && setForm({ ...form, city: v })}>
-                  <SelectTrigger id="wh-city"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {cities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <LocationPicker label="شوێن" value={form.city} onChange={v => setForm({ ...form, city: v })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="wh-address">ناونیشان</Label>

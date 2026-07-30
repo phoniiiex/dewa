@@ -10,6 +10,7 @@ import { useData } from "@/lib/store";
 import { useLayout } from "@/app/dashboard/layout";
 import { formatIQD } from "@/lib/currency";
 import type { Order, OrderStatus, OrderItem, OrderFlow, DiscountType } from "@/lib/types";
+import { extractRegion } from "@/lib/locations";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -89,6 +90,13 @@ export default function OrdersPage() {
   const isRep     = currentUser?.role === "REP";
   const isManager = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
   const myRep     = isRep ? reps.find(r => r.name === currentUser?.name) ?? reps.find(r => r.isActive) : undefined;
+
+  // Territory-filtered clients: when a rep is selected, only show clients in their territories
+  const selectedRepForFilter = isRep ? myRep : reps.find(r => r.id === form?.repId);
+  const territoryClients = useMemo(() => {
+    if (!selectedRepForFilter?.territories?.length) return clients;
+    return clients.filter(c => selectedRepForFilter.territories.includes(extractRegion(c.city)));
+  }, [clients, selectedRepForFilter]);
 
   // ── Filters ─────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm]   = useState("");
@@ -775,8 +783,8 @@ export default function OrdersPage() {
               <Label>{form.orderFlow === 'DIRECT_PHARMACY' ? 'فارمۆخانە (کڕیار) *' : 'کۆگا (کڕیار) *'}</Label>
               <ClientCombobox
                 clients={form.orderFlow === 'DIRECT_PHARMACY'
-                  ? clients.filter(c => c.type !== 'WAREHOUSE')
-                  : clients.filter(c => c.type === 'WAREHOUSE')}
+                  ? territoryClients.filter(c => c.type !== 'WAREHOUSE')
+                  : territoryClients.filter(c => c.type === 'WAREHOUSE')}
                 value={form.clientId} clientName={form.clientName}
                 onChange={(id, name) => {
                   // In STANDARD flow: auto-set all items' bonus% to warehouse base bonus
@@ -812,7 +820,7 @@ export default function OrdersPage() {
               <div className="space-y-2">
                 <Label>فارمۆخانە (زانیاری — لازم نییە) *</Label>
                 <ClientCombobox
-                  clients={clients.filter(c => c.type !== 'WAREHOUSE')}
+                  clients={territoryClients.filter(c => c.type !== 'WAREHOUSE')}
                   value={form.pharmacyId}
                   clientName={clients.find(c => c.id === form.pharmacyId)?.name || ''}
                   onChange={(id) => setForm({ ...form, pharmacyId: id })}

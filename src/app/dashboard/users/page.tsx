@@ -170,6 +170,7 @@ export default function UsersPage() {
       city:           (r.city || "") as string,
       profilePic:     (r.profile_pic || "") as string,
       telegramChatId: (r.telegram_chat_id || "") as string,
+      territories:    [] as string[],
       isActive:       r.is_active !== false,
       createdAt:      (r.created_at || "") as string,
     })));

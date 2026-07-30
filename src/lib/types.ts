@@ -86,6 +86,7 @@ export interface Rep {
   city: string;
   profilePic: string;        // URL to profile photo (shown on map)
   telegramChatId: string;    // linked to telegram_users
+  territories: string[];     // assigned region names (e.g., ["هەولێر", "سلێمانی"])
   isActive: boolean;
   createdAt: string;
 }

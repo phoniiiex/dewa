@@ -5,6 +5,8 @@ import { Search, Plus, UserCheck, Phone, MapPin, Edit3, Trash2, Camera } from "l
 import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Rep } from "@/lib/types";
+import LocationPicker from "@/components/custom/LocationPicker";
+import { getRegionNames } from "@/lib/locations";
 import ExportButton from "@/components/custom/ExportButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +30,7 @@ const repExportCols = [
   { key: "city", label: "شار" }, { key: "isActive", label: "بارودۆخ", format: (v: unknown) => v ? "چالاک" : "ناچالاک" },
 ];
 
-const cities = ["سلێمانی", "هەولێر", "دهۆک", "کەرکوک", "هەڵەبجە"];
+const cities = getRegionNames();
 
 export default function RepsPage() {
   const { reps, clients, orders, addRep, updateRep, deleteRep } = useData();
@@ -37,11 +39,11 @@ export default function RepsPage() {
   const [editing, setEditing] = useState<Rep | null>(null);
   const [detailRep, setDetailRep] = useState<Rep | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true });
+  const [form, setForm] = useState({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true, territories: [] as string[] });
 
-  const resetForm = () => setForm({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true });
+  const resetForm = () => setForm({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true, territories: [] });
   const openAdd  = () => { resetForm(); setEditing(null); setModalOpen(true); };
-  const openEdit = (r: Rep) => { setEditing(r); setForm({ name: r.name, phone: r.phone, email: r.email || "", city: r.city, profilePic: r.profilePic || "", isActive: r.isActive }); setModalOpen(true); };
+  const openEdit = (r: Rep) => { setEditing(r); setForm({ name: r.name, phone: r.phone, email: r.email || "", city: r.city, profilePic: r.profilePic || "", isActive: r.isActive, territories: r.territories || [] }); setModalOpen(true); };
 
   const picInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,7 +71,7 @@ export default function RepsPage() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (editing) updateRep(editing.id, form);
-    else addRep({ ...form, telegramChatId: "" });
+    else addRep({ ...form, telegramChatId: "", territories: form.territories });
     setModalOpen(false);
   };
 
@@ -164,7 +166,11 @@ export default function RepsPage() {
                 </div>
                 <Badge variant={r.isActive ? "default" : "secondary"} className="text-[10px]">{r.isActive ? "چالاک" : "ناچالاک"}</Badge>
               </div>
-
+              {r.territories && r.territories.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {r.territories.map(t => <Badge key={t} variant="outline" className="text-[9px] px-1.5 py-0">{t}</Badge>)}
+                </div>
+              )}
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
                 <Phone className="size-3" />
                 <span dir="ltr">{r.phone}</span>
@@ -249,13 +255,34 @@ export default function RepsPage() {
                 <Input id="rep-phone" required value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="0770 XXX XXXX" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="rep-city">شار</Label>
-                <Select value={form.city || cities[0]} onValueChange={(v: string | null) => v && setForm({ ...form, city: v })}>
-                  <SelectTrigger id="rep-city"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {cities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <LocationPicker label="شوێن" value={form.city} onChange={v => setForm({ ...form, city: v })} />
+              </div>
+              {/* Territory assignment */}
+              <div className="space-y-2">
+                <Label>ناوچەکانی کارکردن (تێریتۆری)</Label>
+                <p className="text-[11px] text-muted-foreground">ناوچەکان هەڵبژێرە کە ئەم نوێنەرە تێیاندا کار دەکات</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {cities.map(c => {
+                    const isSelected = form.territories.includes(c);
+                    return (
+                      <button key={c} type="button"
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors border ${
+                          isSelected
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80"
+                        }`}
+                        onClick={() => setForm({
+                          ...form,
+                          territories: isSelected
+                            ? form.territories.filter(t => t !== c)
+                            : [...form.territories, c],
+                        })}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <Label htmlFor="rep-active">چالاک</Label>
