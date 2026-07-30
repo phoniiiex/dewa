@@ -171,6 +171,9 @@ export default function UsersPage() {
       profilePic:     (r.profile_pic || "") as string,
       telegramChatId: (r.telegram_chat_id || "") as string,
       territories:    [] as string[],
+      insideLocations: [] as string[],
+      insideCityPct:  Number(r.inside_city_pct || 0),
+      outsideCityPct: Number(r.outside_city_pct || 0),
       isActive:       r.is_active !== false,
       createdAt:      (r.created_at || "") as string,
     })));

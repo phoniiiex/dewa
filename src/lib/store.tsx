@@ -107,6 +107,9 @@ function toRep(r: Record<string, unknown>): Rep {
     profilePic: (r.profile_pic || "") as string,
     telegramChatId: (r.telegram_chat_id || "") as string,
     territories: (r._territories || []) as string[],
+    insideLocations: (r._insideLocations || []) as string[],
+    insideCityPct: Number(r.inside_city_pct || 0),
+    outsideCityPct: Number(r.outside_city_pct || 0),
     isActive: r.is_active !== false,
     createdAt: (r.created_at || "") as string,
   };
@@ -120,6 +123,8 @@ function fromRep(r: Partial<Rep>): Record<string, unknown> {
   if (r.city !== undefined) m.city = r.city;
   if (r.profilePic !== undefined) m.profile_pic = r.profilePic;
   if (r.telegramChatId !== undefined) m.telegram_chat_id = r.telegramChatId;
+  if (r.insideCityPct !== undefined) m.inside_city_pct = r.insideCityPct;
+  if (r.outsideCityPct !== undefined) m.outside_city_pct = r.outsideCityPct;
   if (r.isActive !== undefined) m.is_active = r.isActive;
   if (r.createdAt !== undefined) m.created_at = r.createdAt;
   return m;
@@ -570,7 +575,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Fetch all data from Supabase
   const refreshData = useCallback(async () => {
     try {
-      const [pRes, cRes, rRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes, retRes, rtRes, raRes, rcRes] = await Promise.all([
+      const [pRes, cRes, rRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes, retRes, rtRes, raRes, rcRes, rilRes] = await Promise.all([
         supabase.from("products").select("*"),
         supabase.from("clients").select("*"),
         supabase.from("reps").select("*"),
@@ -587,13 +592,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         supabase.from("rep_territories").select("*"),
         supabase.from("rep_product_assignments").select("*"),
         supabase.from("rep_commissions").select("*").order("created_at", { ascending: false }),
+        supabase.from("rep_inside_locations").select("*"),
       ]);
 
-      // Inject territories into rep records before mapping
+      // Inject territories + inside locations into rep records before mapping
       const territoryRows = (rtRes.data || []) as Array<{ rep_id: string; region: string }>;
+      const insideLocationRows = (rilRes.data || []) as Array<{ rep_id: string; location_path: string }>;
       const repRows = (rRes.data || []).map((r: Record<string, unknown>) => {
         const repTerritories = territoryRows.filter(t => t.rep_id === r.id).map(t => t.region);
-        return { ...r, _territories: repTerritories };
+        const repInsideLocations = insideLocationRows.filter(l => l.rep_id === r.id).map(l => l.location_path);
+        return { ...r, _territories: repTerritories, _insideLocations: repInsideLocations };
       });
 
       const fresh = {
@@ -634,7 +642,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         productId: (r.product_id || "") as string,
         productName: prodMap.get(r.product_id as string) || "",
         region: (r.region || "") as string,
-        commissionPct: Number(r.commission_pct || 0),
       })));
 
       // Map rep commissions
@@ -645,6 +652,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         productId: (r.product_id || "") as string,
         productName: prodMap.get(r.product_id as string) || "",
         region: (r.region || "") as string,
+        locationType: (r.location_type || "OUTSIDE") as "INSIDE" | "OUTSIDE",
         saleAmount: Number(r.sale_amount || 0),
         commissionPct: Number(r.commission_pct || 0),
         commissionAmount: Number(r.commission_amount || 0),
@@ -827,6 +835,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           nr.territories.map(region => ({ rep_id: nr.id, region }))
         );
       }
+      // Save inside locations
+      if (nr.insideLocations.length > 0) {
+        await supabase.from("rep_inside_locations").insert(
+          nr.insideLocations.map(location_path => ({ rep_id: nr.id, location_path }))
+        );
+      }
       showToast("نوێنەر زیادکرا");
     }
     return nr;
@@ -834,7 +848,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updateRep = useCallback(async (id: string, r: Partial<Rep>) => {
     setReps((prev) => prev.map((x) => (x.id === id ? { ...x, ...r } : x)));
-    const { territories, ...rest } = r;
+    const { territories, insideLocations, ...rest } = r;
     const { error } = await supabase.from("reps").update(fromRep(rest)).eq("id", id);
     if (error) { showToast("هەڵە: " + error.message, "error"); }
     else {
@@ -844,6 +858,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (territories.length > 0) {
           await supabase.from("rep_territories").insert(
             territories.map(region => ({ rep_id: id, region }))
+          );
+        }
+      }
+      // Update inside locations: delete all then re-insert
+      if (insideLocations !== undefined) {
+        await supabase.from("rep_inside_locations").delete().eq("rep_id", id);
+        if (insideLocations.length > 0) {
+          await supabase.from("rep_inside_locations").insert(
+            insideLocations.map(location_path => ({ rep_id: id, location_path }))
           );
         }
       }
@@ -911,30 +934,45 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     showToast("داواکاری زیادکرا");
     logActivity("CREATE_ORDER", "ORDER", no.id, no.orderNumber, { clientName: no.clientName, repName: no.repName, totalAmount: no.totalAmount });
 
-    // ── Auto-calculate commissions (Option A: assigned rep earns, not ordering rep) ──
+    // ── Auto-calculate commissions (inside/outside city) ──
     try {
       const orderClient = clients.find(c => c.id === no.clientId);
       if (orderClient) {
         const { extractRegion } = await import("@/lib/locations");
         const orderRegion = extractRegion(orderClient.city);
+        const clientLocationPath = orderClient.city; // full path e.g., "سلێمانی > ناوەندی سلێمانی"
         const commissionInserts: Array<Record<string, unknown>> = [];
 
         for (const item of no.items) {
           // Find ALL reps assigned to this product in this region
           const assignments = repAssignments.filter(
-            a => a.productId === item.productId && a.region === orderRegion && a.commissionPct > 0
+            a => a.productId === item.productId && a.region === orderRegion
           );
           for (const assignment of assignments) {
+            // Find the rep to get their commission rates and inside locations
+            const assignedRep = reps.find(rep => rep.id === assignment.repId);
+            if (!assignedRep) continue;
+
+            // Determine inside or outside: check if client's location matches any of the rep's inside locations
+            const isInside = assignedRep.insideLocations.some(loc =>
+              clientLocationPath === loc || clientLocationPath.startsWith(loc + " > ")
+            );
+            const locationType = isInside ? "INSIDE" : "OUTSIDE";
+            const commissionPct = isInside ? assignedRep.insideCityPct : assignedRep.outsideCityPct;
+
+            if (commissionPct <= 0) continue;
+
             const saleAmount = item.unitPrice * item.quantity;
-            const commissionAmount = Math.round(saleAmount * assignment.commissionPct / 100);
+            const commissionAmount = Math.round(saleAmount * commissionPct / 100);
             commissionInserts.push({
               id: genId(),
               rep_id: assignment.repId,
               order_id: no.id,
               product_id: item.productId,
               region: orderRegion,
+              location_type: locationType,
               sale_amount: saleAmount,
-              commission_pct: assignment.commissionPct,
+              commission_pct: commissionPct,
               commission_amount: commissionAmount,
               status: "PENDING",
             });
@@ -943,7 +981,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
         if (commissionInserts.length > 0) {
           await supabase.from("rep_commissions").insert(commissionInserts);
-          // Update local state
           setRepCommissions(prev => [
             ...commissionInserts.map(c => ({
               id: c.id as string,
@@ -952,6 +989,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
               productId: c.product_id as string,
               productName: no.items.find(i => i.productId === c.product_id)?.productName || "",
               region: c.region as string,
+              locationType: c.location_type as "INSIDE" | "OUTSIDE",
               saleAmount: c.sale_amount as number,
               commissionPct: c.commission_pct as number,
               commissionAmount: c.commission_amount as number,
@@ -965,7 +1003,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     } catch { /* commission errors shouldn't block order creation */ }
 
     return no;
-  }, [orders, clients, repAssignments, showToast]);
+  }, [orders, clients, reps, repAssignments, showToast]);
 
   const updateOrder = useCallback(async (id: string, o: Partial<Order>) => {
     setOrders((prev) => prev.map((x) => (x.id === id ? { ...x, ...o } : x)));
@@ -1249,7 +1287,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setRepAssignments(prev => [na, ...prev]);
     const { error } = await supabase.from("rep_product_assignments").insert({
       id: na.id, rep_id: na.repId, product_id: na.productId,
-      region: na.region, commission_pct: na.commissionPct,
+      region: na.region,
     });
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("بەرهەم دیاریکرا بۆ نوێنەر");
   }, [showToast]);

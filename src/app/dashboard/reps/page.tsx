@@ -6,7 +6,7 @@ import { useData } from "@/lib/store";
 import { formatIQD } from "@/lib/currency";
 import type { Rep } from "@/lib/types";
 import LocationPicker from "@/components/custom/LocationPicker";
-import { getRegionNames } from "@/lib/locations";
+import { getRegionNames, getDistricts, getSubDistricts, buildLocationPath } from "@/lib/locations";
 import { Separator } from "@/components/ui/separator";
 import ExportButton from "@/components/custom/ExportButton";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,12 +41,29 @@ export default function RepsPage() {
   const [editing, setEditing] = useState<Rep | null>(null);
   const [detailRep, setDetailRep] = useState<Rep | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [assignForm, setAssignForm] = useState({ productId: "", region: "", commissionPct: "" });
-  const [form, setForm] = useState({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true, territories: [] as string[] });
+  const [assignForm, setAssignForm] = useState({ productId: "", region: "" });
+  const [form, setForm] = useState({
+    name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true,
+    territories: [] as string[], insideLocations: [] as string[],
+    insideCityPct: "", outsideCityPct: "",
+  });
 
-  const resetForm = () => setForm({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true, territories: [] });
+  const resetForm = () => setForm({
+    name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true,
+    territories: [], insideLocations: [], insideCityPct: "", outsideCityPct: "",
+  });
   const openAdd  = () => { resetForm(); setEditing(null); setModalOpen(true); };
-  const openEdit = (r: Rep) => { setEditing(r); setForm({ name: r.name, phone: r.phone, email: r.email || "", city: r.city, profilePic: r.profilePic || "", isActive: r.isActive, territories: r.territories || [] }); setModalOpen(true); };
+  const openEdit = (r: Rep) => {
+    setEditing(r);
+    setForm({
+      name: r.name, phone: r.phone, email: r.email || "", city: r.city,
+      profilePic: r.profilePic || "", isActive: r.isActive,
+      territories: r.territories || [], insideLocations: r.insideLocations || [],
+      insideCityPct: r.insideCityPct ? String(r.insideCityPct) : "",
+      outsideCityPct: r.outsideCityPct ? String(r.outsideCityPct) : "",
+    });
+    setModalOpen(true);
+  };
 
   const picInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,10 +88,30 @@ export default function RepsPage() {
       reader.readAsDataURL(file);
     });
 
+  // Build all available locations for selected territories
+  const availableInsideLocations = useMemo(() => {
+    const locs: string[] = [];
+    for (const territory of form.territories) {
+      for (const district of getDistricts(territory)) {
+        const dPath = buildLocationPath(territory, district.name);
+        locs.push(dPath);
+        for (const sub of getSubDistricts(territory, district.name)) {
+          locs.push(buildLocationPath(territory, district.name, sub.name));
+        }
+      }
+    }
+    return locs;
+  }, [form.territories]);
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (editing) updateRep(editing.id, form);
-    else addRep({ ...form, telegramChatId: "", territories: form.territories });
+    const payload = {
+      ...form,
+      insideCityPct: Number(form.insideCityPct) || 0,
+      outsideCityPct: Number(form.outsideCityPct) || 0,
+    };
+    if (editing) updateRep(editing.id, payload);
+    else addRep({ ...payload, telegramChatId: "" });
     setModalOpen(false);
   };
 
@@ -218,7 +255,7 @@ export default function RepsPage() {
           ADD / EDIT DIALOG
       ═══════════════════════════════════════════════════════════ */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle>{editing ? "دەستکاری نوێنەر" : "نوێنەری نوێ"}</DialogTitle>
             <DialogDescription>زانیاری نوێنەری فرۆشتن پڕبکەوە</DialogDescription>
@@ -287,6 +324,53 @@ export default function RepsPage() {
                   })}
                 </div>
               </div>
+
+              {/* Inside/Outside city commission rates */}
+              {form.territories.length > 0 && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="inside-pct">کۆمیشنی ناو شار %</Label>
+                      <Input id="inside-pct" type="number" min={0} max={100} step={0.1}
+                        value={form.insideCityPct} onChange={e => setForm({ ...form, insideCityPct: e.target.value })}
+                        placeholder="مثلاً ٢" dir="ltr" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="outside-pct">کۆمیشنی دەرەوەی شار %</Label>
+                      <Input id="outside-pct" type="number" min={0} max={100} step={0.1}
+                        value={form.outsideCityPct} onChange={e => setForm({ ...form, outsideCityPct: e.target.value })}
+                        placeholder="مثلاً ٤" dir="ltr" />
+                    </div>
+                  </div>
+
+                  {/* Inside locations picker */}
+                  <div className="space-y-2">
+                    <Label>شوێنە ناوخۆییەکان (ناو شار)</Label>
+                    <p className="text-[10px] text-muted-foreground">شوێنەکان هەڵبژێرە کە بۆ ئەم نوێنەرە &quot;ناو شار&quot; حیساب دەکرێن. هەر شوێنێکی تر &quot;دەرەوەی شار&quot; دەبێت.</p>
+                    <div className="max-h-44 overflow-y-auto border rounded-lg p-2 space-y-0.5">
+                      {availableInsideLocations.map(loc => {
+                        const checked = form.insideLocations.includes(loc);
+                        return (
+                          <label key={loc} className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-muted/50 cursor-pointer text-[11px]">
+                            <input type="checkbox" checked={checked} className="rounded"
+                              onChange={() => setForm({
+                                ...form,
+                                insideLocations: checked
+                                  ? form.insideLocations.filter(l => l !== loc)
+                                  : [...form.insideLocations, loc],
+                              })} />
+                            <span className={checked ? "font-medium text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}>{loc.replace(/ > /g, " › ")}</span>
+                          </label>
+                        );
+                      })}
+                      {availableInsideLocations.length === 0 && (
+                        <p className="text-[10px] text-muted-foreground text-center py-3">سەرەتا ناوچەکان هەڵبژێرە</p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="flex items-center justify-between">
                 <Label htmlFor="rep-active">چالاک</Label>
                 <Switch id="rep-active" checked={form.isActive} onCheckedChange={v => setForm({ ...form, isActive: v })} />
@@ -311,10 +395,32 @@ export default function RepsPage() {
           </SheetHeader>
           {detailRep && (
             <div>
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-2 gap-4 mb-4">
                 <div><p className="text-xs text-muted-foreground mb-1">تەلەفۆن</p><p className="font-semibold text-sm">{detailRep.phone}</p></div>
                 <div><p className="text-xs text-muted-foreground mb-1">شار</p><p className="font-semibold text-sm">{detailRep.city}</p></div>
               </div>
+              {/* Commission rates */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg text-center">
+                  <div className="text-[10px] text-emerald-600">کۆمیشنی ناو شار</div>
+                  <div className="font-bold text-sm text-emerald-700 dark:text-emerald-400">{detailRep.insideCityPct}%</div>
+                </div>
+                <div className="px-3 py-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg text-center">
+                  <div className="text-[10px] text-blue-600">کۆمیشنی دەرەوەی شار</div>
+                  <div className="font-bold text-sm text-blue-700 dark:text-blue-400">{detailRep.outsideCityPct}%</div>
+                </div>
+              </div>
+              {/* Inside locations */}
+              {detailRep.insideLocations.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs text-muted-foreground mb-1.5">شوێنە ناوخۆییەکان (ناو شار)</p>
+                  <div className="flex flex-wrap gap-1">
+                    {detailRep.insideLocations.map(loc => (
+                      <Badge key={loc} variant="secondary" className="text-[10px] font-normal">{loc.replace(/ > /g, " › ")}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               <h4 className="font-bold text-sm mb-3">کڕیارانی تایبەت ({clients.filter(c => c.repId === detailRep.id).length})</h4>
               <div className="flex flex-col gap-1.5 mb-6">
                 {clients.filter(c => c.repId === detailRep.id).map(c => (
@@ -375,12 +481,9 @@ export default function RepsPage() {
                       <span className="font-semibold text-sm">{a.productName || a.productId}</span>
                       <span className="text-[10px] text-muted-foreground ms-2">{a.region}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[10px]">{a.commissionPct}%</Badge>
-                      <button type="button" className="text-destructive hover:text-destructive/80 transition-colors" onClick={() => deleteRepAssignment(a.id)}>
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                    <button type="button" className="text-destructive hover:text-destructive/80 transition-colors" onClick={() => deleteRepAssignment(a.id)}>
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 ))}
                 {repAssignments.filter(a => a.repId === detailRep.id).length === 0 && (
@@ -389,7 +492,7 @@ export default function RepsPage() {
               </div>
               {/* Quick add assignment */}
               {detailRep.territories.length > 0 && (
-                <div className="grid grid-cols-[1fr_1fr_60px_auto] gap-1.5 mb-6">
+                <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 mb-6">
                   <Select value={assignForm.productId || null} onValueChange={(v: string | null) => v && setAssignForm(f => ({ ...f, productId: v }))}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="بەرهەم..." /></SelectTrigger>
                     <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
@@ -398,8 +501,6 @@ export default function RepsPage() {
                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="ناوچە..." /></SelectTrigger>
                     <SelectContent>{detailRep.territories.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                   </Select>
-                  <Input type="number" min={0} max={100} className="h-8 text-xs" placeholder="%"
-                    value={assignForm.commissionPct} onChange={e => setAssignForm(f => ({ ...f, commissionPct: e.target.value }))} />
                   <Button size="sm" className="h-8 text-xs" disabled={!assignForm.productId || !assignForm.region}
                     onClick={() => {
                       addRepAssignment({
@@ -407,9 +508,8 @@ export default function RepsPage() {
                         productId: assignForm.productId,
                         productName: products.find(p => p.id === assignForm.productId)?.name || "",
                         region: assignForm.region,
-                        commissionPct: Number(assignForm.commissionPct) || 0,
                       });
-                      setAssignForm({ productId: "", region: "", commissionPct: "" });
+                      setAssignForm({ productId: "", region: "" });
                     }}>+</Button>
                 </div>
               )}
@@ -448,6 +548,9 @@ export default function RepsPage() {
                             <div>
                               <span className="font-semibold text-xs">{c.productName}</span>
                               <span className="text-[10px] text-muted-foreground ms-1.5">{c.region}</span>
+                              <Badge variant="outline" className={`text-[9px] ms-1 ${c.locationType === "INSIDE" ? "border-emerald-300 text-emerald-600" : "border-blue-300 text-blue-600"}`}>
+                                {c.locationType === "INSIDE" ? "ناو شار" : "دەرەوەی شار"}
+                              </Badge>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-xs">{formatIQD(c.commissionAmount)}</span>

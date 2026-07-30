@@ -87,6 +87,9 @@ export interface Rep {
   profilePic: string;        // URL to profile photo (shown on map)
   telegramChatId: string;    // linked to telegram_users
   territories: string[];     // assigned region names (e.g., ["هەولێر", "سلێمانی"])
+  insideLocations: string[]; // location paths considered "inside the city" for this rep
+  insideCityPct: number;     // commission % for inside-city sales
+  outsideCityPct: number;    // commission % for outside-city sales
   isActive: boolean;
   createdAt: string;
 }
@@ -97,10 +100,10 @@ export interface RepProductAssignment {
   productId: string;
   productName: string;
   region: string;
-  commissionPct: number;
 }
 
 export type CommissionStatus = 'PENDING' | 'PAID';
+export type LocationType = 'INSIDE' | 'OUTSIDE';
 
 export interface RepCommission {
   id: string;
@@ -109,6 +112,7 @@ export interface RepCommission {
   productId: string;
   productName: string;
   region: string;
+  locationType: LocationType;
   saleAmount: number;
   commissionPct: number;
   commissionAmount: number;
