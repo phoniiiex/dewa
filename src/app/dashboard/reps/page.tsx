@@ -39,7 +39,9 @@ export default function RepsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Rep | null>(null);
-  const [detailRep, setDetailRep] = useState<Rep | null>(null);
+  const [detailRepId, setDetailRepId] = useState<string | null>(null);
+  const detailRep = detailRepId ? reps.find(r => r.id === detailRepId) || null : null;
+  const setDetailRep = (r: Rep | null) => setDetailRepId(r?.id || null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [dupWarning, setDupWarning] = useState<{ productId: string; productName: string; existingRepName: string; regions: string[] } | null>(null);
   const [form, setForm] = useState({
