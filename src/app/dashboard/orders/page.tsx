@@ -91,13 +91,6 @@ export default function OrdersPage() {
   const isManager = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
   const myRep     = isRep ? reps.find(r => r.name === currentUser?.name) ?? reps.find(r => r.isActive) : undefined;
 
-  // Territory-filtered clients: when a rep is selected, only show clients in their territories
-  const selectedRepForFilter = isRep ? myRep : reps.find(r => r.id === form?.repId);
-  const territoryClients = useMemo(() => {
-    if (!selectedRepForFilter?.territories?.length) return clients;
-    return clients.filter(c => selectedRepForFilter.territories.includes(extractRegion(c.city)));
-  }, [clients, selectedRepForFilter]);
-
   // ── Filters ─────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm]   = useState("");
   const [statusFilter, setStatusFilter] = useState(globalStatusFilter || "هەموو");
@@ -176,6 +169,13 @@ export default function OrdersPage() {
 
   const isDirect = form.orderFlow === "DIRECT_PHARMACY";
   const selectedWarehouse = !isDirect ? clients.find(c => c.id === form.clientId && c.type === "WAREHOUSE") : undefined;
+
+  // Territory-filtered clients: when a rep is selected, only show clients in their territories
+  const selectedRepForFilter = isRep ? myRep : reps.find(r => r.id === form.repId);
+  const territoryClients = useMemo(() => {
+    if (!selectedRepForFilter?.territories?.length) return clients;
+    return clients.filter(c => selectedRepForFilter.territories.includes(extractRegion(c.city)));
+  }, [clients, selectedRepForFilter]);
 
   // Returns the warehouse's standard bonus % for a product
   const getWarehousePct = (productId: string): number => {
