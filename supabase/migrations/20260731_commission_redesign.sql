@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS rep_inside_locations (
 );
 
 ALTER TABLE rep_inside_locations ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "rep_inside_locations_all" ON rep_inside_locations;
 CREATE POLICY "rep_inside_locations_all" ON rep_inside_locations FOR ALL USING (true) WITH CHECK (true);
 
 -- 3. Add location_type to rep_commissions
