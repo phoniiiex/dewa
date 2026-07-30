@@ -44,6 +44,7 @@ export default function RepsPage() {
   const setDetailRep = (r: Rep | null) => setDetailRepId(r?.id || null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [dupWarning, setDupWarning] = useState<{ productId: string; productName: string; existingRepName: string; regions: string[] } | null>(null);
+  const [commShowCount, setCommShowCount] = useState(3);
   const [form, setForm] = useState({
     name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true,
     territories: [] as string[], insideLocations: [] as string[],
@@ -390,8 +391,8 @@ export default function RepsPage() {
       {/* ═══════════════════════════════════════════════════════════
           DETAIL DRAWER (RIGHT SIDE)
       ═══════════════════════════════════════════════════════════ */}
-      <Drawer open={!!detailRep} onOpenChange={open => !open && setDetailRep(null)} swipeDirection="left">
-        <DrawerContent className="w-[460px] overflow-y-auto p-6">
+      <Drawer open={!!detailRep} onOpenChange={open => { if (!open) { setDetailRep(null); setCommShowCount(3); } }} swipeDirection="left">
+        <DrawerContent className="w-[460px] max-h-dvh overflow-y-auto p-6">
           <DrawerHeader className="border-b pb-4 mb-4 px-0">
             <DrawerTitle>{detailRep?.name}</DrawerTitle>
           </DrawerHeader>
@@ -568,29 +569,37 @@ export default function RepsPage() {
                     {myCommissions.length === 0 ? (
                       <div className="text-center text-xs text-muted-foreground py-3">هیچ کۆمیشنێک نییە</div>
                     ) : (
-                      <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto">
-                        {myCommissions.slice(0, 50).map(c => (
-                          <div key={c.id} className="flex items-center justify-between px-3 py-2 bg-muted/50 rounded-lg">
-                            <div>
-                              <span className="font-semibold text-xs">{c.productName}</span>
-                              <span className="text-[10px] text-muted-foreground ms-1.5">{c.region}</span>
-                              <Badge variant="outline" className={`text-[9px] ms-1 ${c.locationType === "INSIDE" ? "border-emerald-300 text-emerald-600" : "border-blue-300 text-blue-600"}`}>
-                                {c.locationType === "INSIDE" ? "ناو شار" : "دەرەوەی شار"}
-                              </Badge>
+                      <>
+                        <div className="flex flex-col gap-1.5">
+                          {myCommissions.slice(0, commShowCount).map(c => (
+                            <div key={c.id} className="flex items-center justify-between px-3 py-2 bg-muted/50 rounded-lg">
+                              <div>
+                                <span className="font-semibold text-xs">{c.productName}</span>
+                                <span className="text-[10px] text-muted-foreground ms-1.5">{c.region}</span>
+                                <Badge variant="outline" className={`text-[9px] ms-1 ${c.locationType === "INSIDE" ? "border-emerald-300 text-emerald-600" : "border-blue-300 text-blue-600"}`}>
+                                  {c.locationType === "INSIDE" ? "ناو شار" : "دەرەوەی شار"}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs">{formatIQD(c.commissionAmount)}</span>
+                                <button type="button"
+                                  className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${
+                                    c.status === "PAID" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30" : "bg-amber-100 text-amber-700 dark:bg-amber-950/30"
+                                  }`}
+                                  onClick={() => updateCommissionStatus(c.id, c.status === "PAID" ? "PENDING" : "PAID")}>
+                                  {c.status === "PAID" ? "پارەدراو ✓" : "چاوەڕوان"}
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-xs">{formatIQD(c.commissionAmount)}</span>
-                              <button type="button"
-                                className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${
-                                  c.status === "PAID" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30" : "bg-amber-100 text-amber-700 dark:bg-amber-950/30"
-                                }`}
-                                onClick={() => updateCommissionStatus(c.id, c.status === "PAID" ? "PENDING" : "PAID")}>
-                                {c.status === "PAID" ? "پارەدراو ✓" : "چاوەڕوان"}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                        {myCommissions.length > commShowCount && (
+                          <Button variant="ghost" size="sm" className="w-full mt-2 text-xs text-primary"
+                            onClick={() => setCommShowCount(prev => prev + 10)}>
+                            زیاتر ببینە ({myCommissions.length - commShowCount} ماوە)
+                          </Button>
+                        )}
+                      </>
                     )}
                   </>
                 );
