@@ -520,7 +520,9 @@ interface DataStore {
   repAssignments: RepProductAssignment[];
   repCommissions: RepCommission[];
   addRepAssignment: (a: Omit<RepProductAssignment, "id">) => Promise<void>;
+  addRepAssignmentBulk: (repId: string, productId: string, productName: string, territories: string[]) => Promise<void>;
   deleteRepAssignment: (id: string) => Promise<void>;
+  deleteRepAssignmentByProduct: (repId: string, productId: string) => Promise<void>;
   updateCommissionStatus: (id: string, status: "PENDING" | "PAID") => Promise<void>;
 }
 
@@ -1292,6 +1294,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("بەرهەم دیاریکرا بۆ نوێنەر");
   }, [showToast]);
 
+  /** Assign a product to ALL of a rep's territories at once */
+  const addRepAssignmentBulk = useCallback(async (repId: string, productId: string, productName: string, territories: string[]) => {
+    const newRows = territories.map(region => ({ id: genId(), repId, productId, productName, region }));
+    setRepAssignments(prev => [...newRows, ...prev]);
+    const { error } = await supabase.from("rep_product_assignments").insert(
+      newRows.map(r => ({ id: r.id, rep_id: r.repId, product_id: r.productId, region: r.region }))
+    );
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("بەرهەم دیاریکرا بۆ نوێنەر");
+  }, [showToast]);
+
+  /** Remove all assignments for a product+rep pair */
+  const deleteRepAssignmentByProduct = useCallback(async (repId: string, productId: string) => {
+    const toDelete = repAssignments.filter(a => a.repId === repId && a.productId === productId);
+    setRepAssignments(prev => prev.filter(a => !(a.repId === repId && a.productId === productId)));
+    for (const a of toDelete) {
+      await supabase.from("rep_product_assignments").delete().eq("id", a.id);
+    }
+    showToast("دیاریکردن سڕایەوە");
+  }, [repAssignments, showToast]);
+
   const deleteRepAssignment = useCallback(async (id: string) => {
     setRepAssignments(prev => prev.filter(a => a.id !== id));
     const { error } = await supabase.from("rep_product_assignments").delete().eq("id", id);
@@ -1323,7 +1345,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         addReturn, updateReturn, deleteReturn,
         updateSettings,
         savedSignatures, addSignature, deleteSignature, setDefaultSignature,
-        repAssignments, repCommissions, addRepAssignment, deleteRepAssignment, updateCommissionStatus,
+        repAssignments, repCommissions, addRepAssignment, addRepAssignmentBulk, deleteRepAssignment, deleteRepAssignmentByProduct, updateCommissionStatus,
         showToast, toast, refreshData,
       }}
     >

@@ -15,8 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -35,13 +35,13 @@ const cities = getRegionNames();
 
 export default function RepsPage() {
   const { reps, clients, orders, products, addRep, updateRep, deleteRep,
-    repAssignments, repCommissions, addRepAssignment, deleteRepAssignment, updateCommissionStatus } = useData();
+    repAssignments, repCommissions, addRepAssignmentBulk, deleteRepAssignmentByProduct, updateCommissionStatus } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Rep | null>(null);
   const [detailRep, setDetailRep] = useState<Rep | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [assignForm, setAssignForm] = useState({ productId: "", region: "" });
+  const [dupWarning, setDupWarning] = useState<{ productId: string; productName: string; existingRepName: string; regions: string[] } | null>(null);
   const [form, setForm] = useState({
     name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true,
     territories: [] as string[], insideLocations: [] as string[],
@@ -386,13 +386,13 @@ export default function RepsPage() {
       </Dialog>
 
       {/* ═══════════════════════════════════════════════════════════
-          DETAIL SHEET
+          DETAIL DRAWER (RIGHT SIDE)
       ═══════════════════════════════════════════════════════════ */}
-      <Sheet open={!!detailRep} onOpenChange={open => !open && setDetailRep(null)}>
-        <SheetContent side="left" className="w-[440px] overflow-y-auto">
-          <SheetHeader className="border-b pb-4 mb-4">
-            <SheetTitle>{detailRep?.name}</SheetTitle>
-          </SheetHeader>
+      <Drawer open={!!detailRep} onOpenChange={open => !open && setDetailRep(null)} swipeDirection="left">
+        <DrawerContent className="w-[460px] overflow-y-auto p-6">
+          <DrawerHeader className="border-b pb-4 mb-4 px-0">
+            <DrawerTitle>{detailRep?.name}</DrawerTitle>
+          </DrawerHeader>
           {detailRep && (
             <div>
               <div className="grid grid-cols-2 gap-4 mb-4">
@@ -472,45 +472,69 @@ export default function RepsPage() {
 
               <Separator className="my-6" />
 
-              {/* ── Product Assignments ── */}
-              <h4 className="font-bold text-sm mb-3">📦 بەرهەمە دیاریکراوەکان ({repAssignments.filter(a => a.repId === detailRep.id).length})</h4>
-              <div className="flex flex-col gap-1.5 mb-4">
-                {repAssignments.filter(a => a.repId === detailRep.id).map(a => (
-                  <div key={a.id} className="flex items-center justify-between px-3 py-2 bg-emerald-50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-lg">
-                    <div>
-                      <span className="font-semibold text-sm">{a.productName || a.productId}</span>
-                      <span className="text-[10px] text-muted-foreground ms-2">{a.region}</span>
-                    </div>
-                    <button type="button" className="text-destructive hover:text-destructive/80 transition-colors" onClick={() => deleteRepAssignment(a.id)}>
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-                {repAssignments.filter(a => a.repId === detailRep.id).length === 0 && (
-                  <div className="text-center text-xs text-muted-foreground py-3">هیچ بەرهەمێک دیاری نەکراوە</div>
-                )}
-              </div>
-              {/* Quick add assignment */}
-              {detailRep.territories.length > 0 && (
-                <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 mb-6">
-                  <Select value={assignForm.productId || null} onValueChange={(v: string | null) => v && setAssignForm(f => ({ ...f, productId: v }))}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="بەرهەم..." /></SelectTrigger>
-                    <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Select value={assignForm.region || null} onValueChange={(v: string | null) => v && setAssignForm(f => ({ ...f, region: v }))}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="ناوچە..." /></SelectTrigger>
-                    <SelectContent>{detailRep.territories.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Button size="sm" className="h-8 text-xs" disabled={!assignForm.productId || !assignForm.region}
-                    onClick={() => {
-                      addRepAssignment({
-                        repId: detailRep.id,
-                        productId: assignForm.productId,
-                        productName: products.find(p => p.id === assignForm.productId)?.name || "",
-                        region: assignForm.region,
-                      });
-                      setAssignForm({ productId: "", region: "" });
-                    }}>+</Button>
+              {/* ── Product Assignments (Checkbox List) ── */}
+              <h4 className="font-bold text-sm mb-3">📦 بەرهەمە تایبەتەکان</h4>
+              {detailRep.territories.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-3">سەرەتا ناوچەکان دیاریبکە</p>
+              ) : (
+                <div className="max-h-52 overflow-y-auto border rounded-lg p-2 space-y-0.5 mb-4">
+                  {products.filter(p => p.isActive).map(p => {
+                    const isAssigned = repAssignments.some(a => a.repId === detailRep.id && a.productId === p.id);
+                    // Check if another rep has this product in any overlapping territory
+                    const conflictRep = !isAssigned ? reps.find(r =>
+                      r.id !== detailRep.id &&
+                      detailRep.territories.some(t =>
+                        repAssignments.some(a => a.repId === r.id && a.productId === p.id && a.region === t)
+                      )
+                    ) : null;
+                    const conflictRegions = conflictRep
+                      ? detailRep.territories.filter(t =>
+                          repAssignments.some(a => a.repId === conflictRep.id && a.productId === p.id && a.region === t)
+                        )
+                      : [];
+
+                    return (
+                      <label key={p.id} className={cn(
+                        "flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors",
+                        isAssigned ? "bg-emerald-50 dark:bg-emerald-950/15" : "hover:bg-muted/50",
+                        conflictRep && "opacity-80"
+                      )}>
+                        <Checkbox
+                          checked={isAssigned}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              // Check for conflicts
+                              if (conflictRep) {
+                                setDupWarning({
+                                  productId: p.id,
+                                  productName: p.name,
+                                  existingRepName: conflictRep.name,
+                                  regions: conflictRegions,
+                                });
+                                return;
+                              }
+                              addRepAssignmentBulk(detailRep.id, p.id, p.name, detailRep.territories);
+                            } else {
+                              deleteRepAssignmentByProduct(detailRep.id, p.id);
+                            }
+                          }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className={cn("text-sm", isAssigned && "font-semibold text-emerald-700 dark:text-emerald-400")}>{p.name}</span>
+                          {isAssigned && (
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {detailRep.territories.map(t => (
+                                <span key={t} className="text-[9px] px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded">{t}</span>
+                              ))}
+                            </div>
+                          )}
+                          {conflictRep && (
+                            <span className="text-[10px] text-amber-600">⚠ دیاریکراوە بۆ {conflictRep.name}</span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
 
@@ -571,8 +595,28 @@ export default function RepsPage() {
               })()}
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </Drawer>
+
+      {/* ═══════════════════════════════════════════════════════════
+          DUPLICATE PRODUCT WARNING
+      ═══════════════════════════════════════════════════════════ */}
+      <AlertDialog open={!!dupWarning} onOpenChange={open => !open && setDupWarning(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠ بەرهەم پێشتر دیاریکراوە</AlertDialogTitle>
+            <AlertDialogDescription>
+              بەرهەمی <strong>{dupWarning?.productName}</strong> پێشتر بۆ نوێنەری{" "}
+              <strong>{dupWarning?.existingRepName}</strong> لە{" "}
+              {dupWarning?.regions.join("، ")} دیاریکراوە.
+              ناتوانیت هەمان بەرهەم بۆ نوێنەرێکی تر لە هەمان ناوچە دیاریبکەیت.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>باشە، تێگەیشتم</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ═══════════════════════════════════════════════════════════
           DELETE CONFIRM

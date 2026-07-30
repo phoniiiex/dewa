@@ -68,7 +68,7 @@ function shortNum(n: number): string {
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function FinancePage() {
   const router = useRouter();
-  const { transactions, addTransaction, clients, orders, reps } = useData();
+  const { transactions, addTransaction, clients, orders, reps, repCommissions } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("هەموو");
   const [modalOpen, setModalOpen] = useState(false);
@@ -106,20 +106,41 @@ export default function FinancePage() {
 
   // ── Rep performance ────────────────────────────────────────────────────────
   const repData = useMemo(() => {
-    const repMap = new Map<string, { name: string; sales: number; count: number }>();
+    const repMap = new Map<string, { name: string; sales: number; count: number; commTotal: number; commPending: number; commPaid: number }>();
     orders.forEach(o => {
       if (!o.repName || o.status === "NOT_ACCEPTED") return;
-      const existing = repMap.get(o.repId) || { name: o.repName, sales: 0, count: 0 };
+      const existing = repMap.get(o.repId) || { name: o.repName, sales: 0, count: 0, commTotal: 0, commPending: 0, commPaid: 0 };
       existing.sales += o.totalAmount;
       existing.count += 1;
       repMap.set(o.repId, existing);
     });
+    // Inject commission data from repCommissions
+    repCommissions.forEach(c => {
+      const existing = repMap.get(c.repId);
+      if (existing) {
+        existing.commTotal += c.commissionAmount;
+        if (c.status === "PENDING") existing.commPending += c.commissionAmount;
+        if (c.status === "PAID") existing.commPaid += c.commissionAmount;
+      } else {
+        const rep = reps.find(r => r.id === c.repId);
+        repMap.set(c.repId, {
+          name: rep?.name || "—",
+          sales: 0, count: 0,
+          commTotal: c.commissionAmount,
+          commPending: c.status === "PENDING" ? c.commissionAmount : 0,
+          commPaid: c.status === "PAID" ? c.commissionAmount : 0,
+        });
+      }
+    });
     const repList = Array.from(repMap.entries())
-      .map(([id, d]) => ({ id, name: d.name, sales: d.sales, count: d.count, avg: d.count > 0 ? Math.round(d.sales / d.count) : 0 }))
+      .map(([id, d]) => ({ id, name: d.name, sales: d.sales, count: d.count, avg: d.count > 0 ? Math.round(d.sales / d.count) : 0, commTotal: d.commTotal, commPending: d.commPending, commPaid: d.commPaid }))
       .sort((a, b) => b.sales - a.sales);
     const totalRepSales = repList.reduce((s, r) => s + r.sales, 0);
-    return { repList, totalRepSales };
-  }, [orders]);
+    const totalCommissions = repList.reduce((s, r) => s + r.commTotal, 0);
+    const totalCommPending = repList.reduce((s, r) => s + r.commPending, 0);
+    const totalCommPaid = repList.reduce((s, r) => s + r.commPaid, 0);
+    return { repList, totalRepSales, totalCommissions, totalCommPending, totalCommPaid };
+  }, [orders, repCommissions, reps]);
 
   // ── Chart configs ──────────────────────────────────────────────────────────
   const debtChartConfig: ChartConfig = {
@@ -365,7 +386,7 @@ export default function FinancePage() {
       {activeTab === "reps" && (
         <>
           {/* Rep summary */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-gradient-to-br from-indigo-500 to-blue-700 text-white rounded-2xl p-6">
               <div className="flex items-center gap-2 mb-3 opacity-90"><DollarSign className="size-5" /><span className="text-sm">کۆی فرۆشتن</span></div>
               <p className="text-3xl font-black">{formatIQD(repData.totalRepSales)}</p>
@@ -375,6 +396,18 @@ export default function FinancePage() {
               <div className="flex items-center gap-2 mb-3 opacity-90"><Users className="size-5" /><span className="text-sm">کۆی داواکاری</span></div>
               <p className="text-3xl font-black">{repData.repList.reduce((s, r) => s + r.count, 0)}</p>
               <p className="mt-2 text-xs opacity-80">لە {repData.repList.length} نوێنەر</p>
+            </div>
+            <div className="bg-gradient-to-br from-emerald-500 to-green-700 text-white rounded-2xl p-6">
+              <div className="flex items-center gap-2 mb-3 opacity-90"><Wallet className="size-5" /><span className="text-sm">کۆی کۆمیشن</span></div>
+              <p className="text-3xl font-black">{formatIQD(repData.totalCommissions)}</p>
+              <p className="mt-2 text-xs opacity-80">
+                <span className="text-amber-200">چاوەڕوان: {formatIQD(repData.totalCommPending)}</span> · <span className="text-emerald-200">پارەدراو: {formatIQD(repData.totalCommPaid)}</span>
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-amber-500 to-orange-700 text-white rounded-2xl p-6">
+              <div className="flex items-center gap-2 mb-3 opacity-90"><CreditCard className="size-5" /><span className="text-sm">کۆمیشنی چاوەڕوان</span></div>
+              <p className="text-3xl font-black">{formatIQD(repData.totalCommPending)}</p>
+              <p className="mt-2 text-xs opacity-80">پارەنەدراو</p>
             </div>
           </div>
 
@@ -460,14 +493,16 @@ export default function FinancePage() {
                     <TableHead className="text-right">#</TableHead>
                     <TableHead className="text-right">نوێنەر</TableHead>
                     <TableHead className="text-right">کۆی فرۆشتن</TableHead>
-                    <TableHead className="text-right">ژمارەی داواکاری</TableHead>
-                    <TableHead className="text-right">تێکڕای داواکاری</TableHead>
+                    <TableHead className="text-right">داواکاری</TableHead>
+                    <TableHead className="text-right">کۆمیشن</TableHead>
+                    <TableHead className="text-right">چاوەڕوان</TableHead>
+                    <TableHead className="text-right">پارەدراو</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {repData.repList.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="p-0">
+                      <TableCell colSpan={7} className="p-0">
                         <Empty className="py-16 border-0">
                           <EmptyHeader>
                             <EmptyMedia variant="icon"><UserCheck className="size-4" /></EmptyMedia>
@@ -491,15 +526,20 @@ export default function FinancePage() {
                         </div>
                       </TableCell>
                       <TableCell className="font-bold text-emerald-600">{formatIQD(r.sales)}</TableCell>
-                      <TableCell><Badge variant="secondary" className="text-[11px]">{r.count} داواکاری</Badge></TableCell>
-                      <TableCell className="text-muted-foreground">{formatIQD(r.avg)}</TableCell>
+                      <TableCell><Badge variant="secondary" className="text-[11px]">{r.count}</Badge></TableCell>
+                      <TableCell className="font-semibold">{formatIQD(r.commTotal)}</TableCell>
+                      <TableCell className="text-amber-600 text-xs">{formatIQD(r.commPending)}</TableCell>
+                      <TableCell className="text-emerald-600 text-xs">{formatIQD(r.commPaid)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
               <div className="px-4 py-2.5 border-t bg-muted/20 text-xs text-muted-foreground flex justify-between">
                 <span>{repData.repList.length} نوێنەر</span>
-                <span className="font-bold text-emerald-600">کۆ: {formatIQD(repData.totalRepSales)}</span>
+                <div className="flex gap-4">
+                  <span className="font-bold text-emerald-600">فرۆشتن: {formatIQD(repData.totalRepSales)}</span>
+                  <span className="font-bold text-primary">کۆمیشن: {formatIQD(repData.totalCommissions)}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
