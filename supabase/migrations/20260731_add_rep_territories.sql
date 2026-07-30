@@ -1,7 +1,7 @@
 -- Rep Territories: assign regions to representatives
 CREATE TABLE IF NOT EXISTS rep_territories (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  rep_id UUID NOT NULL REFERENCES reps(id) ON DELETE CASCADE,
+  id TEXT DEFAULT gen_random_uuid()::text PRIMARY KEY,
+  rep_id TEXT NOT NULL REFERENCES reps(id) ON DELETE CASCADE,
   region TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE (rep_id, region)

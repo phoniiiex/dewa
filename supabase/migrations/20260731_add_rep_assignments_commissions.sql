@@ -1,8 +1,8 @@
 -- Rep Product Assignments: which rep handles which product in which territory
 CREATE TABLE IF NOT EXISTS rep_product_assignments (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  rep_id UUID NOT NULL REFERENCES reps(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  id TEXT DEFAULT gen_random_uuid()::text PRIMARY KEY,
+  rep_id TEXT NOT NULL REFERENCES reps(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   region TEXT NOT NULL,
   commission_pct NUMERIC DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now(),
@@ -14,10 +14,10 @@ CREATE POLICY "rep_product_assignments_all" ON rep_product_assignments FOR ALL U
 
 -- Rep Commissions: auto-calculated when orders are placed
 CREATE TABLE IF NOT EXISTS rep_commissions (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  rep_id UUID NOT NULL REFERENCES reps(id) ON DELETE CASCADE,
-  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  id TEXT DEFAULT gen_random_uuid()::text PRIMARY KEY,
+  rep_id TEXT NOT NULL REFERENCES reps(id) ON DELETE CASCADE,
+  order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   region TEXT NOT NULL,
   sale_amount NUMERIC NOT NULL DEFAULT 0,
   commission_pct NUMERIC NOT NULL DEFAULT 0,
