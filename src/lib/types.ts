@@ -91,6 +91,31 @@ export interface Rep {
   createdAt: string;
 }
 
+export interface RepProductAssignment {
+  id: string;
+  repId: string;
+  productId: string;
+  productName: string;
+  region: string;
+  commissionPct: number;
+}
+
+export type CommissionStatus = 'PENDING' | 'PAID';
+
+export interface RepCommission {
+  id: string;
+  repId: string;
+  orderId: string;
+  productId: string;
+  productName: string;
+  region: string;
+  saleAmount: number;
+  commissionPct: number;
+  commissionAmount: number;
+  status: CommissionStatus;
+  createdAt: string;
+}
+
 export interface BonusRule {
   productId: string;
   productName: string;

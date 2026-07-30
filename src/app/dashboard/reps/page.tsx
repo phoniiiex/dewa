@@ -7,6 +7,7 @@ import { formatIQD } from "@/lib/currency";
 import type { Rep } from "@/lib/types";
 import LocationPicker from "@/components/custom/LocationPicker";
 import { getRegionNames } from "@/lib/locations";
+import { Separator } from "@/components/ui/separator";
 import ExportButton from "@/components/custom/ExportButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,12 +34,14 @@ const repExportCols = [
 const cities = getRegionNames();
 
 export default function RepsPage() {
-  const { reps, clients, orders, addRep, updateRep, deleteRep } = useData();
+  const { reps, clients, orders, products, addRep, updateRep, deleteRep,
+    repAssignments, repCommissions, addRepAssignment, deleteRepAssignment, updateCommissionStatus } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Rep | null>(null);
   const [detailRep, setDetailRep] = useState<Rep | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [assignForm, setAssignForm] = useState({ productId: "", region: "", commissionPct: "" });
   const [form, setForm] = useState({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true, territories: [] as string[] });
 
   const resetForm = () => setForm({ name: "", phone: "", email: "", city: cities[0], profilePic: "", isActive: true, territories: [] });
@@ -353,6 +356,109 @@ export default function RepsPage() {
                               <div className="text-[10px] text-muted-foreground">{l.orderNumber} — {l.clientName}</div>
                             </div>
                             <span className="text-orange-600 font-bold text-sm">+{l.pending}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              <Separator className="my-6" />
+
+              {/* ── Product Assignments ── */}
+              <h4 className="font-bold text-sm mb-3">📦 بەرهەمە دیاریکراوەکان ({repAssignments.filter(a => a.repId === detailRep.id).length})</h4>
+              <div className="flex flex-col gap-1.5 mb-4">
+                {repAssignments.filter(a => a.repId === detailRep.id).map(a => (
+                  <div key={a.id} className="flex items-center justify-between px-3 py-2 bg-emerald-50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-lg">
+                    <div>
+                      <span className="font-semibold text-sm">{a.productName || a.productId}</span>
+                      <span className="text-[10px] text-muted-foreground ms-2">{a.region}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[10px]">{a.commissionPct}%</Badge>
+                      <button type="button" className="text-destructive hover:text-destructive/80 transition-colors" onClick={() => deleteRepAssignment(a.id)}>
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {repAssignments.filter(a => a.repId === detailRep.id).length === 0 && (
+                  <div className="text-center text-xs text-muted-foreground py-3">هیچ بەرهەمێک دیاری نەکراوە</div>
+                )}
+              </div>
+              {/* Quick add assignment */}
+              {detailRep.territories.length > 0 && (
+                <div className="grid grid-cols-[1fr_1fr_60px_auto] gap-1.5 mb-6">
+                  <Select value={assignForm.productId || null} onValueChange={(v: string | null) => v && setAssignForm(f => ({ ...f, productId: v }))}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="بەرهەم..." /></SelectTrigger>
+                    <SelectContent>{products.filter(p => p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Select value={assignForm.region || null} onValueChange={(v: string | null) => v && setAssignForm(f => ({ ...f, region: v }))}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="ناوچە..." /></SelectTrigger>
+                    <SelectContent>{detailRep.territories.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Input type="number" min={0} max={100} className="h-8 text-xs" placeholder="%"
+                    value={assignForm.commissionPct} onChange={e => setAssignForm(f => ({ ...f, commissionPct: e.target.value }))} />
+                  <Button size="sm" className="h-8 text-xs" disabled={!assignForm.productId || !assignForm.region}
+                    onClick={() => {
+                      addRepAssignment({
+                        repId: detailRep.id,
+                        productId: assignForm.productId,
+                        productName: products.find(p => p.id === assignForm.productId)?.name || "",
+                        region: assignForm.region,
+                        commissionPct: Number(assignForm.commissionPct) || 0,
+                      });
+                      setAssignForm({ productId: "", region: "", commissionPct: "" });
+                    }}>+</Button>
+                </div>
+              )}
+
+              <Separator className="my-4" />
+
+              {/* ── Commission History ── */}
+              {(() => {
+                const myCommissions = repCommissions.filter(c => c.repId === detailRep.id);
+                const totalEarned = myCommissions.reduce((s, c) => s + c.commissionAmount, 0);
+                const totalPending = myCommissions.filter(c => c.status === "PENDING").reduce((s, c) => s + c.commissionAmount, 0);
+                const totalPaid = myCommissions.filter(c => c.status === "PAID").reduce((s, c) => s + c.commissionAmount, 0);
+                return (
+                  <>
+                    <h4 className="font-bold text-sm mb-2">💰 کۆمیشنەکان</h4>
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      <div className="text-center px-2 py-1.5 bg-muted/50 rounded-lg">
+                        <div className="text-[10px] text-muted-foreground">کۆی گشتی</div>
+                        <div className="font-bold text-sm">{formatIQD(totalEarned)}</div>
+                      </div>
+                      <div className="text-center px-2 py-1.5 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
+                        <div className="text-[10px] text-amber-600">چاوەڕوان</div>
+                        <div className="font-bold text-sm text-amber-600">{formatIQD(totalPending)}</div>
+                      </div>
+                      <div className="text-center px-2 py-1.5 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg">
+                        <div className="text-[10px] text-emerald-600">پارەدراو</div>
+                        <div className="font-bold text-sm text-emerald-600">{formatIQD(totalPaid)}</div>
+                      </div>
+                    </div>
+                    {myCommissions.length === 0 ? (
+                      <div className="text-center text-xs text-muted-foreground py-3">هیچ کۆمیشنێک نییە</div>
+                    ) : (
+                      <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto">
+                        {myCommissions.slice(0, 50).map(c => (
+                          <div key={c.id} className="flex items-center justify-between px-3 py-2 bg-muted/50 rounded-lg">
+                            <div>
+                              <span className="font-semibold text-xs">{c.productName}</span>
+                              <span className="text-[10px] text-muted-foreground ms-1.5">{c.region}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs">{formatIQD(c.commissionAmount)}</span>
+                              <button type="button"
+                                className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium transition-colors ${
+                                  c.status === "PAID" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30" : "bg-amber-100 text-amber-700 dark:bg-amber-950/30"
+                                }`}
+                                onClick={() => updateCommissionStatus(c.id, c.status === "PAID" ? "PENDING" : "PAID")}>
+                                {c.status === "PAID" ? "پارەدراو ✓" : "چاوەڕوان"}
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>

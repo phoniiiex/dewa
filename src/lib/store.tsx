@@ -10,7 +10,7 @@ import type {
   Product, Client, Rep, Supplier, Driver, Order,
   Transaction, CompanySettings, User, InvoiceTemplate,
   PriceType, ProductPrice, SampleRequest, ReturnRecord, ReturnStatus,
-  SavedSignature,
+  SavedSignature, RepProductAssignment, RepCommission,
 } from "./types";
 import { RETURN_BONUS_RATE } from "./types";
 
@@ -512,6 +512,11 @@ interface DataStore {
   showToast: (message: string, type?: "success" | "error") => void;
   toast: { message: string; type: "success" | "error"; visible: boolean };
   refreshData: () => Promise<void>;
+  repAssignments: RepProductAssignment[];
+  repCommissions: RepCommission[];
+  addRepAssignment: (a: Omit<RepProductAssignment, "id">) => Promise<void>;
+  deleteRepAssignment: (id: string) => Promise<void>;
+  updateCommissionStatus: (id: string, status: "PENDING" | "PAID") => Promise<void>;
 }
 
 const DataContext = createContext<DataStore | null>(null);
@@ -551,6 +556,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [sampleRequests, setSampleRequests] = useState<SampleRequest[]>((_c?.sampleRequests as SampleRequest[]) ?? []);
   const [returns, setReturns] = useState<ReturnRecord[]>((_c?.returns as ReturnRecord[]) ?? []);
   const [savedSignatures, setSavedSignatures] = useState<SavedSignature[]>([]);
+  const [repAssignments, setRepAssignments] = useState<RepProductAssignment[]>([]);
+  const [repCommissions, setRepCommissions] = useState<RepCommission[]>([]);
   // loading = false immediately if cache exists — no flash, no shimmer needed
   const [loading, setLoading] = useState(!_c);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error"; visible: boolean }>({ message: "", type: "success", visible: false });
@@ -563,7 +570,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Fetch all data from Supabase
   const refreshData = useCallback(async () => {
     try {
-      const [pRes, cRes, rRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes, retRes, rtRes] = await Promise.all([
+      const [pRes, cRes, rRes, sRes, oRes, drRes, tRes, stRes, prRes, itRes, ptRes, srRes, retRes, rtRes, raRes, rcRes] = await Promise.all([
         supabase.from("products").select("*"),
         supabase.from("clients").select("*"),
         supabase.from("reps").select("*"),
@@ -578,6 +585,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         supabase.from("sample_requests").select("*").order("created_at", { ascending: false }),
         supabase.from("returns").select("*").order("created_at", { ascending: false }),
         supabase.from("rep_territories").select("*"),
+        supabase.from("rep_product_assignments").select("*"),
+        supabase.from("rep_commissions").select("*").order("created_at", { ascending: false }),
       ]);
 
       // Inject territories into rep records before mapping
@@ -617,6 +626,31 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setSampleRequests(fresh.sampleRequests);
       setReturns(fresh.returns);
 
+      // Map rep product assignments
+      const prodMap = new Map(fresh.products.map(p => [p.id, p.name]));
+      setRepAssignments((raRes.data || []).map((r: Record<string, unknown>) => ({
+        id: r.id as string,
+        repId: (r.rep_id || "") as string,
+        productId: (r.product_id || "") as string,
+        productName: prodMap.get(r.product_id as string) || "",
+        region: (r.region || "") as string,
+        commissionPct: Number(r.commission_pct || 0),
+      })));
+
+      // Map rep commissions
+      setRepCommissions((rcRes.data || []).map((r: Record<string, unknown>) => ({
+        id: r.id as string,
+        repId: (r.rep_id || "") as string,
+        orderId: (r.order_id || "") as string,
+        productId: (r.product_id || "") as string,
+        productName: prodMap.get(r.product_id as string) || "",
+        region: (r.region || "") as string,
+        saleAmount: Number(r.sale_amount || 0),
+        commissionPct: Number(r.commission_pct || 0),
+        commissionAmount: Number(r.commission_amount || 0),
+        status: (r.status || "PENDING") as "PENDING" | "PAID",
+        createdAt: (r.created_at || "") as string,
+      })));
       // Load saved signatures separately (not cached)
       const { data: sigRows } = await supabase.from("user_signatures").select("*").order("created_at", { ascending: false });
       setSavedSignatures(
@@ -876,8 +910,62 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (error) { showToast("هەڵە: " + error.message, "error"); return no; }
     showToast("داواکاری زیادکرا");
     logActivity("CREATE_ORDER", "ORDER", no.id, no.orderNumber, { clientName: no.clientName, repName: no.repName, totalAmount: no.totalAmount });
+
+    // ── Auto-calculate commissions (Option A: assigned rep earns, not ordering rep) ──
+    try {
+      const orderClient = clients.find(c => c.id === no.clientId);
+      if (orderClient) {
+        const { extractRegion } = await import("@/lib/locations");
+        const orderRegion = extractRegion(orderClient.city);
+        const commissionInserts: Array<Record<string, unknown>> = [];
+
+        for (const item of no.items) {
+          // Find ALL reps assigned to this product in this region
+          const assignments = repAssignments.filter(
+            a => a.productId === item.productId && a.region === orderRegion && a.commissionPct > 0
+          );
+          for (const assignment of assignments) {
+            const saleAmount = item.unitPrice * item.quantity;
+            const commissionAmount = Math.round(saleAmount * assignment.commissionPct / 100);
+            commissionInserts.push({
+              id: genId(),
+              rep_id: assignment.repId,
+              order_id: no.id,
+              product_id: item.productId,
+              region: orderRegion,
+              sale_amount: saleAmount,
+              commission_pct: assignment.commissionPct,
+              commission_amount: commissionAmount,
+              status: "PENDING",
+            });
+          }
+        }
+
+        if (commissionInserts.length > 0) {
+          await supabase.from("rep_commissions").insert(commissionInserts);
+          // Update local state
+          setRepCommissions(prev => [
+            ...commissionInserts.map(c => ({
+              id: c.id as string,
+              repId: c.rep_id as string,
+              orderId: c.order_id as string,
+              productId: c.product_id as string,
+              productName: no.items.find(i => i.productId === c.product_id)?.productName || "",
+              region: c.region as string,
+              saleAmount: c.sale_amount as number,
+              commissionPct: c.commission_pct as number,
+              commissionAmount: c.commission_amount as number,
+              status: "PENDING" as const,
+              createdAt: new Date().toISOString(),
+            })),
+            ...prev,
+          ]);
+        }
+      }
+    } catch { /* commission errors shouldn't block order creation */ }
+
     return no;
-  }, [orders, showToast]);
+  }, [orders, clients, repAssignments, showToast]);
 
   const updateOrder = useCallback(async (id: string, o: Partial<Order>) => {
     setOrders((prev) => prev.map((x) => (x.id === id ? { ...x, ...o } : x)));
@@ -1155,6 +1243,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (error) showToast("هەڵە: " + error.message, "error"); else showToast("واژووی بنەڕەت دانرا");
   }, [showToast]);
 
+  // ── Rep Product Assignment CRUD ──────────────────────────────────
+  const addRepAssignment = useCallback(async (a: Omit<RepProductAssignment, "id">) => {
+    const na = { id: genId(), ...a };
+    setRepAssignments(prev => [na, ...prev]);
+    const { error } = await supabase.from("rep_product_assignments").insert({
+      id: na.id, rep_id: na.repId, product_id: na.productId,
+      region: na.region, commission_pct: na.commissionPct,
+    });
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("بەرهەم دیاریکرا بۆ نوێنەر");
+  }, [showToast]);
+
+  const deleteRepAssignment = useCallback(async (id: string) => {
+    setRepAssignments(prev => prev.filter(a => a.id !== id));
+    const { error } = await supabase.from("rep_product_assignments").delete().eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast("دیاریکردن سڕایەوە");
+  }, [showToast]);
+
+  const updateCommissionStatus = useCallback(async (id: string, status: "PENDING" | "PAID") => {
+    setRepCommissions(prev => prev.map(c => c.id === id ? { ...c, status } : c));
+    const { error } = await supabase.from("rep_commissions").update({ status }).eq("id", id);
+    if (error) showToast("هەڵە: " + error.message, "error"); else showToast(status === "PAID" ? "کۆمیشن پارەدرا" : "کۆمیشن گەڕێنرایەوە بۆ چاوەڕوان");
+  }, [showToast]);
+
   return (
     <DataContext.Provider
       value={{
@@ -1174,6 +1285,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         addReturn, updateReturn, deleteReturn,
         updateSettings,
         savedSignatures, addSignature, deleteSignature, setDefaultSignature,
+        repAssignments, repCommissions, addRepAssignment, deleteRepAssignment, updateCommissionStatus,
         showToast, toast, refreshData,
       }}
     >
