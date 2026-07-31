@@ -95,32 +95,28 @@ async function buildInvoiceHTML(
   const pageW = t.paperSize === "A5" ? "148mm" : "210mm";
   const pageMinH = t.paperSize === "A5" ? "210mm" : "297mm";
 
-  // ── Table header columns
-  const thCells: string[] = [];
-  if (t.table.showRowNumbers)   thCells.push("<th>#</th>");
-  if (t.table.showProductName)  thCells.push("<th>ناوی بەرهەم</th>");
-  if (t.table.showQuantity)     thCells.push("<th>بڕ</th>");
-  if (t.table.showFreeQty)      thCells.push("<th>بۆنەس</th>");
-  if (t.table.showUnitPrice)    thCells.push("<th>نرخی یەکە</th>");
-  if (t.table.showLineTotal)    thCells.push("<th>کۆ</th>");
-  if (t.table.showExpiryDate)   thCells.push("<th>بەسەرچوون</th>");
-  if (t.table.showCompany)      thCells.push("<th>بەرهەمهێنەر</th>");
-  if (t.table.showBatchNumber)  thCells.push("<th>ژمارەی باچ</th>");
-  if (t.table.showProductType)  thCells.push("<th>جۆری بەرهەم</th>");
+  // ── Table columns (ordered)
+  type ColDef = { show: boolean; th: string; td: (it: typeof items[0], i: number) => string };
+  const colDefs: Record<string, ColDef> = {
+    rowNumber:   { show: t.table.showRowNumbers,   th: "<th>#</th>",            td: (_it, i) => `<td>${i + 1}</td>` },
+    productName: { show: t.table.showProductName,   th: "<th>ناوی بەرهەم</th>",  td: (it) => `<td>${it.productName}</td>` },
+    quantity:    { show: t.table.showQuantity,       th: "<th>بڕ</th>",           td: (it) => `<td>${it.quantity}</td>` },
+    freeQty:     { show: t.table.showFreeQty,        th: "<th>بۆنەس</th>",       td: (it) => `<td>${it.bonusQty || "—"}</td>` },
+    unitPrice:   { show: t.table.showUnitPrice,      th: "<th>نرخی یەکە</th>",   td: (it) => `<td>${fmtNum(it.unitPrice)}</td>` },
+    lineTotal:   { show: t.table.showLineTotal,      th: "<th>کۆ</th>",          td: (it) => `<td>${fmtNum(it.quantity * it.unitPrice)}</td>` },
+    expiryDate:  { show: t.table.showExpiryDate,     th: "<th>بەسەرچوون</th>",  td: (it) => `<td>${it.expiryDate || "—"}</td>` },
+    company:     { show: t.table.showCompany,        th: "<th>بەرهەمهێنەر</th>", td: (it) => `<td>${it.company || "—"}</td>` },
+    batchNumber: { show: t.table.showBatchNumber,    th: "<th>ژمارەی باچ</th>",  td: (it) => `<td>${it.batchNumber || "—"}</td>` },
+    productType: { show: t.table.showProductType,    th: "<th>جۆری بەرهەم</th>", td: (it) => `<td>${it.category || "—"}</td>` },
+  };
+  const colOrder = t.table.columnOrder || Object.keys(colDefs);
+  const activeCols = colOrder.filter(k => colDefs[k]?.show);
+
+  const thCells = activeCols.map(k => colDefs[k].th);
 
   // ── Table body rows
   const bodyRows = items.map((it, i) => {
-    const cells: string[] = [];
-    if (t.table.showRowNumbers)   cells.push(`<td>${i + 1}</td>`);
-    if (t.table.showProductName)  cells.push(`<td>${it.productName}</td>`);
-    if (t.table.showQuantity)     cells.push(`<td>${it.quantity}</td>`);
-    if (t.table.showFreeQty)      cells.push(`<td>${it.bonusQty || "—"}</td>`);
-    if (t.table.showUnitPrice)    cells.push(`<td>${fmtNum(it.unitPrice)}</td>`);
-    if (t.table.showLineTotal)    cells.push(`<td>${fmtNum(it.quantity * it.unitPrice)}</td>`);
-    if (t.table.showExpiryDate)   cells.push(`<td>${it.expiryDate || "—"}</td>`);
-    if (t.table.showCompany)      cells.push(`<td>${it.company || "—"}</td>`);
-    if (t.table.showBatchNumber)  cells.push(`<td>${it.batchNumber || "—"}</td>`);
-    if (t.table.showProductType)  cells.push(`<td>${it.category || "—"}</td>`);
+    const cells = activeCols.map(k => colDefs[k].td(it, i));
     return `<tr>${cells.join("")}</tr>`;
   }).join("");
 
