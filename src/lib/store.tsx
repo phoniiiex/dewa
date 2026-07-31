@@ -621,9 +621,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         sampleRequests: srRes.data?.map(toSampleRequest) ?? [],
         returns: retRes.data?.map(toReturn) ?? [],
       };
+      // Auto-generate qrToken for clients missing one
+      const clientsWithQr = fresh.clients.map(c => {
+        if (!c.qrToken) {
+          const token = genId();
+          // Update in background — don't block load
+          supabase.from("clients").update({ qr_token: token }).eq("id", c.id);
+          return { ...c, qrToken: token };
+        }
+        return c;
+      });
 
       setProducts(fresh.products);
-      setClients(fresh.clients);
+      setClients(clientsWithQr);
       setReps(fresh.reps);
       setSuppliers(fresh.suppliers);
       setOrders(fresh.orders);

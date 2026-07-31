@@ -240,13 +240,13 @@ async function buildInvoiceHTML(
 
   // ── QR Code
   let qrDataUrl = "";
-  if (t.showQR) {
+  if (t.showQR && qrToken) {
     try {
       const qrMod = await import("qrcode");
       const toDataURL = qrMod.toDataURL || (qrMod.default && qrMod.default.toDataURL);
       if (toDataURL) {
         const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://dewa.app";
-        const qrUrl = qrToken ? `${baseUrl}/q/${qrToken}` : baseUrl;
+        const qrUrl = `${baseUrl}/q/${qrToken}`;
         qrDataUrl = await toDataURL(qrUrl, {
           width: (t.qr.size || 120) * 2,
           margin: 1,
@@ -315,18 +315,23 @@ async function buildInvoiceHTML(
     ${extraTableStyles}
     @media print {
       body { background: #fff; }
-      @page {
-        margin: 8mm;
-        @bottom-center {
-          content: counter(page) "/" counter(pages);
-          font-size: 9px;
-          color: #999;
-        }
-      }
+      @page { margin: 8mm; }
     }
+    .page-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 9px;
+      color: #999;
+      padding: 4px 0;
+    }
+    @media screen { .page-footer { display: none; } }
   </style>
 </head>
 <body>
+  <div class="page-footer" id="pageFooter"></div>
   <div style="width:${pageW};min-height:${pageMinH};padding:32px 40px;margin:0 auto;position:relative">
     ${t.watermark ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:72px;font-weight:700;color:rgba(0,0,0,0.04);transform:rotate(-30deg);pointer-events:none;z-index:0;user-select:none">${t.watermark}</div>` : ""}
     <div style="position:relative;z-index:1">
@@ -339,6 +344,16 @@ async function buildInvoiceHTML(
       ${footerHTML}
     </div>
   </div>
+  <script>
+    // Calculate total pages and display page number
+    (function() {
+      var pageH = ${t.paperSize === "A5" ? 793 : 1123}; // approx A4/A5 height in px at 96dpi
+      var contentH = document.body.scrollHeight;
+      var totalPages = Math.max(1, Math.ceil(contentH / pageH));
+      var footer = document.getElementById("pageFooter");
+      if (footer) footer.textContent = "1/" + totalPages;
+    })();
+  </script>
 </body>
 </html>`;
 }
