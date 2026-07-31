@@ -124,25 +124,39 @@ function buildInvoiceHTML(
   }).join("");
 
   // ── Build section HTML blocks
-  const headerHTML = !t.showHeader ? "" : `
+  const headerHTML = !t.showHeader ? "" : (() => {
+    const isSplit = t.header.layout === "split";
+    const isCentered = t.header.layout === "centered";
+    const isBanner = t.header.layout === "banner";
+    const mainStyle = isSplit
+      ? "display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:20px"
+      : `display:flex;align-items:flex-start;gap:16px${isCentered ? ";flex-direction:column;align-items:center;text-align:center" : ""}`;
+    const bannerBg = isBanner ? `;background:linear-gradient(135deg,${accent} 0%,#7C4DFF 100%);color:#fff;border-radius:12px;padding:20px 24px;margin:-12px;margin-bottom:0` : "";
+    const infoAlign = isSplit ? ";text-align:center" : "";
+    const phonesStyle = isSplit
+      ? "display:flex;flex-direction:column;gap:4px;font-size:10px;opacity:0.65"
+      : "display:flex;flex-wrap:wrap;gap:16px;font-size:10.5px;opacity:0.65;margin-top:10px;border-top:1px solid rgba(0,0,0,0.06);padding-top:8px";
+    return `
     <header style="${cssVars(ms(gs, t.header.style))};border-bottom:2px solid ${accent};padding-bottom:16px;margin-bottom:20px">
-      <div style="display:flex;align-items:flex-start;gap:16px${t.header.layout === "centered" ? ";flex-direction:column;align-items:center;text-align:center" : ""}">
+      <div style="${mainStyle}${bannerBg}">
         ${t.header.showLogo && settings.logo ? `<img src="${settings.logo}" alt="Logo" style="width:64px;height:64px;object-fit:contain;border-radius:8px">` : ""}
-        <div style="flex:1">
+        <div style="flex:1${infoAlign}">
           ${t.header.showNameKu ? `<div style="font-size:20px;font-weight:800;line-height:1.3">${settings.name}</div>` : ""}
           ${t.header.showNameEn && settings.nameEn ? `<div style="font-size:14px;font-weight:600;opacity:0.7;margin-top:2px">${settings.nameEn}</div>` : ""}
           ${t.header.showEstYear && settings.establishedYear ? `<div style="font-size:11px;opacity:0.6;margin-top:4px">دامەزراوەی ${settings.establishedYear}</div>` : ""}
           ${t.header.showBusinessDesc && settings.businessDesc ? `<div style="font-size:11px;opacity:0.7;margin-top:2px">${settings.businessDesc}</div>` : ""}
           ${t.header.showAddress && (settings.address || settings.city) ? `<div style="font-size:11px;opacity:0.65;margin-top:4px">📍 ${settings.address}${settings.city ? `، ${settings.city}` : ""}</div>` : ""}
         </div>
+        ${isSplit ? `<div style="${phonesStyle}">` : ""}
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:10.5px;opacity:0.65;margin-top:10px;border-top:1px solid rgba(0,0,0,0.06);padding-top:8px">
+      ${!isSplit ? `<div style="${phonesStyle}">` : ""}
         ${t.header.showPhoneAdmin && settings.phoneAdmin ? `<span>بەڕێوەبەرایەتی: ${settings.phoneAdmin}</span>` : ""}
         ${t.header.showPhoneAccounting && settings.phoneAccounting ? `<span>ژمێریاری: ${settings.phoneAccounting}</span>` : ""}
         ${t.header.showPhoneIT && settings.phoneIT ? `<span>کۆمپیوتەر: ${settings.phoneIT}</span>` : ""}
         ${t.header.showPhoneSales && settings.phoneSales ? `<span>فرۆشتن: ${settings.phoneSales}</span>` : ""}
       </div>
     </header>`;
+  })();
 
   const metaItems: string[] = [];
   if (t.invoiceMeta.showInvoiceNumber) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">ژمارە</span><span style="font-size:13px;font-weight:600">${order.orderNumber}</span></div>`);

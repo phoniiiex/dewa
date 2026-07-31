@@ -49,11 +49,12 @@ const FONT_OPTIONS: { id: SectionStyle["fontFamily"]; label: string; stack: stri
   { id: "mono",   label: "مۆنۆ",     stack: "'Courier New', Courier, monospace" },
 ];
 
-const HEADER_LAYOUTS: { id: HeaderLayout; label: string }[] = [
-  { id: "classic",  label: "کلاسیک" },
-  { id: "centered", label: "ناوەند" },
-  { id: "banner",   label: "بانەر" },
-  { id: "minimal",  label: "ساکار" },
+const HEADER_LAYOUTS: { id: HeaderLayout; label: string; desc: string }[] = [
+  { id: "classic",  label: "کلاسیک",  desc: "لۆگۆ لە چەپ، زانیاری لە ڕاست" },
+  { id: "centered", label: "ناوەند",  desc: "هەموو شتەکان لە ناوەندا" },
+  { id: "banner",   label: "بانەر",    desc: "باری ڕەنگاوڕەنگ تەواو" },
+  { id: "minimal",  label: "ساکار",   desc: "ناوی کۆمپانیا تەنها" },
+  { id: "split",    label: "سێ بەش",   desc: "لۆگۆ | زانیاری | ژمارەکان" },
 ];
 
 const TABLE_LAYOUTS: { id: TableLayout; label: string }[] = [
@@ -259,16 +260,25 @@ export default function InvoiceBuilder({ open, onClose, editTemplate }: InvoiceB
                         {/* Layout presets for header/table */}
                         {sec.key === "header" && (
                           <div>
-                            <Label className="text-[11px] text-muted-foreground mb-1 block">شێوەی سەرپەڕە</Label>
-                            <Select
-                              value={template.header.layout}
-                              onValueChange={v => updateNested("header", "layout", v)}
-                            >
-                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {HEADER_LAYOUTS.map(l => <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <Label className="text-[11px] text-muted-foreground mb-2 block">شێوەی سەرپەڕە</Label>
+                            <div className="grid grid-cols-5 gap-1.5">
+                              {HEADER_LAYOUTS.map(l => (
+                                <button
+                                  key={l.id}
+                                  type="button"
+                                  onClick={() => updateNested("header", "layout", l.id)}
+                                  className={cn(
+                                    "flex flex-col items-center gap-1 p-2 rounded-lg border text-center transition-all",
+                                    template.header.layout === l.id
+                                      ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+                                      : "border-border hover:border-primary/40 hover:bg-muted/50"
+                                  )}
+                                >
+                                  <span className="text-[11px] font-bold">{l.label}</span>
+                                  <span className="text-[8px] text-muted-foreground leading-tight">{l.desc}</span>
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         )}
                         {sec.key === "table" && (

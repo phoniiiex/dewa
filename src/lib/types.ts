@@ -303,7 +303,7 @@ export interface SectionStyle {
   textAlign: "right" | "center" | "left";
 }
 
-export type HeaderLayout = "classic" | "centered" | "banner" | "minimal";
+export type HeaderLayout = "classic" | "centered" | "banner" | "minimal" | "split";
 export type TableLayout = "standard" | "bordered" | "minimal" | "compact" | "striped";
 
 export interface InvoiceTemplate {

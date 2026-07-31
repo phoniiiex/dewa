@@ -125,6 +125,26 @@
 .phones span {
   white-space: nowrap;
 }
+/* Split header: 3-column — logo | company | phones */
+.header_split .headerMain {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 20px;
+}
+.header_split .phones {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0;
+  text-align: left;
+  font-size: 10px;
+}
+.header_split .companyInfo {
+  text-align: center;
+}
 
 /* ── Invoice Meta ── */
 .invoiceMeta {
