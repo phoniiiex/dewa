@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -31,6 +31,7 @@ import { useData } from "@/lib/store";
 import type { InvoiceTemplate, SectionStyle, HeaderLayout, TableLayout } from "@/lib/types";
 import { DEFAULT_INVOICE_TEMPLATE, DEFAULT_SECTION_STYLE } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import InvoiceDocument from "@/components/print/InvoiceDocument";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ interface InvoiceBuilderProps {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function InvoiceBuilder({ open, onClose, editTemplate }: InvoiceBuilderProps) {
-  const { addTemplate, updateTemplate } = useData();
+  const { addTemplate, updateTemplate, settings } = useData();
 
   // Build initial state from editTemplate or defaults
   const initial = useMemo<Omit<InvoiceTemplate, "id" | "createdAt">>(() => {
@@ -152,7 +153,7 @@ export default function InvoiceBuilder({ open, onClose, editTemplate }: InvoiceB
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-2xl p-0 flex flex-col"
+        className="w-full sm:max-w-2xl p-0 flex flex-col max-h-dvh overflow-hidden"
         dir="rtl"
       >
         {/* ── Title Bar ── */}
@@ -197,7 +198,7 @@ export default function InvoiceBuilder({ open, onClose, editTemplate }: InvoiceB
         </div>
 
         {/* ── Content Area ── */}
-        <ScrollArea className="flex-1 px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4 min-h-0">
           {/* ═══ TAB: Sections & Metadata ═══ */}
           {activeTab === "sections" && (
             <div className="space-y-1">
@@ -325,6 +326,33 @@ export default function InvoiceBuilder({ open, onClose, editTemplate }: InvoiceB
           {/* ═══ TAB: Global ═══ */}
           {activeTab === "global" && (
             <div className="space-y-5">
+              {/* Live mini preview */}
+              <div className="border border-border rounded-lg overflow-hidden bg-white">
+                <div className="text-[10px] text-muted-foreground px-3 py-1.5 bg-muted/30 border-b border-border font-medium flex items-center gap-1">
+                  <Eye className="size-3" /> پێشبینین
+                </div>
+                <div className="p-2 overflow-hidden" style={{ maxHeight: 220 }}>
+                  <div style={{ transform: "scale(0.32)", transformOrigin: "top right", width: "312.5%", pointerEvents: "none" }}>
+                    <InvoiceDocument
+                      data={{
+                        order: {
+                          id: "preview", orderNumber: "INV-001", clientName: "موشتەری نموونە", repName: "",
+                          status: "PENDING", totalAmount: 125000, notes: "",
+                          items: [
+                            { productId: "", productName: "بەرهەمی ١", quantity: 2, unitPrice: 50000, bonusQty: 0, priceTypeId: "", priceTypeName: "", bonusPct: 0, repBonusPct: 0, warehouseBonusQty: 0, repBonusQty: 0, overrideWarehouseFulfillment: false },
+                            { productId: "", productName: "بەرهەمی ٢", quantity: 1, unitPrice: 25000, bonusQty: 0, priceTypeId: "", priceTypeName: "", bonusPct: 0, repBonusPct: 0, warehouseBonusQty: 0, repBonusQty: 0, overrideWarehouseFulfillment: false },
+                          ],
+                          createdAt: new Date().toISOString(),
+                        },
+                        client: { name: "موشتەری نموونە", balance: 0, qrToken: "" },
+                        settings,
+                        template: { ...template, id: "preview", createdAt: new Date().toISOString() } as InvoiceTemplate,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Paper Size */}
               <div>
                 <Label className="text-xs text-muted-foreground mb-1.5 block">قەبارەی کاغەز</Label>
@@ -466,7 +494,7 @@ export default function InvoiceBuilder({ open, onClose, editTemplate }: InvoiceB
               </div>
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         {/* ── Save Button ── */}
         <div className="px-5 py-3 border-t border-border flex-shrink-0 flex justify-end gap-2">

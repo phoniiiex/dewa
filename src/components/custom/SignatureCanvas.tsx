@@ -117,9 +117,42 @@ export default function SignatureCanvas({ onSave, width = 400, height = 180 }: S
   const save = () => {
     const canvas = canvasRef.current;
     if (!canvas || strokes.length === 0) return;
-    // Re-render clean then export
     redraw(strokes);
-    const dataUrl = canvas.toDataURL("image/png");
+
+    // Crop to bounding box + export as compact JPEG
+    const ctx = canvas.getContext("2d")!;
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const a = imgData.data[(y * canvas.width + x) * 4 + 3];
+        if (a > 0) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    const pad = 8;
+    minX = Math.max(0, minX - pad);
+    minY = Math.max(0, minY - pad);
+    maxX = Math.min(canvas.width, maxX + pad);
+    maxY = Math.min(canvas.height, maxY + pad);
+    const cropW = maxX - minX;
+    const cropH = maxY - minY;
+
+    // Draw cropped to a temp canvas
+    const tmp = document.createElement("canvas");
+    tmp.width = cropW;
+    tmp.height = cropH;
+    const tmpCtx = tmp.getContext("2d")!;
+    // White background for JPEG (no transparency)
+    tmpCtx.fillStyle = "#fff";
+    tmpCtx.fillRect(0, 0, cropW, cropH);
+    tmpCtx.drawImage(canvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+
+    const dataUrl = tmp.toDataURL("image/webp", 0.7);
     onSave(dataUrl);
     clear();
   };

@@ -7,7 +7,6 @@
 
 import type { Order, CompanySettings, InvoiceTemplate, SectionStyle } from "@/lib/types";
 import { DEFAULT_INVOICE_TEMPLATE, DEFAULT_SECTION_STYLE } from "@/lib/types";
-import QRCode from "qrcode";
 
 export interface PrintOptions {
   templateId?: string;
@@ -231,6 +230,7 @@ async function buildInvoiceHTML(
   let qrDataUrl = "";
   if (t.showQR && qrToken) {
     try {
+      const QRCode = (await import("qrcode")).default;
       const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://dewa.app";
       const qrUrl = `${baseUrl}/q/${qrToken}`;
       qrDataUrl = await QRCode.toDataURL(qrUrl, {
@@ -238,7 +238,7 @@ async function buildInvoiceHTML(
         margin: 1,
         color: { dark: "#1A1A2E", light: "#FFFFFF" },
       });
-    } catch { /* QR generation failed — continue without it */ }
+    } catch (e) { console.warn("QR generation failed:", e); }
   }
   const qrImageHTML = qrDataUrl ? `
     <div style="text-align:${t.qr.position === "left" ? "left" : "right"}">
