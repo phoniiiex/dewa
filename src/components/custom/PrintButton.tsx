@@ -44,6 +44,9 @@ export function PrintButton({ order, className, iconOnly = true }: Props) {
     };
   }, [clients, orders, order]);
 
+  const client = clients.find(c => c.id === order.clientId);
+  const qrToken = client?.qrToken || "";
+
   // Print with default template (left click)
   function handlePrint() {
     const template = invoiceTemplates.find(t => t.isDefault) || invoiceTemplates[0];
@@ -52,6 +55,7 @@ export function PrintButton({ order, className, iconOnly = true }: Props) {
       template,
       clientData: buildClientData(),
       signatureUrl: defaultSig?.imageUrl,
+      qrToken,
     });
   }
 
@@ -63,6 +67,7 @@ export function PrintButton({ order, className, iconOnly = true }: Props) {
       template,
       clientData: buildClientData(),
       signatureUrl: defaultSig?.imageUrl,
+      qrToken,
     });
     setMenuOpen(false);
   }
@@ -74,6 +79,7 @@ export function PrintButton({ order, className, iconOnly = true }: Props) {
       template,
       clientData: buildClientData(),
       signatureUrl: sigUrl,
+      qrToken,
     });
     setMenuOpen(false);
   }

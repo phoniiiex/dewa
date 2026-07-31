@@ -7,6 +7,7 @@
 
 import type { Order, CompanySettings, InvoiceTemplate, SectionStyle } from "@/lib/types";
 import { DEFAULT_INVOICE_TEMPLATE, DEFAULT_SECTION_STYLE } from "@/lib/types";
+import QRCode from "qrcode";
 
 export interface PrintOptions {
   templateId?: string;
@@ -66,13 +67,14 @@ export interface ClientData {
   totalOrderCount: number;
 }
 
-function buildInvoiceHTML(
+async function buildInvoiceHTML(
   order: Order,
   settings: CompanySettings,
   template: InvoiceTemplate,
   signatureUrl?: string,
   clientData?: ClientData,
-): string {
+  qrToken?: string,
+): Promise<string> {
   const t = template;
   const gs: SectionStyle = { ...DEFAULT_SECTION_STYLE, fontFamily: t.globalFont, accentColor: t.primaryColor };
   const items = order.items || [];
@@ -225,9 +227,29 @@ function buildInvoiceHTML(
   const notesHTML = t.showNotes && t.footer.showNotes && order.notes ? `<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:700;margin-bottom:3px;color:${accent}">تێبینی</div><div style="font-size:11px;opacity:0.7;line-height:1.6">${order.notes}</div></div>` : "";
   const termsHTML = t.showTerms && t.footer.showTerms && t.footer.customTerms ? `<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:700;margin-bottom:3px;color:${accent}">مەرج و ڕێسا</div><div style="font-size:11px;opacity:0.7;line-height:1.6">${t.footer.customTerms}</div></div>` : "";
 
-  const qrNotesHTML = (notesHTML || termsHTML) ? `
+  // ── QR Code
+  let qrDataUrl = "";
+  if (t.showQR && qrToken) {
+    try {
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://dewa.app";
+      const qrUrl = `${baseUrl}/q/${qrToken}`;
+      qrDataUrl = await QRCode.toDataURL(qrUrl, {
+        width: (t.qr.size || 120) * 2,
+        margin: 1,
+        color: { dark: "#1A1A2E", light: "#FFFFFF" },
+      });
+    } catch { /* QR generation failed — continue without it */ }
+  }
+  const qrImageHTML = qrDataUrl ? `
+    <div style="text-align:${t.qr.position === "left" ? "left" : "right"}">
+      <img src="${qrDataUrl}" alt="QR" style="width:${t.qr.size || 120}px;height:${t.qr.size || 120}px" />
+      ${t.qr.showLabel ? `<div style="font-size:9px;opacity:0.5;margin-top:4px">سکانی بۆ بینینی قەرزەکان</div>` : ""}
+    </div>` : "";
+
+  const qrNotesHTML = (notesHTML || termsHTML || qrImageHTML) ? `
     <div style="display:flex;align-items:flex-start;gap:20px;margin-bottom:12px">
       <div style="flex:1">${notesHTML}${termsHTML}</div>
+      ${qrImageHTML}
     </div>` : "";
 
   // ── Signature
@@ -347,13 +369,14 @@ function safeTemplate(t?: InvoiceTemplate): InvoiceTemplate {
 }
 
 /** Print an order invoice using the template from the store */
-export function printOrder(
+export async function printOrder(
   order: Order,
   settings: CompanySettings,
-  opts: { signatureUrl?: string; template?: InvoiceTemplate; clientData?: ClientData } = {}
-): void {
+  opts: { signatureUrl?: string; template?: InvoiceTemplate; clientData?: ClientData; qrToken?: string } = {}
+): Promise<void> {
   const t = safeTemplate(opts.template);
-  printHTML(buildInvoiceHTML(order, settings, t, opts.signatureUrl, opts.clientData));
+  const html = await buildInvoiceHTML(order, settings, t, opts.signatureUrl, opts.clientData, opts.qrToken);
+  printHTML(html);
 }
 
 /** Print a sticker with customer name */
