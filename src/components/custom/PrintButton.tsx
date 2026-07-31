@@ -33,7 +33,8 @@ export function PrintButton({ order, className, iconOnly = true }: Props) {
 
   const buildClientData = useCallback((): ClientData => {
     const client = clients.find(c => c.id === order.clientId);
-    const clientOrderCount = orders.filter(o => o.clientId === order.clientId).length;
+    const clientOrders = orders.filter(o => o.clientId === order.clientId && o.status !== "PAID" && o.status !== "NOT_ACCEPTED");
+    const clientOrderCount = clientOrders.length;
     const currentBalance = client?.balance ?? 0;
     const previousDebt = currentBalance - order.totalAmount;
     return {

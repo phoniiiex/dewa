@@ -281,7 +281,8 @@ async function buildInvoiceHTML(
   // ── Footer
   const footerParts: string[] = [];
   if (t.footer.showPrintDateTime) footerParts.push(`<span>${printDate} — ${printTime}</span>`);
-  if (t.footer.showPageNumber) footerParts.push(`<span>لاپەڕە ١</span>`);
+  // Page number is added via JS after render
+  if (t.footer.showPageNumber) footerParts.push(`<span id="inlinePageNum"></span>`);
   const footerHTML = !t.showFooter ? "" : `
     <footer style="${cssVars(ms(gs, t.footer.style))};display:flex;justify-content:center;gap:24px;font-size:10px;opacity:0.5;border-top:1px solid rgba(0,0,0,0.06);padding-top:10px;margin-top:auto">${footerParts.join("")}</footer>`;
 
@@ -291,7 +292,7 @@ async function buildInvoiceHTML(
   <meta charset="utf-8">
   <title>پسووڵە - ${order.orderNumber}</title>
   <style>
-    @page { margin: 0; }
+    @page { size: ${t.paperSize}; margin: 10mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: ${FONT_STACKS[t.globalFont]};
@@ -315,24 +316,11 @@ async function buildInvoiceHTML(
     ${extraTableStyles}
     @media print {
       body { background: #fff; }
-      @page { margin: 8mm; }
     }
-    .page-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      text-align: center;
-      font-size: 9px;
-      color: #999;
-      padding: 4px 0;
-    }
-    @media screen { .page-footer { display: none; } }
   </style>
 </head>
 <body>
-  <div class="page-footer" id="pageFooter"></div>
-  <div style="width:${pageW};min-height:${pageMinH};padding:32px 40px;margin:0 auto;position:relative">
+  <div style="width:100%;max-width:${pageW};padding:20px 28px;margin:0 auto;position:relative">
     ${t.watermark ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:72px;font-weight:700;color:rgba(0,0,0,0.04);transform:rotate(-30deg);pointer-events:none;z-index:0;user-select:none">${t.watermark}</div>` : ""}
     <div style="position:relative;z-index:1">
       ${headerHTML}
@@ -345,13 +333,13 @@ async function buildInvoiceHTML(
     </div>
   </div>
   <script>
-    // Calculate total pages and display page number
     (function() {
-      var pageH = ${t.paperSize === "A5" ? 793 : 1123}; // approx A4/A5 height in px at 96dpi
-      var contentH = document.body.scrollHeight;
-      var totalPages = Math.max(1, Math.ceil(contentH / pageH));
-      var footer = document.getElementById("pageFooter");
-      if (footer) footer.textContent = "1/" + totalPages;
+      var el = document.getElementById("inlinePageNum");
+      if (el) {
+        var pageH = ${t.paperSize === "A5" ? 793 : 1123};
+        var total = Math.max(1, Math.ceil(document.body.scrollHeight / pageH));
+        el.textContent = "1/" + total;
+      }
     })();
   </script>
 </body>
