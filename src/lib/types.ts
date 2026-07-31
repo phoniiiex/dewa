@@ -371,6 +371,7 @@ export interface InvoiceTemplate {
     showCompany: boolean;
     showBatchNumber: boolean;
     showProductType: boolean;
+    columnOrder: string[];  // ordered list of column keys
   };
 
   // ── Summary config ──
@@ -498,6 +499,7 @@ export const DEFAULT_INVOICE_TEMPLATE: Omit<InvoiceTemplate, "id" | "createdAt">
     showCompany: true,
     showBatchNumber: true,
     showProductType: true,
+    columnOrder: ["rowNumber", "productName", "quantity", "freeQty", "unitPrice", "lineTotal", "expiryDate", "company", "batchNumber", "productType"],
   },
 
   summary: {

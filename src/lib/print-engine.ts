@@ -228,16 +228,19 @@ async function buildInvoiceHTML(
 
   // ── QR Code
   let qrDataUrl = "";
-  if (t.showQR && qrToken) {
+  if (t.showQR) {
     try {
-      const QRCode = (await import("qrcode")).default;
-      const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://dewa.app";
-      const qrUrl = `${baseUrl}/q/${qrToken}`;
-      qrDataUrl = await QRCode.toDataURL(qrUrl, {
-        width: (t.qr.size || 120) * 2,
-        margin: 1,
-        color: { dark: "#1A1A2E", light: "#FFFFFF" },
-      });
+      const qrMod = await import("qrcode");
+      const toDataURL = qrMod.toDataURL || (qrMod.default && qrMod.default.toDataURL);
+      if (toDataURL) {
+        const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://dewa.app";
+        const qrUrl = qrToken ? `${baseUrl}/q/${qrToken}` : baseUrl;
+        qrDataUrl = await toDataURL(qrUrl, {
+          width: (t.qr.size || 120) * 2,
+          margin: 1,
+          color: { dark: "#1A1A2E", light: "#FFFFFF" },
+        });
+      }
     } catch (e) { console.warn("QR generation failed:", e); }
   }
   const qrImageHTML = qrDataUrl ? `

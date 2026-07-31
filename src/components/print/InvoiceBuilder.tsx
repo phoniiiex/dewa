@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Save, FileText, Table2, BarChart3, QrCode, PenLine, FootprintsIcon,
   ChevronDown, ChevronRight, Palette, LayoutTemplate, Settings2,
-  Eye, EyeOff, Type, Plus, Minus,
+  Eye, EyeOff, Type, Plus, Minus, ArrowUp, ArrowDown, GripVertical,
 } from "lucide-react";
 import { useData } from "@/lib/store";
 import type { InvoiceTemplate, SectionStyle, HeaderLayout, TableLayout } from "@/lib/types";
@@ -567,21 +567,71 @@ function renderMetadataToggles(
         </>
       );
 
-    case "table":
+    case "table": {
+      const COL_META: Record<string, { label: string; toggleKey: string }> = {
+        rowNumber:   { label: "ژمارەی ریز (#)", toggleKey: "showRowNumbers" },
+        productName: { label: "ناوی بەرهەم",    toggleKey: "showProductName" },
+        quantity:    { label: "بڕ",              toggleKey: "showQuantity" },
+        freeQty:     { label: "بڕی بۆنەس",      toggleKey: "showFreeQty" },
+        unitPrice:   { label: "نرخی یەکە",      toggleKey: "showUnitPrice" },
+        lineTotal:   { label: "کۆی ریز",        toggleKey: "showLineTotal" },
+        expiryDate:  { label: "بەرواری بەسەرچوون", toggleKey: "showExpiryDate" },
+        company:     { label: "کۆمپانیای بەرهەمهێنەر", toggleKey: "showCompany" },
+        batchNumber: { label: "ژمارەی باچ",     toggleKey: "showBatchNumber" },
+        productType: { label: "جۆری بەرهەم",    toggleKey: "showProductType" },
+      };
+      const order = template.table.columnOrder || Object.keys(COL_META);
+      const moveCol = (idx: number, dir: -1 | 1) => {
+        const next = [...order];
+        const target = idx + dir;
+        if (target < 0 || target >= next.length) return;
+        [next[idx], next[target]] = [next[target], next[idx]];
+        updateNested("table", "columnOrder", next);
+      };
       return (
         <>
-          <ToggleRow label="ژمارەی ریز (#)" checked={template.table.showRowNumbers} onChange={v => updateNested("table", "showRowNumbers", v)} />
-          <ToggleRow label="ناوی بەرهەم" checked={template.table.showProductName} onChange={v => updateNested("table", "showProductName", v)} />
-          <ToggleRow label="بڕ" checked={template.table.showQuantity} onChange={v => updateNested("table", "showQuantity", v)} />
-          <ToggleRow label="بڕی بۆنەس" checked={template.table.showFreeQty} onChange={v => updateNested("table", "showFreeQty", v)} />
-          <ToggleRow label="نرخی یەکە" checked={template.table.showUnitPrice} onChange={v => updateNested("table", "showUnitPrice", v)} />
-          <ToggleRow label="کۆی ریز" checked={template.table.showLineTotal} onChange={v => updateNested("table", "showLineTotal", v)} />
-          <ToggleRow label="بەرواری بەسەرچوون" checked={template.table.showExpiryDate} onChange={v => updateNested("table", "showExpiryDate", v)} />
-          <ToggleRow label="کۆمپانیای بەرهەمهێنەر" checked={template.table.showCompany} onChange={v => updateNested("table", "showCompany", v)} />
-          <ToggleRow label="ژمارەی باچ" checked={template.table.showBatchNumber} onChange={v => updateNested("table", "showBatchNumber", v)} />
-          <ToggleRow label="جۆری بەرهەم" checked={template.table.showProductType} onChange={v => updateNested("table", "showProductType", v)} />
+          <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+            ستوونەکان بکشێنە بۆ ڕیزکردنەوە
+          </div>
+          <div className="space-y-0.5">
+            {order.map((colKey, idx) => {
+              const meta = COL_META[colKey];
+              if (!meta) return null;
+              const checked = (template.table as Record<string, unknown>)[meta.toggleKey] as boolean;
+              return (
+                <div key={colKey} className="flex items-center gap-1 py-1 px-1.5 rounded-md hover:bg-muted/40 transition-colors group">
+                  <GripVertical className="size-3 text-muted-foreground/40 shrink-0" />
+                  <div className="flex gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => moveCol(idx, -1)}
+                      disabled={idx === 0}
+                      className="size-5 rounded flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-20"
+                    >
+                      <ArrowUp className="size-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveCol(idx, 1)}
+                      disabled={idx === order.length - 1}
+                      className="size-5 rounded flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-20"
+                    >
+                      <ArrowDown className="size-3" />
+                    </button>
+                  </div>
+                  <span className={cn("text-xs flex-1", !checked && "opacity-40 line-through")}>{meta.label}</span>
+                  <Switch
+                    checked={checked}
+                    onCheckedChange={v => updateNested("table", meta.toggleKey, v)}
+                    className="scale-[0.65]"
+                  />
+                </div>
+              );
+            })}
+          </div>
         </>
       );
+    }
 
     case "summary":
       return (
