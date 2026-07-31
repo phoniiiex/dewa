@@ -183,14 +183,10 @@ export default function DebtPage() {
         </div>
 
         {/* Stats */}
-        <div className="fade-up d2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+        <div className="fade-up d2" style={{ marginBottom: 14 }}>
           <div style={{ background: t.cardBg, borderRadius: 18, padding: "18px 16px", border: `1px solid ${t.cardBorder}`, transition: "all .3s" }}>
             <div style={{ fontSize: 10, fontWeight: 800, color: t.labelColor, marginBottom: 8, letterSpacing: "0.05em" }}>داواکارییە نەدراوەکان</div>
             <div style={{ fontSize: 28, fontWeight: 900, color: orders.length > 0 ? t.statNum : "#059669" }}>{orders.length}</div>
-          </div>
-          <div style={{ background: t.cardBg, borderRadius: 18, padding: "18px 16px", border: `1px solid ${t.cardBorder}`, transition: "all .3s" }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: t.labelColor, marginBottom: 8, letterSpacing: "0.05em" }}>باڵانسی هەژمار</div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: client.balance > 0 ? t.statNum : "#059669" }}>{formatIQD(client.balance)}</div>
           </div>
         </div>
 
