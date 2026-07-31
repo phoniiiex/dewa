@@ -215,16 +215,12 @@ export default function DebtPage() {
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 18 }}>{st.emoji}</span>
                       <div>
                         <div style={{ fontWeight: 800, fontSize: 14, color: t.text }}>#{o.orderNumber}</div>
                         <div style={{ fontSize: 11, color: t.textMuted, marginTop: 2 }}>{formatDateKurdish(o.createdAt)}</div>
                       </div>
                     </div>
-                    <div style={{ textAlign: "left" }}>
-                      <span style={{ padding: "4px 10px", borderRadius: 10, fontSize: 11, fontWeight: 800, background: `${st.color}18`, color: st.color }}>{st.label}</span>
-                      <div style={{ fontSize: 15, fontWeight: 900, color: t.statNum, marginTop: 4 }}>{formatIQD(o.totalAmount)}</div>
-                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: t.statNum }}>{formatIQD(o.totalAmount)}</div>
                   </div>
 
                   {isExpanded && o.items?.length > 0 && (
