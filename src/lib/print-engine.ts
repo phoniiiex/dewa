@@ -178,7 +178,7 @@ async function buildInvoiceHTML(
   if (t.invoiceMeta.showCustomerName) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">کڕیار</span><span style="font-size:13px;font-weight:600">${order.clientName}</span></div>`);
   if (t.invoiceMeta.showCurrency) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">دراو</span><span style="font-size:13px;font-weight:600">${settings.currency}</span></div>`);
   if (t.invoiceMeta.showRepName) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">نوێنەر</span><span style="font-size:13px;font-weight:600">${order.repName}</span></div>`);
-  if (t.invoiceMeta.showPharmacyName && order.pharmacyName) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">فارمۆخانە</span><span style="font-size:13px;font-weight:600">${order.pharmacyName}</span></div>`);
+  if (t.invoiceMeta.showPharmacyName && order.pharmacyName) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">بۆ دەرمانخانەی</span><span style="font-size:13px;font-weight:600">${order.pharmacyName}</span></div>`);
 
   const metaHTML = !t.showInvoiceMeta ? "" : `
     <div style="${cssVars(ms(gs, t.invoiceMeta.style))};background:#F8F9FF;border-radius:12px;padding:16px 20px;border:1px solid #E8EAFF;margin-bottom:12px">
