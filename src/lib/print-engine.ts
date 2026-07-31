@@ -44,9 +44,11 @@ function formatDateKurdish(iso: string): string {
 
 function formatTimeKurdish(): string {
   const d = new Date();
-  const h = d.getHours().toString().padStart(2, "0");
+  let h = d.getHours();
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
   const m = d.getMinutes().toString().padStart(2, "0");
-  return `${h}:${m}`;
+  return `${h}:${m} ${ampm}`;
 }
 
 function fmtNum(n: number): string {
@@ -277,13 +279,12 @@ async function buildInvoiceHTML(
   const signatureHTML = !t.showSignature ? "" : `
     <div style="${cssVars(ms(gs, t.signature.style))};display:flex;justify-content:space-around;gap:24px;margin-top:24px;padding-top:12px">${sigBoxes}</div>`;
 
-  // ── Footer
+  // ── Footer (sticks to bottom of each printed page)
   const footerParts: string[] = [];
   if (t.footer.showPrintDateTime) footerParts.push(`<span>${printDate} — ${printTime}</span>`);
-  // Page number is added via JS after render
   if (t.footer.showPageNumber) footerParts.push(`<span id="inlinePageNum"></span>`);
   const footerHTML = !t.showFooter ? "" : `
-    <footer style="${cssVars(ms(gs, t.footer.style))};display:flex;justify-content:center;gap:24px;font-size:10px;opacity:0.5;border-top:1px solid rgba(0,0,0,0.06);padding-top:10px;margin-top:auto">${footerParts.join("")}</footer>`;
+    <footer class="print-footer" style="${cssVars(ms(gs, t.footer.style))};display:flex;justify-content:center;gap:24px;font-size:10px;opacity:0.5;border-top:1px solid rgba(0,0,0,0.06);padding-top:8px">${footerParts.join("")}</footer>`;
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ckb">
@@ -315,6 +316,15 @@ async function buildInvoiceHTML(
     ${extraTableStyles}
     @media print {
       body { background: #fff; }
+    }
+    .print-footer {
+      position: fixed;
+      bottom: 8px;
+      left: 28px;
+      right: 28px;
+    }
+    @media screen {
+      .print-footer { position: static; margin-top: 24px; }
     }
   </style>
 </head>
