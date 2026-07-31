@@ -292,7 +292,7 @@ async function buildInvoiceHTML(
   <meta charset="utf-8">
   <title>پسووڵە - ${order.orderNumber}</title>
   <style>
-    @page { size: ${t.paperSize}; margin: 10mm; }
+    @page { size: ${t.paperSize}; margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: ${FONT_STACKS[t.globalFont]};
