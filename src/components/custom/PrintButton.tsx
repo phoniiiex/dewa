@@ -3,18 +3,18 @@
 // DEWA — PrintButton
 //
 // Left click  → print immediately with default template
-// Right click → context menu: choose template, signature, or
+// Right click → popover menu: choose template, signature, or
 //               navigate to template editor
 // ============================================================
 
-import { Printer, FileText, PenLine, Settings2 } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Printer, FileText, PenLine, Settings2, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
-  ContextMenu, ContextMenuContent, ContextMenuItem,
-  ContextMenuSeparator, ContextMenuTrigger, ContextMenuLabel,
-  ContextMenuRadioGroup, ContextMenuRadioItem,
-} from "@/components/ui/context-menu";
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { useData } from "@/lib/store";
 import { printOrder } from "@/lib/print-engine";
 import type { Order } from "@/lib/types";
@@ -29,8 +29,9 @@ interface Props {
 export function PrintButton({ order, className, iconOnly = true }: Props) {
   const { settings, invoiceTemplates, savedSignatures, clients, orders } = useData();
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  function buildClientData(): ClientData {
+  const buildClientData = useCallback((): ClientData => {
     const client = clients.find(c => c.id === order.clientId);
     const clientOrderCount = orders.filter(o => o.clientId === order.clientId).length;
     const currentBalance = client?.balance ?? 0;
@@ -41,7 +42,7 @@ export function PrintButton({ order, className, iconOnly = true }: Props) {
       totalDebt: Math.max(0, currentBalance),
       totalOrderCount: clientOrderCount,
     };
-  }
+  }, [clients, orders, order]);
 
   // Print with default template (left click)
   function handlePrint() {
@@ -63,6 +64,7 @@ export function PrintButton({ order, className, iconOnly = true }: Props) {
       clientData: buildClientData(),
       signatureUrl: defaultSig?.imageUrl,
     });
+    setMenuOpen(false);
   }
 
   // Print with specific signature
@@ -73,94 +75,92 @@ export function PrintButton({ order, className, iconOnly = true }: Props) {
       clientData: buildClientData(),
       signatureUrl: sigUrl,
     });
+    setMenuOpen(false);
   }
 
+  const defaultTemplate = invoiceTemplates.find(t => t.isDefault);
+
   return (
-    <ContextMenu>
-      <ContextMenuTrigger>
-        <Button
+    <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+      <PopoverTrigger
+        render={<Button
           size={iconOnly ? "icon" : "sm"}
           variant="ghost"
           className={iconOnly ? "size-7" : className || ""}
           title="چاپکردن (کلیکی ڕاست بۆ بژاردەکان)"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handlePrint();
-          }}
-        >
-          <Printer className={iconOnly ? "size-3.5" : "size-3.5 me-1"} />
-          {!iconOnly && "چاپ"}
-        </Button>
-      </ContextMenuTrigger>
+        />}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handlePrint();
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setMenuOpen(true);
+        }}
+      >
+        <Printer className={iconOnly ? "size-3.5" : "size-3.5 me-1"} />
+        {!iconOnly && "چاپ"}
+      </PopoverTrigger>
 
-      <ContextMenuContent dir="rtl" className="w-56">
+      <PopoverContent dir="rtl" className="w-56 p-1.5" align="start" side="bottom">
         {/* ── Templates ── */}
-        <ContextMenuLabel className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+        <div className="px-2 py-1.5 text-[10px] text-muted-foreground font-medium flex items-center gap-1.5">
           <FileText className="size-3" /> داڕێژەکان
-        </ContextMenuLabel>
+        </div>
         {invoiceTemplates.length === 0 ? (
-          <ContextMenuItem disabled className="text-xs text-muted-foreground">
-            هیچ داڕێژەیەک نییە
-          </ContextMenuItem>
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">هیچ داڕێژەیەک نییە</div>
         ) : (
-          <ContextMenuRadioGroup value={invoiceTemplates.find(t => t.isDefault)?.id || ""}>
-            {invoiceTemplates.map(t => (
-              <ContextMenuRadioItem
-                key={t.id}
-                value={t.id}
-                className="text-xs"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handlePrintWithTemplate(t.id);
-                }}
-              >
-                {t.name || "بێ ناو"}
-                {t.isDefault && <span className="text-[9px] text-primary ms-1">(بنەڕەتی)</span>}
-              </ContextMenuRadioItem>
-            ))}
-          </ContextMenuRadioGroup>
+          invoiceTemplates.map(t => (
+            <button
+              key={t.id}
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-muted/70 transition-colors text-start"
+              onClick={(e) => { e.stopPropagation(); handlePrintWithTemplate(t.id); }}
+            >
+              <div className="size-3.5 flex items-center justify-center">
+                {t.id === defaultTemplate?.id && <Check className="size-3 text-primary" />}
+              </div>
+              {t.name || "بێ ناو"}
+              {t.isDefault && <span className="text-[9px] text-primary ms-auto">(بنەڕەتی)</span>}
+            </button>
+          ))
         )}
-
-        <ContextMenuSeparator />
 
         {/* ── Signatures ── */}
         {savedSignatures.length > 0 && (
           <>
-            <ContextMenuLabel className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+            <Separator className="my-1" />
+            <div className="px-2 py-1.5 text-[10px] text-muted-foreground font-medium flex items-center gap-1.5">
               <PenLine className="size-3" /> واژووەکان
-            </ContextMenuLabel>
+            </div>
             {savedSignatures.map(sig => (
-              <ContextMenuItem
+              <button
                 key={sig.id}
-                className="text-xs gap-2"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handlePrintWithSignature(sig.imageUrl);
-                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-muted/70 transition-colors text-start"
+                onClick={(e) => { e.stopPropagation(); handlePrintWithSignature(sig.imageUrl); }}
               >
                 <div className="size-5 rounded bg-muted/50 flex items-center justify-center overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={sig.imageUrl} alt="" className="max-h-4 max-w-4 object-contain" />
                 </div>
                 {sig.name}
-                {sig.isDefault && <span className="text-[9px] text-primary ms-1">(بنەڕەتی)</span>}
-              </ContextMenuItem>
+                {sig.isDefault && <span className="text-[9px] text-primary ms-auto">(بنەڕەتی)</span>}
+              </button>
             ))}
-            <ContextMenuSeparator />
           </>
         )}
 
+        <Separator className="my-1" />
+
         {/* ── Go to editor ── */}
-        <ContextMenuItem
-          className="text-xs gap-1.5"
-          onClick={() => router.push("/dashboard/settings/templates")}
+        <button
+          className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-md hover:bg-muted/70 transition-colors text-start"
+          onClick={() => { setMenuOpen(false); router.push("/dashboard/settings/templates"); }}
         >
-          <Settings2 className="size-3" /> ڕێکخستنی داڕێژەکان
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+          <Settings2 className="size-3.5" /> ڕێکخستنی داڕێژەکان
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }
