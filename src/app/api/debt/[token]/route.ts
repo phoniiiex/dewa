@@ -41,7 +41,7 @@ export async function GET(
     // Fetch company settings from company_settings table
     const { data: settingsRow } = await supabase
       .from("company_settings")
-      .select("name, name_en, phone, logo_url")
+      .select("name, name_en, phone, logo")
       .single();
 
     // Total unpaid from active orders
@@ -57,7 +57,7 @@ export async function GET(
       },
       orders,
       totalUnpaidOrders,
-      settings: settingsRow ? { name: settingsRow.name, nameEn: settingsRow.name_en, phone: settingsRow.phone, logoUrl: settingsRow.logo_url } : null,
+      settings: settingsRow ? { name: settingsRow.name, nameEn: settingsRow.name_en, phone: settingsRow.phone, logo: settingsRow.logo } : null,
     });
   } catch {
     return NextResponse.json({ error: "server_error" }, { status: 500 });
