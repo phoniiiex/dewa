@@ -27,7 +27,7 @@ export async function GET(
       .from("orders")
       .select("id, order_number, status, total_amount, created_at, items")
       .eq("client_id", client.id)
-      .not("status", "in", '("PAID","NOT_ACCEPTED")')
+      .not("status", "in", "(PAID,NOT_ACCEPTED)")
       .order("created_at", { ascending: false });
 
     const orders = (orderRows || []).map((o: Record<string, unknown>) => ({

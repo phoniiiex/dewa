@@ -26,11 +26,27 @@ const FONT_STACKS: Record<SectionStyle["fontFamily"], string> = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatDate(iso: string): string {
+const KURDISH_MONTHS = [
+  "کانوونی دووەم", "شوبات", "ئازار", "نیسان", "ئایار", "حوزەیران",
+  "تەمموز", "ئاب", "ئەیلوول", "تشرینی یەکەم", "تشرینی دووەم", "کانوونی یەکەم",
+];
+
+function formatDateKurdish(iso: string): string {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleDateString("ku", { year: "numeric", month: "long", day: "numeric" });
+    const d = new Date(iso);
+    const day = d.getDate();
+    const month = KURDISH_MONTHS[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day} ی ${month}ی ${year}`;
   } catch { return iso.slice(0, 10); }
+}
+
+function formatTimeKurdish(): string {
+  const d = new Date();
+  const h = d.getHours().toString().padStart(2, "0");
+  const m = d.getMinutes().toString().padStart(2, "0");
+  return `${h}:${m}`;
 }
 
 function fmtNum(n: number): string {
@@ -89,8 +105,8 @@ async function buildInvoiceHTML(
     : "داشکاندن";
   const netTotal = subtotal - discount;
   const now = new Date();
-  const printDate = now.toLocaleDateString("ku", { year: "numeric", month: "long", day: "numeric" });
-  const printTime = now.toLocaleTimeString("ku", { hour: "2-digit", minute: "2-digit" });
+  const printDate = formatDateKurdish(new Date().toISOString());
+  const printTime = formatTimeKurdish();
   const accent = t.primaryColor || "#4263EB";
   const pageW = t.paperSize === "A5" ? "148mm" : "210mm";
   const pageMinH = t.paperSize === "A5" ? "210mm" : "297mm";
@@ -157,8 +173,8 @@ async function buildInvoiceHTML(
 
   const metaItems: string[] = [];
   if (t.invoiceMeta.showInvoiceNumber) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">ژمارە</span><span style="font-size:13px;font-weight:600">${order.orderNumber}</span></div>`);
-  if (t.invoiceMeta.showDate) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">بەروار</span><span style="font-size:13px;font-weight:600">${formatDate(order.createdAt)}</span></div>`);
-  if (t.invoiceMeta.showCopyLabel) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">نسخە</span><span style="font-size:13px;font-weight:600">نسخەی یەکەم</span></div>`);
+  if (t.invoiceMeta.showDate) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">بەروار</span><span style="font-size:13px;font-weight:600">${formatDateKurdish(order.createdAt)}</span></div>`);
+  if (t.invoiceMeta.showCopyLabel) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">جۆری نسخە</span><span style="font-size:13px;font-weight:600">ئەسڵی</span></div>`);
   if (t.invoiceMeta.showCustomerName) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">کڕیار</span><span style="font-size:13px;font-weight:600">${order.clientName}</span></div>`);
   if (t.invoiceMeta.showCurrency) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">دراو</span><span style="font-size:13px;font-weight:600">${settings.currency}</span></div>`);
   if (t.invoiceMeta.showRepName) metaItems.push(`<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:10px;opacity:0.5;font-weight:600">نوێنەر</span><span style="font-size:13px;font-weight:600">${order.repName}</span></div>`);
@@ -299,6 +315,14 @@ async function buildInvoiceHTML(
     ${extraTableStyles}
     @media print {
       body { background: #fff; }
+      @page {
+        margin: 8mm;
+        @bottom-center {
+          content: counter(page) "/" counter(pages);
+          font-size: 9px;
+          color: #999;
+        }
+      }
     }
   </style>
 </head>
